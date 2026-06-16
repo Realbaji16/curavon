@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   CheckCircle2,
   Ban,
@@ -110,19 +110,14 @@ export function HomeScreen() {
         )}
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={`${actionAdjusted}-${blockedReason}-${actionDone}`}
-          className="hero-action-card"
-          initial={{ opacity: 0, rotateY: actionAdjusted ? -90 : 0 }}
-          animate={{ opacity: 1, rotateY: 0 }}
-          exit={{ opacity: 0, rotateY: 90 }}
-          transition={{ duration: 0.4 }}
-          style={{
-            background: tokens.heroGradient,
-            boxShadow: tokens.shadow,
-          }}
-        >
+      <div
+        key={`${actionAdjusted}-${blockedReason}-${actionDone}`}
+        className="hero-action-card"
+        style={{
+          background: tokens.heroGradient,
+          boxShadow: tokens.shadow,
+        }}
+      >
           {celebrating && (
             <motion.div
               className="celebration-burst"
@@ -180,8 +175,7 @@ export function HomeScreen() {
               Adjust
             </motion.button>
           </div>
-        </motion.div>
-      </AnimatePresence>
+      </div>
 
       <div
         className="accordion"
@@ -204,19 +198,11 @@ export function HomeScreen() {
             <ChevronDown size={20} style={{ color: tokens.textMuted }} />
           </motion.span>
         </button>
-        <AnimatePresence>
-          {whyExpanded && (
-            <motion.div
-              className="accordion-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              style={{ color: tokens.textMuted }}
-            >
-              <SensitiveBlur sensitive>{action.why}</SensitiveBlur>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {whyExpanded && (
+          <div className="accordion-body" style={{ color: tokens.textMuted }}>
+            <SensitiveBlur sensitive>{action.why}</SensitiveBlur>
+          </div>
+        )}
       </div>
 
       <div

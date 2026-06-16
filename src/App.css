@@ -9,6 +9,7 @@
 html, body, #root {
   height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -17,68 +18,147 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #1a1a2e;
-  overflow: hidden;
 }
 
 /* ─── App Root ─── */
 .app-root {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 24px 16px;
-  gap: 16px;
+  height: 100dvh;
+  width: 100vw;
+  padding: 16px;
+  overflow: visible;
 }
 
 .device-label {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.5px;
+  z-index: 1000;
+  pointer-events: none;
 }
 
 .platform-hints {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 8px;
   color: rgba(255, 255, 255, 0.4);
   font-size: 12px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* iPhone 17 logical viewport (402 × 874 pt @3x) */
+:root {
+  --phone-width: 402px;
+  --phone-height: 874px;
+  --phone-radius: 55px;
+  --phone-frame-x: 8px;
+  --phone-frame-y: 12px;
+  --phone-outer-width: 418px;
+  --phone-outer-height: 898px;
+}
+
+.phone-scaler {
+  --phone-scale: min(
+    calc((100vw - 48px) / var(--phone-outer-width)),
+    calc((100dvh - 48px) / var(--phone-outer-height))
+  );
+  width: calc(var(--phone-outer-width) * var(--phone-scale));
+  height: calc(var(--phone-outer-height) * var(--phone-scale));
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.phone-device {
+  width: var(--phone-outer-width);
+  height: var(--phone-outer-height);
+  padding: var(--phone-frame-y) var(--phone-frame-x);
+  box-sizing: border-box;
+  background: linear-gradient(165deg, #636366 0%, #48484a 35%, #1c1c1e 100%);
+  border-radius: calc(var(--phone-radius) + var(--phone-frame-y));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 40px 100px rgba(0, 0, 0, 0.65);
+  transform: scale(var(--phone-scale));
+  transform-origin: top left;
 }
 
 /* ─── Phone Frame ─── */
 .phone-frame {
-  width: 390px;
-  height: 844px;
-  border-radius: 44px;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--phone-radius);
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
-  box-shadow:
-    0 0 0 3px #333,
-    0 0 0 6px #1a1a1a,
-    0 25px 80px rgba(0, 0, 0, 0.5);
   flex-shrink: 0;
+  background: #000;
 }
 
-.phone-notch {
+.phone-frame--device {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.phone-bezel {
   position: absolute;
-  top: 0;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  z-index: 120;
+}
+
+.phone-dynamic-island {
+  position: absolute;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   width: 126px;
-  height: 34px;
-  background: #1a1a1a;
-  border-radius: 0 0 20px 20px;
-  z-index: 100;
+  height: 37px;
+  background: #000;
+  border-radius: 19px;
+  z-index: 110;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.phone-home-indicator {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  z-index: 110;
+  pointer-events: none;
+}
+
+.phone-frame > .onboarding {
+  flex: 1;
+  min-height: 0;
 }
 
 .phone-status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 28px 4px;
-  font-size: 14px;
+  padding: 16px 28px 4px;
+  font-size: 15px;
   font-weight: 600;
   z-index: 50;
   flex-shrink: 0;
@@ -188,7 +268,7 @@ body {
 }
 
 .overlay-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 199;
 }
@@ -232,16 +312,19 @@ body {
 .onboarding {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   height: 100%;
-  padding: 0 24px 32px;
+  padding: 54px 24px 28px;
+  overflow: hidden;
 }
 
 .onboarding-indicators {
   display: flex;
   gap: 8px;
   justify-content: center;
-  padding-top: 56px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .indicator-dot {
@@ -258,8 +341,16 @@ body {
 
 .onboarding-step {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.onboarding-step::-webkit-scrollbar {
+  display: none;
 }
 
 .onboarding-icon-wrap {
@@ -359,7 +450,10 @@ body {
 }
 
 .onboarding-footer {
-  padding-top: 16px;
+  flex-shrink: 0;
+  padding-top: 12px;
+  position: relative;
+  z-index: 10;
 }
 
 .primary-btn {
@@ -718,7 +812,7 @@ body {
 .chat-screen {
   display: flex;
   flex-direction: column;
-  height: calc(844px - 120px);
+  height: calc(var(--phone-height) - 120px);
   padding-bottom: 0;
 }
 
@@ -1165,43 +1259,3 @@ body {
   box-shadow: 0 8px 24px rgba(0,0,0,0.2);
 }
 
-/* ─── Responsive ─── */
-@media (max-height: 900px) {
-  .app-root {
-    padding: 12px;
-  }
-
-  .phone-frame {
-    transform: scale(0.92);
-    transform-origin: center center;
-  }
-}
-
-@media (max-height: 780px) {
-  .phone-frame {
-    transform: scale(0.82);
-  }
-}
-
-@media (max-width: 420px) {
-  .app-root {
-    padding: 0;
-  }
-
-  .device-label,
-  .platform-hints {
-    display: none;
-  }
-
-  .phone-frame {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-    box-shadow: none;
-    transform: none;
-  }
-
-  .phone-notch {
-    display: none;
-  }
-}
