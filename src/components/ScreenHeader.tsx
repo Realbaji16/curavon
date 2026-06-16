@@ -16,7 +16,7 @@ export function ScreenHeader({ title, showThemeToggle = true, subtitle }: Screen
   return (
     <header className="screen-header" style={{ color: tokens.text }}>
       <div className="header-content">
-        {title && (
+        {title ? (
           <div>
             <h1 className="header-title">{title}</h1>
             {subtitle && (
@@ -24,6 +24,13 @@ export function ScreenHeader({ title, showThemeToggle = true, subtitle }: Screen
                 {subtitle}
               </p>
             )}
+          </div>
+        ) : (
+          <div className="header-brand">
+            <span className="brand-mark" style={{ background: tokens.primarySoft, color: tokens.primary }}>
+              ✦
+            </span>
+            <span className="brand-name">Healthy.AI</span>
           </div>
         )}
         {showThemeToggle && <ThemeToggle />}

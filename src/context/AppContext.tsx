@@ -11,10 +11,13 @@ export type TabId = 'home' | 'ask' | 'flow' | 'circle' | 'settings';
 
 export type BlockedReason =
   | 'time'
-  | 'motivation'
-  | 'stress'
+  | 'forgot'
+  | 'hard'
+  | 'confusing'
+  | 'worse'
   | 'cost'
   | 'work'
+  | 'other'
   | null;
 
 export interface OnboardingData {
@@ -54,6 +57,7 @@ interface AppState {
   streak: number;
   healthPoints: number;
   whyExpanded: boolean;
+  showDoctorSummary: boolean;
 }
 
 interface AppContextValue extends AppState {
@@ -77,12 +81,14 @@ interface AppContextValue extends AppState {
   toggleWhyExpanded: () => void;
   clearAllData: () => void;
   sendNudge: (memberId: string) => void;
+  openDoctorSummary: () => void;
+  closeDoctorSummary: () => void;
 }
 
 const defaultOnboarding: OnboardingData = {
   ageRange: '25-34',
   sex: 'Prefer not to say',
-  goals: ['Sleep', 'Skin'],
+  goals: ['Sleep', 'Energy'],
   sensitiveMode: false,
 };
 
@@ -111,7 +117,7 @@ const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     onboardingComplete: false,
-    theme: 'warm',
+    theme: 'sky',
     activeTab: 'home',
     sensitiveMode: false,
     onboardingData: defaultOnboarding,
@@ -124,7 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {
         id: 'welcome',
         role: 'assistant',
-        text: 'Hi there! I\'m Healthy.Ai — your action companion. Tell me what\'s going on and I\'ll help you figure out a gentle next step. (I\'m not a doctor, just a friendly guide.)',
+        text: 'Hi — I\'m here to help you organize what\'s going on and find one safe next step. I don\'t diagnose or prescribe. What would you like to focus on today?',
       },
     ],
     chatStep: 0,
@@ -139,6 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     streak: 5,
     healthPoints: 340,
     whyExpanded: false,
+    showDoctorSummary: false,
   });
 
   const setTheme = useCallback((theme: ThemePreset) => {
@@ -277,10 +284,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, whyExpanded: !s.whyExpanded }));
   }, []);
 
+  const openDoctorSummary = useCallback(() => {
+    setState((s) => ({ ...s, showDoctorSummary: true }));
+  }, []);
+
+  const closeDoctorSummary = useCallback(() => {
+    setState((s) => ({ ...s, showDoctorSummary: false }));
+  }, []);
+
   const clearAllData = useCallback(() => {
     setState({
       onboardingComplete: false,
-      theme: 'warm',
+      theme: 'sky',
       activeTab: 'home',
       sensitiveMode: false,
       onboardingData: defaultOnboarding,
@@ -293,7 +308,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         {
           id: 'welcome',
           role: 'assistant',
-          text: 'Hi there! I\'m Healthy.Ai — your action companion.',
+          text: 'Hi — I\'m here to help you organize what\'s going on and find one safe next step.',
         },
       ],
       chatStep: 0,
@@ -308,6 +323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       streak: 0,
       healthPoints: 0,
       whyExpanded: false,
+      showDoctorSummary: false,
     });
   }, []);
 
@@ -342,6 +358,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleWhyExpanded,
         clearAllData,
         sendNudge,
+        openDoctorSummary,
+        closeDoctorSummary,
       }}
     >
       {children}

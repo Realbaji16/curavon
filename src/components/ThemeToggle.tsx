@@ -5,9 +5,9 @@ import { themes } from '../theme/themes';
 import type { ThemePreset } from '../theme/themes';
 
 const PRESETS: { id: ThemePreset; label: string; emoji: string }[] = [
-  { id: 'calm', label: 'Calm', emoji: '🌿' },
-  { id: 'warm', label: 'Warm', emoji: '☀️' },
-  { id: 'minimal', label: 'Minimal', emoji: '◻️' },
+  { id: 'sky', label: 'Sky', emoji: '☁️' },
+  { id: 'mist', label: 'Mist', emoji: '🌫️' },
+  { id: 'dawn', label: 'Dawn', emoji: '🌅' },
 ];
 
 export function ThemeToggle() {
@@ -16,38 +16,40 @@ export function ThemeToggle() {
   const tokens = themes[theme];
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="theme-toggle-wrap">
       <button
-        className="theme-toggle-btn"
+        type="button"
+        className="theme-toggle-btn glass-card"
         onClick={() => setOpen(!open)}
-        aria-label="Switch design preset"
+        aria-label="Switch mood"
         style={{
-          background: tokens.surface,
-          border: `1.5px solid ${tokens.border}`,
+          background: tokens.glass,
+          borderColor: tokens.glassBorder,
           color: tokens.text,
         }}
       >
         <span className="theme-dot" style={{ background: tokens.primary }} />
-        {tokens.name.split(' ')[0]}
+        {tokens.name}
       </button>
       <AnimatePresence>
         {open && (
           <>
             <div className="overlay-backdrop" onClick={() => setOpen(false)} />
             <motion.div
-              className="theme-dropdown"
+              className="theme-dropdown glass-card"
               initial={{ opacity: 0, y: -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.95 }}
               style={{
-                background: tokens.surface,
-                border: `1px solid ${tokens.border}`,
+                background: tokens.glass,
+                borderColor: tokens.glassBorder,
                 boxShadow: tokens.shadow,
               }}
             >
               {PRESETS.map((p) => (
                 <button
                   key={p.id}
+                  type="button"
                   className={`theme-option ${theme === p.id ? 'active' : ''}`}
                   onClick={() => {
                     setTheme(p.id);
@@ -55,7 +57,8 @@ export function ThemeToggle() {
                   }}
                   style={{
                     color: themes[p.id].text,
-                    background: theme === p.id ? themes[p.id].primarySoft : 'transparent',
+                    background:
+                      theme === p.id ? themes[p.id].primarySoft : 'transparent',
                   }}
                 >
                   <span>{p.emoji}</span>

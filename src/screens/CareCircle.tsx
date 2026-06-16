@@ -1,134 +1,145 @@
 import { motion } from 'framer-motion';
-import { Heart, Bell } from 'lucide-react';
+import { Moon, Zap, Utensils, Heart, Sparkles, Stethoscope, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { themes } from '../theme/themes';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { staggerContainer, fadeUp, tapScale } from '../motion/variants';
 
-interface Member {
-  id: string;
-  name: string;
-  relation: string;
-  avatar: string;
-  status: 'active' | 'missed' | 'nudge';
-  statusLabel: string;
-}
+const CATEGORIES = ['All', 'Sleep', 'Energy', 'Habits', 'Care'];
 
-const MEMBERS: Member[] = [
+const INSIGHTS = [
   {
-    id: '1',
-    name: 'Mom',
-    relation: 'Parent',
-    avatar: '👩',
-    status: 'active',
-    statusLabel: 'Active',
+    id: 'sleep',
+    title: 'Sleep basics',
+    desc: 'Gentle habits for more restful nights — no rigid rules.',
+    icon: Moon,
+    read: '4 min',
+    category: 'Sleep',
   },
   {
-    id: '2',
-    name: 'Alex',
-    relation: 'Partner',
-    avatar: '🧑',
-    status: 'missed',
-    statusLabel: 'Missed Check-In',
+    id: 'energy',
+    title: 'Energy reset',
+    desc: 'Small patterns that may help when afternoons feel heavy.',
+    icon: Zap,
+    read: '3 min',
+    category: 'Energy',
   },
   {
-    id: '3',
-    name: 'Jordan',
-    relation: 'Sibling',
-    avatar: '👦',
-    status: 'nudge',
-    statusLabel: 'Needs Nudge',
+    id: 'eating',
+    title: 'Eating habits',
+    desc: 'Mindful approaches to nourishment without guilt.',
+    icon: Utensils,
+    read: '5 min',
+    category: 'Habits',
   },
   {
-    id: '4',
-    name: 'Sam',
-    relation: 'Friend',
-    avatar: '🧑‍🤝‍🧑',
-    status: 'active',
-    statusLabel: 'Active',
+    id: 'stress',
+    title: 'Stress support',
+    desc: 'Calm tools for busy days and racing thoughts.',
+    icon: Heart,
+    read: '4 min',
+    category: 'Habits',
+  },
+  {
+    id: 'skin',
+    title: 'Skin care basics',
+    desc: 'Simple routines and when to track changes over time.',
+    icon: Sparkles,
+    read: '3 min',
+    category: 'Habits',
+  },
+  {
+    id: 'care',
+    title: 'When to seek care',
+    desc: 'Know when self-care is enough — and when to ask for help.',
+    icon: Stethoscope,
+    read: '5 min',
+    category: 'Care',
   },
 ];
 
-const statusColors = {
-  active: { bg: '#D8F3DC', text: '#40916C' },
-  missed: { bg: '#FFE8DC', text: '#E07A5F' },
-  nudge: { bg: '#FAECD8', text: '#C06040' },
-};
-
 export function CareCircleScreen() {
-  const { theme, sendNudge } = useApp();
+  const { theme, showToast } = useApp();
   const tokens = themes[theme];
 
   return (
-    <div className="screen circle-screen">
-      <ScreenHeader
-        title="Care Circle"
-        subtitle="Privacy-first family support"
-      />
+    <div className="screen learn-screen">
+      <ScreenHeader title="Learn" subtitle="Calm insights for everyday health" />
 
-      <div
-        className="circle-info-card"
-        style={{
-          background: tokens.accentSoft,
-          border: `1px solid ${tokens.border}`,
-          color: tokens.textSecondary,
-        }}
-      >
-        <Heart size={18} />
-        <span>Only shared milestones appear here — never raw symptom details.</span>
-      </div>
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+        <motion.div
+          className="learn-intro warm-card glass-card-inner"
+          variants={fadeUp}
+          style={{
+            background: tokens.cardGradient,
+            border: `1px solid ${tokens.glassBorder}`,
+            boxShadow: tokens.shadowSoft,
+          }}
+        >
+          <p style={{ color: tokens.textSecondary, lineHeight: 1.55, margin: 0 }}>
+            Short guides to support your health flow — educational, not diagnostic. Always talk to a
+            clinician about symptoms that worry you.
+          </p>
+        </motion.div>
 
-      <div className="member-list">
-        {MEMBERS.map((member, i) => {
-          const colors = statusColors[member.status];
-          return (
-            <motion.div
-              key={member.id}
-              className="member-card"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
+        <motion.div className="learn-categories" variants={fadeUp}>
+          {CATEGORIES.map((cat, i) => (
+            <motion.button
+              key={cat}
+              type="button"
+              className={`learn-category-chip ${i === 0 ? 'learn-category-chip--active' : ''}`}
+              {...tapScale}
+              onClick={() => showToast(`Filter: ${cat}`)}
               style={{
-                background: tokens.cardGradient,
-                border: `1px solid ${tokens.border}`,
-                boxShadow: tokens.shadow,
+                background: i === 0 ? tokens.primarySoft : tokens.glass,
+                border: `1.5px solid ${i === 0 ? tokens.primary : tokens.border}`,
+                color: i === 0 ? tokens.primary : tokens.text,
               }}
             >
-              <div className="member-info">
-                <span className="member-avatar">{member.avatar}</span>
-                <div>
-                  <p className="member-name" style={{ color: tokens.text }}>
-                    {member.name}
-                  </p>
-                  <p className="member-relation" style={{ color: tokens.textMuted }}>
-                    {member.relation}
-                  </p>
-                </div>
-              </div>
+              {cat}
+            </motion.button>
+          ))}
+        </motion.div>
 
-              <span
-                className="status-tag"
-                style={{ background: colors.bg, color: colors.text }}
-              >
-                {member.statusLabel}
-              </span>
-
+        <div className="insight-grid">
+          {INSIGHTS.map((item) => {
+            const Icon = item.icon;
+            return (
               <motion.button
-                className="nudge-btn"
-                whileTap={{ scale: 0.95 }}
-                onClick={() => sendNudge(member.id)}
+                key={item.id}
+                type="button"
+                className="insight-card warm-card glass-card-inner"
+                variants={fadeUp}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => showToast(`Opening: ${item.title}`)}
                 style={{
-                  background: tokens.surfaceElevated,
-                  border: `1.5px solid ${tokens.border}`,
-                  color: tokens.primary,
+                  background: tokens.cardGradient,
+                  border: `1px solid ${tokens.glassBorder}`,
+                  boxShadow: tokens.shadowSoft,
+                  textAlign: 'left',
                 }}
               >
-                <Bell size={16} />
-                Send Support Nudge
+                <div
+                  className="insight-icon-wrap"
+                  style={{ background: tokens.primarySoft }}
+                >
+                  <Icon size={22} style={{ color: tokens.primary }} />
+                </div>
+                <h3 style={{ color: tokens.text, margin: '10px 0 4px', fontSize: 16 }}>{item.title}</h3>
+                <p style={{ color: tokens.textMuted, fontSize: 13, lineHeight: 1.45, margin: 0 }}>
+                  {item.desc}
+                </p>
+                <div className="insight-footer">
+                  <span className="progress-pill" style={{ background: tokens.tealSoft, color: tokens.teal }}>
+                    {item.read}
+                  </span>
+                  <ChevronRight size={16} style={{ color: tokens.textMuted }} />
+                </div>
               </motion.button>
-            </motion.div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </motion.div>
     </div>
   );
 }
