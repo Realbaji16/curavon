@@ -1,15 +1,16 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Sparkles, ChevronRight, Lock, Target } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { themes } from '../theme/themes';
+import { CuravonIcon, CuravonWordmark } from '../components/CuravonBrand';
 
 const STEPS = [
   {
     id: 'welcome',
-    title: 'Meet Healthy.AI',
+    title: 'Meet Curavon',
     subtitle: 'Your next-best-action health companion',
-    body: 'We help you move from health confusion to one clear, safe step — without overwhelm.',
-    icon: Sparkles,
+    body: 'Move from health confusion to one clear, safe next step — without overwhelm.',
+    icon: null,
   },
   {
     id: 'action',
@@ -45,11 +46,10 @@ const GOAL_OPTIONS = [
 ];
 
 const SAFETY_COPY =
-  'Healthy.AI does not diagnose or replace a clinician. It helps you organize concerns and choose safer next steps.';
+  'Curavon does not diagnose or replace a clinician. It helps you organize concerns and choose safer next steps.';
 
 export function Onboarding() {
-  const { completeOnboarding, theme } = useApp();
-  const tokens = themes[theme];
+  const { completeOnboarding } = useApp();
   const [step, setStep] = useState(0);
   const [goals, setGoals] = useState<string[]>(['Sleep', 'Energy']);
   const [sensitiveMode, setSensitiveModeLocal] = useState(false);
@@ -74,126 +74,128 @@ export function Onboarding() {
   };
 
   const current = STEPS[step];
+  const isLast = step === STEPS.length - 1;
 
   return (
     <div className="onboarding">
-      <div className="onboarding-indicators">
-        {STEPS.map((_, i) => (
-          <div
-            key={i}
-            className={`indicator-dot ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}
-            style={{ background: i <= step ? tokens.primary : tokens.border }}
-          />
-        ))}
-      </div>
+      <header className="onboarding-header">
+        <span className="onboarding-status-pill">
+          <CuravonIcon size={18} compact className="onboarding-status-brand-icon" />
+          Gentle health companion
+        </span>
+      </header>
 
-      <div key={step} className="onboarding-step">
-        {current.id !== 'goals' ? (
-          <div
-            className="onboarding-card warm-card glass-card-inner"
-            style={{
-              background: tokens.cardGradient,
-              border: `1px solid ${tokens.glassBorder}`,
-              boxShadow: tokens.shadowSoft,
-            }}
+      <div className="onboarding-step">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            className="onboarding-main"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
           >
-            {current.icon && (
-              <div className="onboarding-icon-wrap" style={{ background: tokens.primarySoft }}>
-                <current.icon size={40} style={{ color: tokens.primary }} />
+            {current.id !== 'goals' ? (
+              <div className="onboarding-card onboarding-card--premium warm-card glass-card-inner">
+                {current.id === 'welcome' ? (
+                  <div className="onboarding-icon-wrap onboarding-icon-wrap--brand">
+                    <CuravonIcon size={60} className="onboarding-hero-brand-icon" />
+                  </div>
+                ) : current.icon ? (
+                  <div className="onboarding-icon-wrap">
+                    <current.icon size={36} className="onboarding-icon" />
+                  </div>
+                ) : null}
+                <h1 className="onboarding-title">
+                  {current.id === 'welcome' ? (
+                    <>
+                      <span className="onboarding-title-lead">Meet</span>{' '}
+                      <CuravonWordmark className="curavon-wordmark--hero" />
+                    </>
+                  ) : (
+                    current.title
+                  )}
+                </h1>
+                <p className={`onboarding-subtitle ${current.id === 'welcome' ? 'curavon-tagline' : ''}`}>
+                  {current.subtitle}
+                </p>
+                <p className="onboarding-body">{current.body}</p>
+              </div>
+            ) : (
+              <div className="onboarding-card onboarding-card--premium warm-card glass-card-inner setup-form">
+                <h1 className="onboarding-title">{current.title}</h1>
+                <p className="onboarding-subtitle">{current.subtitle}</p>
+                <div className="goal-chips">
+                  {GOAL_OPTIONS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      className={`goal-chip ${goals.includes(g) ? 'selected' : ''}`}
+                      onClick={() => toggleGoal(g)}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+                <div className="sensitive-toggle-row">
+                  <div>
+                    <p className="toggle-label">Sensitive Mode</p>
+                    <p className="toggle-desc">Blur personal health details on screen</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`native-switch ${sensitiveMode ? 'on' : ''}`}
+                    onClick={() => setSensitiveModeLocal(!sensitiveMode)}
+                    aria-pressed={sensitiveMode}
+                  >
+                    <span className="switch-thumb" />
+                  </button>
+                </div>
               </div>
             )}
-            <h1 className="onboarding-title" style={{ color: tokens.text }}>{current.title}</h1>
-            <p className="onboarding-subtitle" style={{ color: tokens.textSecondary }}>
-              {current.subtitle}
-            </p>
-            <p className="onboarding-body" style={{ color: tokens.textMuted }}>{current.body}</p>
-          </div>
-        ) : (
-          <div className="setup-form">
-            <h1 className="onboarding-title" style={{ color: tokens.text }}>{current.title}</h1>
-            <p className="onboarding-subtitle" style={{ color: tokens.textSecondary }}>
-              {current.subtitle}
-            </p>
-            <div className="goal-chips">
-              {GOAL_OPTIONS.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  className={`goal-chip ${goals.includes(g) ? 'selected' : ''}`}
-                  onClick={() => toggleGoal(g)}
-                  style={{
-                    background: goals.includes(g) ? tokens.primary : tokens.glass,
-                    color: goals.includes(g) ? '#fff' : tokens.text,
-                    border: `1.5px solid ${goals.includes(g) ? tokens.primary : tokens.border}`,
-                  }}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-            <div
-              className="sensitive-toggle-row warm-card glass-card-inner"
-              style={{
-                background: tokens.cardGradient,
-                border: `1px solid ${tokens.glassBorder}`,
-              }}
-            >
-              <div>
-                <p className="toggle-label" style={{ color: tokens.text }}>Sensitive Mode</p>
-                <p className="toggle-desc" style={{ color: tokens.textMuted }}>
-                  Blur personal health details on screen
-                </p>
-              </div>
-              <button
-                type="button"
-                className={`native-switch ${sensitiveMode ? 'on' : ''}`}
-                onClick={() => setSensitiveModeLocal(!sensitiveMode)}
-                style={{ background: sensitiveMode ? tokens.primary : tokens.border }}
-                aria-pressed={sensitiveMode}
-              >
-                <span className="switch-thumb" />
-              </button>
-            </div>
-          </div>
-        )}
 
-        <div
-          className="privacy-notice safety-card warm-card"
-          style={{
-            background: tokens.accentSoft,
-            border: `1px solid ${tokens.border}`,
-            color: tokens.textSecondary,
-          }}
-        >
-          <Shield size={16} />
-          <span>{SAFETY_COPY}</span>
-        </div>
+            <div className="privacy-notice safety-card onboarding-safety">
+              <Shield size={17} aria-hidden="true" />
+              <span>{SAFETY_COPY}</span>
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      <div className="onboarding-footer">
-        {step < STEPS.length - 1 ? (
-          <button
+      <footer className="onboarding-actions">
+        <div className="onboarding-indicators" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
+          {STEPS.map((s, i) => (
+            <div
+              key={s.id}
+              className={`indicator-dot ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}
+              aria-current={i === step ? 'step' : undefined}
+            />
+          ))}
+        </div>
+
+        {!isLast ? (
+          <motion.button
             type="button"
-            className="primary-btn soft-button"
+            className="btn btn-primary btn-pill onboarding-continue-btn"
             onClick={next}
-            style={{ background: tokens.heroGradient, color: '#fff', boxShadow: tokens.shadow }}
+            whileTap={{ scale: 0.98 }}
           >
-            Continue
-            <ChevronRight size={20} />
-          </button>
+            <span className="button-label">Continue</span>
+            <ChevronRight size={20} strokeWidth={2.4} />
+          </motion.button>
         ) : (
-          <button
+          <motion.button
             type="button"
-            className="primary-btn soft-button"
+            className="btn btn-primary btn-pill onboarding-continue-btn"
             onClick={finish}
             disabled={goals.length === 0}
-            style={{ background: tokens.heroGradient, color: '#fff', boxShadow: tokens.shadow }}
+            whileTap={{ scale: 0.98 }}
           >
-            Get started
+            <span className="button-label">Get started</span>
             <Sparkles size={18} />
-          </button>
+          </motion.button>
         )}
-      </div>
+      </footer>
     </div>
   );
 }

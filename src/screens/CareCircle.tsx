@@ -67,16 +67,8 @@ export function CareCircleScreen() {
       <ScreenHeader title="Learn" subtitle="Calm insights for everyday health" />
 
       <motion.div variants={staggerContainer} initial="hidden" animate="visible">
-        <motion.div
-          className="learn-intro warm-card glass-card-inner"
-          variants={fadeUp}
-          style={{
-            background: tokens.cardGradient,
-            border: `1px solid ${tokens.glassBorder}`,
-            boxShadow: tokens.shadowSoft,
-          }}
-        >
-          <p style={{ color: tokens.textSecondary, lineHeight: 1.55, margin: 0 }}>
+        <motion.div className="learn-intro warm-card glass-card-inner" variants={fadeUp}>
+          <p style={{ lineHeight: 1.55, margin: 0 }}>
             Short guides to support your health flow — educational, not diagnostic. Always talk to a
             clinician about symptoms that worry you.
           </p>
@@ -112,28 +104,16 @@ export function CareCircleScreen() {
                 variants={fadeUp}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => showToast(`Opening: ${item.title}`)}
-                style={{
-                  background: tokens.cardGradient,
-                  border: `1px solid ${tokens.glassBorder}`,
-                  boxShadow: tokens.shadowSoft,
-                  textAlign: 'left',
-                }}
+                style={{ textAlign: 'left' }}
               >
-                <div
-                  className="insight-icon-wrap"
-                  style={{ background: tokens.primarySoft }}
-                >
-                  <Icon size={22} style={{ color: tokens.primary }} />
+                <div className="insight-icon-wrap">
+                  <Icon size={22} className="icon-warm" />
                 </div>
-                <h3 style={{ color: tokens.text, margin: '10px 0 4px', fontSize: 16 }}>{item.title}</h3>
-                <p style={{ color: tokens.textMuted, fontSize: 13, lineHeight: 1.45, margin: 0 }}>
-                  {item.desc}
-                </p>
+                <h3 style={{ margin: '10px 0 4px', fontSize: 16 }}>{item.title}</h3>
+                <p>{item.desc}</p>
                 <div className="insight-footer">
-                  <span className="progress-pill" style={{ background: tokens.tealSoft, color: tokens.teal }}>
-                    {item.read}
-                  </span>
-                  <ChevronRight size={16} style={{ color: tokens.textMuted }} />
+                  <span className="progress-pill progress-pill--teal">{item.read}</span>
+                  <ChevronRight size={16} className="icon-muted" />
                 </div>
               </motion.button>
             );

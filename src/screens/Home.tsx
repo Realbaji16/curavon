@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { BlockedReason } from '../context/AppContext';
-import { themes } from '../theme/themes';
 import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
 import { BlockedReasonSheet } from '../components/BottomSheets';
 import { DoctorSummary } from '../components/DoctorSummary';
@@ -26,7 +25,7 @@ const ACTIONS = {
     title: "Today's Next Best Action",
     task: 'Drink a glass of water and log your energy tonight.',
     timeframe: '2 minutes',
-    why: 'This helps Healthy.AI understand whether your energy pattern is improving.',
+    why: 'This helps Curavon understand whether your energy pattern is improving.',
     icon: Droplets,
   },
   adjusted: {
@@ -65,7 +64,6 @@ function getGreeting() {
 
 export function HomeScreen() {
   const {
-    theme,
     onboardingData,
     actionDone,
     actionAdjusted,
@@ -82,7 +80,6 @@ export function HomeScreen() {
     showDoctorSummary,
     closeDoctorSummary,
   } = useApp();
-  const tokens = themes[theme];
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
 
@@ -129,17 +126,17 @@ export function HomeScreen() {
 
       <motion.div variants={staggerContainer} initial="hidden" animate="visible">
         <motion.div className="home-greeting" variants={fadeUp}>
-          <p className="greeting-time" style={{ color: tokens.textMuted }}>{getGreeting()}</p>
-          <h2 className="greeting-name" style={{ color: tokens.text }}>
+          <p className="greeting-time">{getGreeting()}</p>
+          <h2 className="greeting-name">
             One step at a time
           </h2>
-          <p className="greeting-status" style={{ color: tokens.textSecondary }}>
+          <p className="greeting-status">
             {actionDone
               ? 'You completed today\'s action — well done.'
               : 'Your next best action is ready below.'}
           </p>
           {onboardingData.goals.length > 0 && (
-            <p className="greeting-goals" style={{ color: tokens.textMuted }}>
+            <p className="greeting-goals">
               Focus:{' '}
               <SensitiveBlur sensitive>{onboardingData.goals.join(' · ')}</SensitiveBlur>
             </p>
@@ -154,7 +151,6 @@ export function HomeScreen() {
             initial="hidden"
             animate="visible"
             exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2 } }}
-            style={{ background: tokens.heroGradient, boxShadow: tokens.shadow }}
           >
             <div className="hero-card-glow" aria-hidden="true" />
             <div className="hero-card-header">
@@ -246,7 +242,7 @@ export function HomeScreen() {
             <div className="action-buttons">
               <motion.button
                 type="button"
-                className={`action-btn done-btn ${actionDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
+                className={`action-btn btn-health-done done-btn ${actionDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
                 whileTap={actionDone ? undefined : { scale: 0.94 }}
                 onClick={handleDone}
                 disabled={actionDone}
@@ -256,7 +252,7 @@ export function HomeScreen() {
               </motion.button>
               <motion.button
                 type="button"
-                className="action-btn blocked-btn"
+                className="action-btn btn-health-blocked blocked-btn"
                 {...tapScale}
                 onClick={openBlockedSheet}
               >
@@ -265,7 +261,7 @@ export function HomeScreen() {
               </motion.button>
               <motion.button
                 type="button"
-                className="action-btn adjust-btn"
+                className="action-btn btn-health-adjust adjust-btn"
                 {...tapScale}
                 onClick={handleAdjust}
               >
@@ -282,19 +278,14 @@ export function HomeScreen() {
           variants={fadeUp}
           {...tapScale}
           onClick={() => setActiveTab('flow')}
-          style={{
-            background: tokens.cardGradient,
-            border: `1px solid ${tokens.glassBorder}`,
-            boxShadow: tokens.shadowSoft,
-          }}
         >
           <div className="flow-preview-head">
-            <GitBranch size={20} style={{ color: tokens.teal }} />
+            <GitBranch size={20} className="icon-teal" />
             <div>
-              <p className="flow-preview-label" style={{ color: tokens.textMuted }}>Active health flow</p>
-              <p className="flow-preview-title" style={{ color: tokens.text }}>{FLOW_PREVIEW.title}</p>
+              <p className="flow-preview-label">Active health flow</p>
+              <p className="flow-preview-title">{FLOW_PREVIEW.title}</p>
             </div>
-            <ChevronRight size={18} style={{ color: tokens.textMuted }} />
+            <ChevronRight size={18} className="icon-muted" />
           </div>
           <div className="flow-preview-bar">
             <motion.div
@@ -302,32 +293,26 @@ export function HomeScreen() {
               initial={{ width: 0 }}
               animate={{ width: `${(FLOW_PREVIEW.progress / FLOW_PREVIEW.total) * 100}%` }}
               transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1], delay: 0.25 }}
-              style={{ background: tokens.teal }}
             />
           </div>
-          <p className="flow-preview-stage" style={{ color: tokens.textSecondary }}>
+          <p className="flow-preview-stage">
             Stage {FLOW_PREVIEW.progress} of {FLOW_PREVIEW.total} · {FLOW_PREVIEW.stage}
           </p>
         </motion.button>
 
         <motion.div variants={fadeUp}>
-          <StreakCard streakCount={streak} todayDone={actionDone} theme={theme} />
+          <StreakCard streakCount={streak} todayDone={actionDone} />
         </motion.div>
 
         <motion.div
           className="smart-silence-card warm-card glass-card-inner"
           variants={fadeUp}
-          style={{
-            background: tokens.cardGradient,
-            border: `1px solid ${tokens.glassBorder}`,
-            boxShadow: tokens.shadowSoft,
-          }}
         >
           <div className="section-header">
-            <BellOff size={20} style={{ color: tokens.accent }} />
-            <h3 style={{ color: tokens.text, margin: 0 }}>Smart Silence</h3>
+            <BellOff size={20} className="icon-accent" />
+            <h3>Smart Silence</h3>
           </div>
-          <ul className="silence-bullets" style={{ color: tokens.textSecondary }}>
+          <ul className="silence-bullets">
             <li>No random reminders — only useful nudges.</li>
             <li>Sensitive details stay hidden when you need privacy.</li>
             <li>
@@ -336,9 +321,8 @@ export function HomeScreen() {
           </ul>
           <button
             type="button"
-            className="ghost-button"
+            className="btn btn-secondary btn-glass ghost-button text-link-warm"
             onClick={() => setActiveTab('settings')}
-            style={{ color: tokens.primary, marginTop: 8 }}
           >
             Manage in Profile
           </button>
@@ -350,20 +334,15 @@ export function HomeScreen() {
           variants={fadeUp}
           {...tapScale}
           onClick={openDoctorSummary}
-          style={{
-            background: tokens.cardGradient,
-            border: `1px solid ${tokens.glassBorder}`,
-            boxShadow: tokens.shadowSoft,
-          }}
         >
-          <FileText size={20} style={{ color: tokens.primary }} />
+          <FileText size={20} className="icon-warm" />
           <div className="doctor-shortcut-text">
-            <span style={{ color: tokens.text, fontWeight: 700 }}>Doctor Summary</span>
-            <span style={{ color: tokens.textMuted, fontSize: 13 }}>
+            <span>Doctor Summary</span>
+            <span>
               Prepare for your next visit
             </span>
           </div>
-          <ChevronRight size={18} style={{ color: tokens.textMuted }} />
+          <ChevronRight size={18} className="icon-muted" />
         </motion.button>
       </motion.div>
 

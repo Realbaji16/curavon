@@ -52,25 +52,18 @@ export function SettingsScreen() {
     <div className="screen settings-screen">
       <ScreenHeader title="Profile" subtitle="Trust, privacy & control" />
 
-      <section
-        className="settings-section warm-card glass-card-inner"
-        style={{
-          background: tokens.cardGradient,
-          border: `1px solid ${tokens.glassBorder}`,
-          boxShadow: tokens.shadowSoft,
-        }}
-      >
+      <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <EyeOff size={20} style={{ color: tokens.primary }} />
-          <h3 style={{ color: tokens.text, margin: 0 }}>Sensitive Mode</h3>
+          <EyeOff size={20} className="icon-warm" />
+          <h3>Sensitive Mode</h3>
         </div>
-        <p className="section-desc" style={{ color: tokens.textMuted }}>
+        <p className="section-desc">
           Sensitive details stay hidden on screen when you need privacy.
         </p>
         <div className="toggle-row">
           <div>
-            <p className="toggle-label" style={{ color: tokens.text }}>Enable Sensitive Mode</p>
-            <p className="toggle-desc" style={{ color: tokens.textMuted }}>
+            <p className="toggle-label">Enable Sensitive Mode</p>
+            <p className="toggle-desc">
               Blurs symptoms, goals, and personal health text
             </p>
           </div>
@@ -78,7 +71,6 @@ export function SettingsScreen() {
             type="button"
             className={`native-switch ${sensitiveMode ? 'on' : ''}`}
             onClick={() => setSensitiveMode(!sensitiveMode)}
-            style={{ background: sensitiveMode ? tokens.primary : tokens.border }}
             aria-pressed={sensitiveMode}
           >
             <span className="switch-thumb" />
@@ -98,32 +90,24 @@ export function SettingsScreen() {
         )}
       </section>
 
-      <section
-        className="settings-section warm-card glass-card-inner"
-        style={{
-          background: tokens.cardGradient,
-          border: `1px solid ${tokens.glassBorder}`,
-          boxShadow: tokens.shadowSoft,
-        }}
-      >
+      <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <Bell size={20} style={{ color: tokens.accent }} />
-          <h3 style={{ color: tokens.text, margin: 0 }}>Smart Silence</h3>
+          <Bell size={20} className="icon-accent" />
+          <h3>Smart Silence</h3>
         </div>
-        <p className="section-desc" style={{ color: tokens.textMuted }}>
+        <p className="section-desc">
           Only useful nudges. No spam. You stay in control.
         </p>
         {silenceOptions.map(({ key, label, desc }) => (
           <div key={key} className="toggle-row">
             <div>
-              <p className="toggle-label" style={{ color: tokens.text }}>{label}</p>
-              <p className="toggle-desc" style={{ color: tokens.textMuted }}>{desc}</p>
+              <p className="toggle-label">{label}</p>
+              <p className="toggle-desc">{desc}</p>
             </div>
             <button
               type="button"
               className={`native-switch ${smartSilence[key] ? 'on' : ''}`}
               onClick={() => toggleSmartSilence(key)}
-              style={{ background: smartSilence[key] ? tokens.primary : tokens.border }}
               aria-pressed={smartSilence[key]}
             >
               <span className="switch-thumb" />
@@ -132,64 +116,38 @@ export function SettingsScreen() {
         ))}
       </section>
 
-      <section
-        className="settings-section warm-card glass-card-inner"
-        style={{
-          background: tokens.cardGradient,
-          border: `1px solid ${tokens.glassBorder}`,
-          boxShadow: tokens.shadowSoft,
-        }}
-      >
+      <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <FileText size={20} style={{ color: tokens.teal }} />
-          <h3 style={{ color: tokens.text, margin: 0 }}>Doctor Summary</h3>
+          <FileText size={20} className="icon-teal" />
+          <h3>Doctor Summary</h3>
         </div>
-        <p className="section-desc" style={{ color: tokens.textMuted }}>
+        <p className="section-desc">
           Prepare a visit-ready summary — not a diagnosis.
         </p>
         <button
           type="button"
-          className="soft-button"
+          className="btn btn-secondary btn-glass"
           onClick={openDoctorSummary}
-          style={{
-            background: tokens.primarySoft,
-            color: tokens.primary,
-            width: '100%',
-            marginTop: 8,
-          }}
+          style={{ width: '100%', marginTop: 8 }}
         >
           View Doctor Summary
         </button>
       </section>
 
-      <section
-        className="settings-section warm-card glass-card-inner"
-        style={{
-          background: tokens.cardGradient,
-          border: `1px solid ${tokens.glassBorder}`,
-          boxShadow: tokens.shadowSoft,
-        }}
-      >
+      <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <Lock size={20} style={{ color: tokens.teal }} />
-          <h3 style={{ color: tokens.text, margin: 0 }}>Privacy</h3>
+          <Lock size={20} className="icon-teal" />
+          <h3>Privacy</h3>
         </div>
-        <p className="section-desc" style={{ color: tokens.textMuted }}>
+        <p className="section-desc">
           All data stays on your device. Nothing is sold or shared without your consent.
         </p>
       </section>
 
-      <div
-        className="disclaimer-box safety-card"
-        style={{
-          background: tokens.accentSoft,
-          border: `1px solid ${tokens.border}`,
-          color: tokens.textSecondary,
-        }}
-      >
+      <div className="disclaimer-box safety-card">
         <Shield size={18} />
         <span>
-          Healthy.AI is not a doctor. It does not diagnose, prescribe, or replace emergency care.
+          Curavon is not a doctor. It does not diagnose, prescribe, or replace emergency care.
         </span>
       </div>
 

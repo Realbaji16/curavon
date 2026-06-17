@@ -246,7 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         {
           id: 'welcome',
           role: 'assistant',
-          text: 'Hi there! I\'m Healthy.Ai — your action companion. Tell me what\'s going on and I\'ll help you figure out a gentle next step.',
+          text: 'Hi there! I\'m Curavon — your action companion. Tell me what\'s going on and I\'ll help you figure out a gentle next step.',
         },
       ],
       chatStep: 0,

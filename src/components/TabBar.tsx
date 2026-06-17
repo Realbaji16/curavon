@@ -24,14 +24,7 @@ export function TabBar() {
 
   return (
     <div className="tab-bar-wrap">
-      <nav
-        className="tab-bar glass-card"
-        style={{
-          background: tokens.glass,
-          borderColor: tokens.glassBorder,
-          boxShadow: tokens.shadowSoft,
-        }}
-      >
+      <nav className="tab-bar glass-card">
         {TABS.map(({ id, label, icon: Icon }) => {
           const active = activeTab === id;
           return (

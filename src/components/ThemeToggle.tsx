@@ -8,6 +8,7 @@ const PRESETS: { id: ThemePreset; label: string; emoji: string }[] = [
   { id: 'sky', label: 'Sky', emoji: '☁️' },
   { id: 'mist', label: 'Mist', emoji: '🌫️' },
   { id: 'dawn', label: 'Dawn', emoji: '🌅' },
+  { id: 'night', label: 'Night', emoji: '🌙' },
 ];
 
 export function ThemeToggle() {

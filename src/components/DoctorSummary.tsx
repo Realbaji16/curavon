@@ -126,11 +126,6 @@ export function DoctorSummary({ variant = 'card', onClose, concern, loading }: D
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28 }}
-      style={{
-        background: tokens.cardGradient,
-        border: `1px solid ${tokens.glassBorder}`,
-        boxShadow: tokens.shadowSoft,
-      }}
     >
       {onClose && (
         <motion.button

@@ -50,7 +50,7 @@ const RECENT_CONCERNS = [
 
 type AskMode = 'landing' | 'intake' | 'chat';
 
-export function AskHealthyScreen() {
+export function AskCuravonScreen() {
   const { theme, chatMessages, addChatMessage, showSafetyEscalation } = useApp();
   const tokens = themes[theme];
   const [mode, setMode] = useState<AskMode>('landing');
@@ -122,7 +122,6 @@ export function AskHealthyScreen() {
               initial={false}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-              style={{ background: tokens.teal }}
             />
           </div>
           <span style={{ color: tokens.textMuted, fontSize: 12 }}>
@@ -137,17 +136,12 @@ export function AskHealthyScreen() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -12 }}
             transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
-            style={{
-              background: tokens.cardGradient,
-              border: `1px solid ${tokens.glassBorder}`,
-              boxShadow: tokens.shadowSoft,
-            }}
           >
-            <p className="intake-concern-label" style={{ color: tokens.textMuted }}>Your concern</p>
-            <p className="intake-concern" style={{ color: tokens.text }}>
+            <p className="intake-concern-label">Your concern</p>
+            <p className="intake-concern">
               <SensitiveBlur sensitive>{concern}</SensitiveBlur>
             </p>
-            <h2 className="intake-question" style={{ color: tokens.text }}>{q.question}</h2>
+            <h2 className="intake-question">{q.question}</h2>
             <div className="intake-options">
               {q.options.map((opt, i) => (
                 <motion.button
@@ -176,7 +170,7 @@ export function AskHealthyScreen() {
           {intakeStep > 0 && (
             <motion.button
               type="button"
-              className="ghost-button"
+              className="ghost-button btn btn-secondary btn-glass"
               {...tapScale}
               onClick={() => {
                 setIntakeStep(intakeStep - 1);
@@ -189,7 +183,7 @@ export function AskHealthyScreen() {
             </motion.button>
           )}
         </div>
-        <p className="intake-note" style={{ color: tokens.textMuted }}>
+        <p className="intake-note">
           Red-flag check runs before your health flow is created.
         </p>
       </div>
@@ -213,19 +207,14 @@ export function AskHealthyScreen() {
               variants={fadeUp}
               initial="hidden"
               animate="visible"
-              style={{
-                background: tokens.cardGradient,
-                border: `1px solid ${tokens.glassBorder}`,
-                boxShadow: tokens.shadowSoft,
-              }}
             >
-              <p style={{ color: tokens.text, lineHeight: 1.5, margin: 0 }}>
+              <p style={{ lineHeight: 1.5, margin: 0 }}>
                 Tell us what&apos;s on your mind. We&apos;ll ask a few gentle questions, check for urgent
                 signs, and help you choose a safe next step.
               </p>
             </motion.div>
 
-            <p className="chip-label" style={{ color: tokens.textMuted }}>Common concerns</p>
+            <p className="chip-label">Common concerns</p>
             <motion.div className="concern-chips" variants={staggerContainer} initial="hidden" animate="visible">
               {CONCERN_CHIPS.map((c, i) => (
                 <motion.button
@@ -249,7 +238,7 @@ export function AskHealthyScreen() {
 
             {RECENT_CONCERNS.length > 0 && (
               <>
-                <p className="chip-label" style={{ color: tokens.textMuted }}>Recent</p>
+                <p className="chip-label">Recent</p>
                 <motion.div className="recent-concerns" variants={staggerContainer} initial="hidden" animate="visible">
                   {RECENT_CONCERNS.map((r, i) => (
                     <motion.button
@@ -260,13 +249,9 @@ export function AskHealthyScreen() {
                       variants={chipStagger}
                       {...tapScale}
                       onClick={() => startIntake(r.label)}
-                      style={{
-                        background: tokens.cardGradient,
-                        border: `1px solid ${tokens.glassBorder}`,
-                      }}
                     >
-                      <span style={{ color: tokens.text }}>{r.label}</span>
-                      <span style={{ color: tokens.textMuted, fontSize: 12 }}>{r.when}</span>
+                      <span>{r.label}</span>
+                      <span style={{ fontSize: 12 }}>{r.when}</span>
                     </motion.button>
                   ))}
                 </motion.div>
@@ -326,17 +311,10 @@ export function AskHealthyScreen() {
         )}
       </AnimatePresence>
 
-      <div
-        className="safety-note safety-card"
-        style={{
-          background: tokens.accentSoft,
-          border: `1px solid ${tokens.border}`,
-          color: tokens.textSecondary,
-        }}
-      >
+      <div className="safety-note safety-card">
         <Shield size={16} />
         <span>
-          Healthy.AI does not diagnose. It helps you organize what&apos;s happening and choose a safe next step.
+          Curavon does not diagnose. It helps you organize what&apos;s happening and choose a safe next step.
         </span>
       </div>
 
@@ -357,18 +335,12 @@ export function AskHealthyScreen() {
           onFocus={() => setInputFocused(true)}
           onBlur={() => setInputFocused(false)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: tokens.text,
-          }}
         />
         <motion.button
           type="button"
-          className="send-btn"
+          className="send-btn btn-icon"
           {...tapScale}
           onClick={send}
-          style={{ background: tokens.primary }}
         >
           <Send size={20} color="#fff" />
         </motion.button>
@@ -378,8 +350,7 @@ export function AskHealthyScreen() {
 }
 
 function SafetyEscalation() {
-  const { theme, resetChat, openShareSheet } = useApp();
-  const tokens = themes[theme];
+  const { resetChat, openShareSheet } = useApp();
   const [understood, setUnderstood] = useState(false);
 
   return (
@@ -391,15 +362,10 @@ function SafetyEscalation() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: [0.4, 0, 0.2, 1] }}
-        style={{
-          background: tokens.cardGradient,
-          border: `1px solid ${tokens.warning}`,
-          boxShadow: tokens.shadowSoft,
-        }}
       >
-        <h2 className="safety-title" style={{ color: tokens.text }}>This may need urgent care</h2>
-        <p style={{ color: tokens.textSecondary, lineHeight: 1.6, margin: '12px 0 0' }}>
-          Healthy.AI can help you prepare a summary, but urgent symptoms should be handled by a
+        <h2 className="safety-title">This may need urgent care</h2>
+        <p className="safety-body" style={{ margin: '12px 0 0' }}>
+          Curavon can help you prepare a summary, but urgent symptoms should be handled by a
           clinician or emergency service.
         </p>
       </motion.div>
@@ -422,23 +388,23 @@ function SafetyEscalation() {
       >
         <motion.button
           type="button"
-          className="soft-button"
+          className="soft-button btn btn-safety-primary btn-safety-urgent"
           {...tapScale}
           onClick={openShareSheet}
-          style={{ background: tokens.heroGradient, color: '#fff', boxShadow: tokens.shadow, flex: 1 }}
+          style={{ flex: 1 }}
         >
           <FileText size={18} />
           Prepare summary
         </motion.button>
         <motion.button
           type="button"
-          className="ghost-button"
+          className="ghost-button btn btn-secondary btn-glass"
           {...tapScale}
           onClick={() => {
             setUnderstood(true);
             resetChat();
           }}
-          style={{ flex: 1, color: tokens.textSecondary }}
+          style={{ flex: 1 }}
         >
           I understand
         </motion.button>

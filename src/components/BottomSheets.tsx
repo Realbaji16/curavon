@@ -1,7 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { themes } from '../theme/themes';
 import type { BlockedReason } from '../context/AppContext';
 import {
   Clock,
@@ -27,8 +26,7 @@ const REASONS: { id: BlockedReason; label: string; icon: typeof Clock }[] = [
 ];
 
 export function BlockedReasonSheet() {
-  const { showBlockedSheet, closeBlockedSheet, selectBlockedReason, theme } = useApp();
-  const tokens = themes[theme];
+  const { showBlockedSheet, closeBlockedSheet, selectBlockedReason } = useApp();
   const [selected, setSelected] = useState<BlockedReason | null>(null);
 
   const handleSelect = (id: BlockedReason) => {
@@ -57,17 +55,10 @@ export function BlockedReasonSheet() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={sheetSlide}
-            style={{
-              background: tokens.glass,
-              borderTop: `1px solid ${tokens.glassBorder}`,
-              backdropFilter: 'blur(24px)',
-            }}
           >
-            <div className="sheet-handle" style={{ background: tokens.border }} />
-            <h3 className="sheet-title" style={{ color: tokens.text }}>
-              What got in the way?
-            </h3>
-            <p className="sheet-subtitle" style={{ color: tokens.textMuted }}>
+            <div className="sheet-handle" />
+            <h3 className="sheet-title">What got in the way?</h3>
+            <p className="sheet-subtitle">
               No judgment — we&apos;ll find something easier.
             </p>
             <motion.div
@@ -84,13 +75,8 @@ export function BlockedReasonSheet() {
                   variants={fadeUp}
                   {...tapScale}
                   onClick={() => handleSelect(id)}
-                  style={{
-                    background: selected === id ? tokens.primarySoft : tokens.surfaceElevated,
-                    border: `1.5px solid ${selected === id ? tokens.primary : tokens.border}`,
-                    color: tokens.text,
-                  }}
                 >
-                  <Icon size={20} style={{ color: tokens.primary }} />
+                  <Icon size={20} className="reason-chip-icon" />
                   <span>{label}</span>
                 </motion.button>
               ))}
@@ -103,8 +89,7 @@ export function BlockedReasonSheet() {
 }
 
 export function ShareSheet() {
-  const { showShareSheet, closeShareSheet, theme } = useApp();
-  const tokens = themes[theme];
+  const { showShareSheet, closeShareSheet } = useApp();
 
   const options = [
     { label: 'Messages', icon: '💬' },
@@ -133,12 +118,9 @@ export function ShareSheet() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={sheetSlide}
-            style={{ background: tokens.glass }}
           >
-            <div className="sheet-handle" style={{ background: tokens.border }} />
-            <h3 className="sheet-title" style={{ color: tokens.text }}>
-              Share Summary
-            </h3>
+            <div className="sheet-handle" />
+            <h3 className="sheet-title">Share Summary</h3>
             <motion.div
               className="share-grid"
               variants={staggerContainer}
@@ -153,7 +135,6 @@ export function ShareSheet() {
                   variants={fadeUp}
                   {...tapScale}
                   onClick={closeShareSheet}
-                  style={{ color: tokens.text }}
                 >
                   <span className="share-icon">{opt.icon}</span>
                   <span className="share-label">{opt.label}</span>
@@ -162,10 +143,9 @@ export function ShareSheet() {
             </motion.div>
             <motion.button
               type="button"
-              className="share-cancel"
+              className="share-cancel btn btn-secondary btn-glass"
               {...tapScale}
               onClick={closeShareSheet}
-              style={{ background: tokens.surface, color: tokens.primary }}
             >
               Cancel
             </motion.button>
