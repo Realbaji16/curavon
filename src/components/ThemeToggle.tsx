@@ -20,50 +20,51 @@ export function ThemeToggle() {
     <div className="theme-toggle-wrap">
       <button
         type="button"
-        className="theme-toggle-btn glass-card"
+        className="theme-toggle-btn"
         onClick={() => setOpen(!open)}
         aria-label="Switch mood"
-        style={{
-          background: tokens.glass,
-          borderColor: tokens.glassBorder,
-          color: tokens.text,
-        }}
+        aria-expanded={open}
       >
-        <span className="theme-dot" style={{ background: tokens.primary }} />
-        {tokens.name}
+        <span
+          className="theme-dot"
+          style={{ background: tokens.primary }}
+          aria-hidden="true"
+        />
+        <span className="theme-toggle-label">{tokens.name}</span>
       </button>
       <AnimatePresence>
         {open && (
           <>
             <div className="overlay-backdrop" onClick={() => setOpen(false)} />
             <motion.div
-              className="theme-dropdown glass-card"
+              className="theme-dropdown"
               initial={{ opacity: 0, y: -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.95 }}
-              style={{
-                background: tokens.glass,
-                borderColor: tokens.glassBorder,
-                boxShadow: tokens.shadow,
-              }}
+              role="menu"
+              aria-label="Choose appearance mode"
             >
               {PRESETS.map((p) => (
                 <button
                   key={p.id}
                   type="button"
+                  role="menuitemradio"
+                  aria-checked={theme === p.id}
                   className={`theme-option ${theme === p.id ? 'active' : ''}`}
                   onClick={() => {
                     setTheme(p.id);
                     setOpen(false);
                   }}
-                  style={{
-                    color: themes[p.id].text,
-                    background:
-                      theme === p.id ? themes[p.id].primarySoft : 'transparent',
-                  }}
                 >
-                  <span>{p.emoji}</span>
-                  {themes[p.id].name}
+                  <span className="theme-option-emoji" aria-hidden="true">
+                    {p.emoji}
+                  </span>
+                  <span className="theme-option-label">{p.label}</span>
+                  <span
+                    className="theme-option-swatch"
+                    style={{ background: themes[p.id].primary }}
+                    aria-hidden="true"
+                  />
                 </button>
               ))}
             </motion.div>

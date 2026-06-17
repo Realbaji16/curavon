@@ -27,10 +27,11 @@ interface CloudBackgroundProps {
  */
 export function CloudBackground({ mood = 'today', theme = 'sky' }: CloudBackgroundProps) {
   const isNight = theme === 'night';
+  const themeClass = isNight ? 'cloud-bg--night' : `cloud-bg--day cloud-bg--theme-${theme}`;
 
   return (
     <div
-      className={`cloud-background cloud-bg cloud-bg--${mood} ${isNight ? 'cloud-bg--night' : 'cloud-bg--day'}`}
+      className={`cloud-background cloud-bg cloud-bg--${mood} ${themeClass}`}
       aria-hidden="true"
     >
       <div className="cloud-sky-base" />
@@ -41,10 +42,12 @@ export function CloudBackground({ mood = 'today', theme = 'sky' }: CloudBackgrou
 
       {isNight ? (
         <>
+          <div className="cloud-sky-night-aurora" aria-hidden="true" />
           <StarField />
           <div className="cloud-layer cloud-layer--night">
             <div className="cloud-blob cloud-blob--night-1 floating-cloud" />
             <div className="cloud-blob cloud-blob--night-2 floating-cloud" />
+            <div className="cloud-blob cloud-blob--night-3 floating-cloud" />
           </div>
         </>
       ) : (

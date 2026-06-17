@@ -154,9 +154,9 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     glassBorder: 'rgba(255, 255, 255, 0.72)',
 
-    primary: '#D96F5A',
+    primary: '#8B7FD4',
 
-    primarySoft: 'rgba(255, 138, 100, 0.12)',
+    primarySoft: 'rgba(139, 127, 212, 0.16)',
 
     accent: '#9B8CF0',
 
@@ -210,9 +210,9 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     glassBorder: 'rgba(255, 255, 255, 0.72)',
 
-    primary: '#D96F5A',
+    primary: '#E07A52',
 
-    primarySoft: 'rgba(255, 138, 100, 0.14)',
+    primarySoft: 'rgba(224, 122, 82, 0.16)',
 
     accent: '#F6B36D',
 

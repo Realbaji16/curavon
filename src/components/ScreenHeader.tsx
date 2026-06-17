@@ -23,7 +23,7 @@ export function ScreenHeader({ title, showThemeToggle = true, subtitle }: Screen
           </div>
         ) : (
           <div className="header-brand">
-            <CuravonBrandLockup className="brand-name" iconSize={30} compact />
+            <CuravonBrandLockup className="brand-name" iconSize={36} compact />
           </div>
         )}
         {showThemeToggle && <ThemeToggle />}

@@ -1,70 +1,68 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#bg)" />
-  <rect x="4.5" y="4.5" width="55" height="55" rx="17.5" stroke="white" stroke-opacity="0.62" />
-  <path
-    d="M48.9 45.1C45.5 48.4 40.8 50.4 35.8 50.4C26.3 50.4 18.6 42.7 18.6 33.2C18.6 23.7 26.3 16 35.8 16C40.9 16 45.6 18.1 49 21.5"
-    stroke="url(#outerStroke)"
-    stroke-width="3.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M49 16.2H55V22.2"
-    stroke="url(#outerStroke)"
-    stroke-width="3.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M23.8 39C26.1 36.4 29.3 34.9 32.9 34.9C36.4 34.9 39.7 36.4 41.9 39"
-    stroke="#2F7E8A"
-    stroke-width="2.85"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M21.4 43C24.5 40.6 28.4 39.2 32.9 39.2C37.4 39.2 41.3 40.6 44.4 43"
-    stroke="#2E7874"
-    stroke-width="2.6"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M33.8 24.1C33.8 22.9 34.7 22 35.9 22C36.8 22 37.5 22.4 38 23.2C38.5 22.4 39.2 22 40.1 22C41.3 22 42.2 22.9 42.2 24.1C42.2 26 40.6 27.3 38 29.4C35.5 27.3 33.8 26 33.8 24.1Z"
-    stroke="#FF8A64"
-    stroke-width="2.4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M38 29.3V32.9"
-    stroke="#F4A37A"
-    stroke-width="2.25"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M43.9 30.7C46.2 31 48.2 32.2 49.8 34.2"
-    stroke="url(#forwardStroke)"
-    stroke-width="2.45"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <circle cx="51.1" cy="35.5" r="2.1" fill="url(#forwardStroke)" />
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="10" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="white" stop-opacity="0.58" />
-      <stop offset="62%" stop-color="#FF8A64" stop-opacity="0.14" />
-      <stop offset="100%" stop-color="#8EDCCB" stop-opacity="0.2" />
+    <linearGradient id="badgeGradient" x1="8" y1="92" x2="92" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF6EE" stop-opacity="0.95" />
+      <stop offset="52%" stop-color="#F8FCFA" stop-opacity="0.92" />
+      <stop offset="100%" stop-color="#EAF7F4" stop-opacity="0.9" />
     </linearGradient>
-    <linearGradient id="outerStroke" x1="16" y1="12" x2="54" y2="52" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#2E8B87" />
-      <stop offset="58%" stop-color="#3EBFA3" />
+    <linearGradient id="highlightGradient" x1="12" y1="16" x2="88" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.72" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="curavonTealGradient" x1="20" y1="20" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2F7E8A" />
+      <stop offset="55%" stop-color="#3EBFA3" />
       <stop offset="100%" stop-color="#8EDCCB" />
     </linearGradient>
-    <linearGradient id="forwardStroke" x1="44" y1="28" x2="53" y2="35" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3EBFA3" />
-      <stop offset="100%" stop-color="#8EDCCB" />
-    </linearGradient>
+    <filter id="badgeShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#2F7E8A" flood-opacity="0.14" />
+    </filter>
   </defs>
+  <g filter="url(#badgeShadow)">
+    <rect
+      x="8"
+      y="8"
+      width="84"
+      height="84"
+      rx="24"
+      fill="url(#badgeGradient)"
+      stroke="rgba(142, 220, 203, 0.45)"
+      stroke-width="1.5"
+    />
+    <rect x="12" y="12" width="76" height="76" rx="20" fill="url(#highlightGradient)" />
+  </g>
+  <path
+    d="M60 20.5A30 30 0 1 0 79.4 54.2"
+    fill="none"
+    stroke="url(#curavonTealGradient)"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M60 20.5A30 30 0 1 0 79.4 54.2"
+    fill="none"
+    stroke="rgba(255, 255, 255, 0.24)"
+    stroke-width="2.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="50" cy="42" r="4" fill="#FF8A64" />
+  <path
+    d="M34 55 C40 55 42 55 45 50 C48 45 51 65 55 58 C58 53 62 55 67 55"
+    fill="none"
+    stroke="#2F7E8A"
+    stroke-width="5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <g transform="translate(86 28) rotate(22) scale(-0.78 0.78)">
+    <path
+      d="M0 0L0 20L7 15L10 24L12 22L9 14L17 14Z"
+      fill="url(#curavonTealGradient)"
+      stroke="url(#curavonTealGradient)"
+      stroke-width="1.2"
+      stroke-linejoin="round"
+    />
+  </g>
 </svg>

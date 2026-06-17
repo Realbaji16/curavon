@@ -26,6 +26,8 @@ import { softPageTransition } from './motion/variants';
 
 import type { ThemePreset } from './theme/themes';
 
+import { getThemeCssVars } from './theme/themeStyles';
+
 import './App.css';
 
 
@@ -52,7 +54,7 @@ function PhoneFrameShell({
 
 }) {
 
-  const isNight = theme === 'night';
+  const themeStyle = getThemeCssVars(theme);
 
 
 
@@ -60,7 +62,11 @@ function PhoneFrameShell({
 
     <div
 
-      className={`phone-frame phone-frame--device ${className} ${isNight ? 'phone-frame--night' : ''}`}
+      className={`phone-frame phone-frame--device phone-frame--${theme} ${className}`}
+
+      data-theme={theme}
+
+      style={themeStyle}
 
     >
 

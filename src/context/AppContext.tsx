@@ -24,6 +24,7 @@ export interface OnboardingData {
   ageRange: string;
   sex: string;
   goals: string[];
+  goalNotes?: string;
   sensitiveMode: boolean;
 }
 
@@ -88,7 +89,7 @@ interface AppContextValue extends AppState {
 const defaultOnboarding: OnboardingData = {
   ageRange: '25-34',
   sex: 'Prefer not to say',
-  goals: ['Sleep', 'Energy'],
+  goals: [],
   sensitiveMode: false,
 };
 

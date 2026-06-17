@@ -62,6 +62,11 @@ function getGreeting() {
   return 'Good evening';
 }
 
+const RECENT_CONCERNS = [
+  { label: 'Afternoon energy dips', updated: '2 days ago' },
+  { label: 'Sleep routine', updated: 'This week' },
+];
+
 export function HomeScreen() {
   const {
     onboardingData,
@@ -126,14 +131,12 @@ export function HomeScreen() {
 
       <motion.div variants={staggerContainer} initial="hidden" animate="visible">
         <motion.div className="home-greeting" variants={fadeUp}>
-          <p className="greeting-time">{getGreeting()}</p>
-          <h2 className="greeting-name">
-            One step at a time
-          </h2>
+          <p className="greeting-time">{getGreeting()}, Alex</p>
+          <h2 className="greeting-name">Today&apos;s next best action</h2>
           <p className="greeting-status">
             {actionDone
               ? 'You completed today\'s action — well done.'
-              : 'Your next best action is ready below.'}
+              : 'One clear, safe step is ready when you are.'}
           </p>
           {onboardingData.goals.length > 0 && (
             <p className="greeting-goals">
@@ -154,7 +157,7 @@ export function HomeScreen() {
           >
             <div className="hero-card-glow" aria-hidden="true" />
             <div className="hero-card-header">
-              <ActionIcon size={22} color="#fff" />
+              <ActionIcon size={22} className="hero-card-icon" />
               <span className="hero-label">{action.title}</span>
             </div>
 
@@ -299,6 +302,25 @@ export function HomeScreen() {
             Stage {FLOW_PREVIEW.progress} of {FLOW_PREVIEW.total} · {FLOW_PREVIEW.stage}
           </p>
         </motion.button>
+
+        <motion.div
+          className="recent-concerns-card warm-card glass-card-inner"
+          variants={fadeUp}
+        >
+          <div className="section-header">
+            <h3>Recent concerns</h3>
+          </div>
+          <ul className="recent-concerns-list">
+            {RECENT_CONCERNS.map((concern) => (
+              <li key={concern.label} className="recent-concern-item">
+                <span className="recent-concern-label">
+                  <SensitiveBlur sensitive>{concern.label}</SensitiveBlur>
+                </span>
+                <span className="recent-concern-meta">{concern.updated}</span>
+              </li>
+            ))}
+          </ul>
+        </motion.div>
 
         <motion.div variants={fadeUp}>
           <StreakCard streakCount={streak} todayDone={actionDone} />

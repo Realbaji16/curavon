@@ -16,6 +16,95 @@ interface CuravonBrandLockupProps {
   compact?: boolean;
 }
 
+function CuravonIconGraphic() {
+  const badgeGradientId = useId();
+  const highlightGradientId = useId();
+  const shadowFilterId = useId();
+  const tealGradientId = useId();
+  const ringPath = 'M60 20.5A30 30 0 1 0 79.4 54.2';
+
+  return (
+    <>
+      <defs>
+        <linearGradient id={badgeGradientId} x1="8" y1="92" x2="92" y2="8" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFF6EE" stopOpacity="0.95" />
+          <stop offset="52%" stopColor="#F8FCFA" stopOpacity="0.92" />
+          <stop offset="100%" stopColor="#EAF7F4" stopOpacity="0.9" />
+        </linearGradient>
+        <linearGradient id={highlightGradientId} x1="12" y1="16" x2="88" y2="84" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.72" />
+          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={tealGradientId} x1="20" y1="20" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#2F7E8A" />
+          <stop offset="55%" stopColor="#3EBFA3" />
+          <stop offset="100%" stopColor="#8EDCCB" />
+        </linearGradient>
+        <filter id={shadowFilterId} x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#2F7E8A" floodOpacity="0.14" />
+        </filter>
+      </defs>
+      <g filter={`url(#${shadowFilterId})`}>
+        <rect
+          x="8"
+          y="8"
+          width="84"
+          height="84"
+          rx="24"
+          fill={`url(#${badgeGradientId})`}
+          stroke="rgba(142, 220, 203, 0.45)"
+          strokeWidth="1.5"
+        />
+        <rect
+          x="12"
+          y="12"
+          width="76"
+          height="76"
+          rx="20"
+          fill={`url(#${highlightGradientId})`}
+        />
+      </g>
+      <path
+        className="curavon-icon-ring"
+        d={ringPath}
+        fill="none"
+        stroke={`url(#${tealGradientId})`}
+        strokeWidth="10"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        className="curavon-icon-ring-highlight"
+        d={ringPath}
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.24)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle className="curavon-icon-care-seed" cx="50" cy="42" r="4" fill="var(--care-seed)" />
+      <path
+        className="curavon-icon-pulse"
+        d="M34 55 C40 55 42 55 45 50 C48 45 51 65 55 58 C58 53 62 55 67 55"
+        fill="none"
+        stroke="#2F7E8A"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <g className="curavon-icon-arrow" transform="translate(86 28) rotate(22) scale(-0.78 0.78)">
+        <path
+          d="M0 0L0 20L7 15L10 24L12 22L9 14L17 14Z"
+          fill={`url(#${tealGradientId})`}
+          stroke={`url(#${tealGradientId})`}
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </g>
+    </>
+  );
+}
+
 export function CuravonWordmark({ className = '' }: CuravonWordmarkProps) {
   return (
     <span className={`curavon-wordmark ${className}`.trim()} aria-label="Curavon">
@@ -27,85 +116,19 @@ export function CuravonWordmark({ className = '' }: CuravonWordmarkProps) {
 
 export function CuravonIcon({ size = 36, className = '', compact = false }: CuravonIconProps) {
   const iconStyle = { ['--curavon-icon-size' as string]: `${size}px` } as CSSProperties;
-  const outerGradientId = useId();
-  const forwardGradientId = useId();
 
   return (
     <span className={`curavon-icon ${compact ? 'curavon-icon--compact' : ''} ${className}`.trim()} style={iconStyle}>
-      <span className="curavon-icon-badge" aria-hidden="true">
-        <svg
-          className="curavon-icon-svg"
-          viewBox="0 0 64 64"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          role="img"
-          aria-label="Curavon icon"
-        >
-          <defs>
-            <linearGradient id={outerGradientId} x1="16" y1="12" x2="54" y2="52" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#2E8B87" />
-              <stop offset="58%" stopColor="#3EBFA3" />
-              <stop offset="100%" stopColor="#8EDCCB" />
-            </linearGradient>
-            <linearGradient id={forwardGradientId} x1="44" y1="28" x2="53" y2="35" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#3EBFA3" />
-              <stop offset="100%" stopColor="#8EDCCB" />
-            </linearGradient>
-          </defs>
-          <g className="curavon-icon-mark">
-            <path
-              d="M48.9 45.1C45.5 48.4 40.8 50.4 35.8 50.4C26.3 50.4 18.6 42.7 18.6 33.2C18.6 23.7 26.3 16 35.8 16C40.9 16 45.6 18.1 49 21.5"
-              stroke={`url(#${outerGradientId})`}
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M49 16.2H55V22.2"
-              stroke={`url(#${outerGradientId})`}
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M23.8 39C26.1 36.4 29.3 34.9 32.9 34.9C36.4 34.9 39.7 36.4 41.9 39"
-              stroke="#2F7E8A"
-              strokeWidth="2.85"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M21.4 43C24.5 40.6 28.4 39.2 32.9 39.2C37.4 39.2 41.3 40.6 44.4 43"
-              stroke="#2E7874"
-              strokeWidth="2.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M33.8 24.1C33.8 22.9 34.7 22 35.9 22C36.8 22 37.5 22.4 38 23.2C38.5 22.4 39.2 22 40.1 22C41.3 22 42.2 22.9 42.2 24.1C42.2 26 40.6 27.3 38 29.4C35.5 27.3 33.8 26 33.8 24.1Z"
-              stroke="#FF8A64"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M38 29.3V32.9"
-              stroke="#F4A37A"
-              strokeWidth="2.25"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M43.9 30.7C46.2 31 48.2 32.2 49.8 34.2"
-              stroke={`url(#${forwardGradientId})`}
-              strokeWidth="2.45"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <circle cx="51.1" cy="35.5" r="2.1" fill={`url(#${forwardGradientId})`} />
-          </g>
-        </svg>
-      </span>
+      <svg
+        className="curavon-icon-svg"
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-label="Curavon app icon"
+      >
+        <CuravonIconGraphic />
+      </svg>
     </span>
   );
 }
