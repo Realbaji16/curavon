@@ -14,7 +14,7 @@ const TABS: { id: TabId; label: string; icon: typeof Sun }[] = [
   { id: 'home', label: 'Today', icon: Sun },
   { id: 'ask', label: 'Ask', icon: MessageCircle },
   { id: 'flow', label: 'Flow', icon: GitBranch },
-  { id: 'circle', label: 'Learn', icon: BookOpen },
+  { id: 'circle', label: 'Guides', icon: BookOpen },
   { id: 'settings', label: 'Profile', icon: User },
 ];
 

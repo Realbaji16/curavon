@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Bell, Trash2, EyeOff, FileText, Lock } from 'lucide-react';
+import { Shield, Bell, EyeOff, FileText, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { themes } from '../theme/themes';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -13,6 +13,11 @@ export function SettingsScreen() {
     setSensitiveMode,
     smartSilence,
     toggleSmartSilence,
+    profileSetup,
+    authDemoUser,
+    resetChat,
+    showToast,
+    signOutDemo,
     clearAllData,
     openDoctorSummary,
     showDoctorSummary,
@@ -48,9 +53,41 @@ export function SettingsScreen() {
     setConfirmClear(false);
   };
 
+  const silenceLabel =
+    profileSetup?.smartSilencePreference === 'minimal-notifications'
+      ? 'Minimal notifications'
+      : profileSetup?.smartSilencePreference === 'daily-digest-only'
+        ? 'Daily digest only'
+        : 'Gentle reminders';
+
   return (
     <div className="screen settings-screen">
       <ScreenHeader title="Profile" subtitle="Trust, privacy & control" />
+
+      <section className="settings-section warm-card glass-card-inner">
+        <div className="section-header">
+          <Shield size={20} className="icon-teal" />
+          <h3>Account</h3>
+        </div>
+        <div className="settings-account-grid">
+          <p className="settings-account-row">
+            <span>Preferred name</span>
+            <strong>{profileSetup?.preferredName || authDemoUser?.fullName || 'Curavon member'}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Account status</span>
+            <strong>Prototype account</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Sensitive Mode</span>
+            <strong>{sensitiveMode ? 'On' : 'Off'}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Smart Silence</span>
+            <strong>{silenceLabel}</strong>
+          </p>
+        </div>
+      </section>
 
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
@@ -137,11 +174,23 @@ export function SettingsScreen() {
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
           <Lock size={20} className="icon-teal" />
-          <h3>Privacy</h3>
+          <h3>Data &amp; Privacy</h3>
         </div>
-        <p className="section-desc">
-          All data stays on your device. Nothing is sold or shared without your consent.
-        </p>
+        <p className="section-desc">All data stays on your device for this prototype.</p>
+        <div className="settings-actions-list">
+          <button type="button" className="btn btn-secondary btn-glass" onClick={() => showToast('Export coming soon')}>
+            Export my data
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={() => { resetChat(); showToast('Chat history cleared'); }}>
+            Clear chat history
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleClear}>
+            {confirmClear ? 'Tap again to delete all health data' : 'Delete all health data'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={signOutDemo}>
+            Sign out
+          </button>
+        </div>
       </section>
 
       <div className="disclaimer-box safety-card">
@@ -150,21 +199,6 @@ export function SettingsScreen() {
           Curavon is not a doctor. It does not diagnose, prescribe, or replace emergency care.
         </span>
       </div>
-
-      <motion.button
-        type="button"
-        className="clear-data-btn"
-        whileTap={{ scale: 0.97 }}
-        onClick={handleClear}
-        style={{
-          background: confirmClear ? tokens.danger : 'transparent',
-          color: confirmClear ? '#fff' : tokens.danger,
-          border: `2px solid ${tokens.danger}`,
-        }}
-      >
-        <Trash2 size={18} />
-        {confirmClear ? 'Tap again to delete all local data' : 'Clear all local data'}
-      </motion.button>
 
       {showDoctorSummary && (
         <div className="summary-overlay">

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
   Sparkles,
   ChevronRight,
   ListChecks,
-  Target,
   Route,
   CheckCircle2,
   Ban,
@@ -13,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { CuravonIcon, CuravonWordmark } from '../components/CuravonBrand';
-import { extractGoalsFromText, GOAL_QUICK_PICKS } from '../utils/extractGoals';
 
 const SLIDE_TRANSITION = { duration: 0.4, ease: [0.4, 0, 0.2, 1] as const };
 
@@ -45,16 +43,7 @@ const STEPS = [
     id: 'signin',
     variant: 'signin' as const,
   },
-  {
-    id: 'goals',
-    variant: 'goals' as const,
-    title: 'Choose your goals',
-    subtitle: 'What matters most right now?',
-  },
 ];
-
-const GOAL_WRITEUP_PLACEHOLDER =
-  "e.g. I'm always tired, sleep badly, and stress is wearing me down...";
 
 const DEMO_CONCERNS = [
   { label: 'Low energy', checked: true },
@@ -71,53 +60,18 @@ const DEMO_ACTION = {
 export function Onboarding() {
   const { completeOnboarding } = useApp();
   const [step, setStep] = useState(0);
-  const [goals, setGoals] = useState<string[]>([]);
-  const [goalWriteUp, setGoalWriteUp] = useState('');
-  const [extractedGoals, setExtractedGoals] = useState<string[]>([]);
-  const [sensitiveMode, setSensitiveModeLocal] = useState(false);
-  const previousExtractedRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      const extracted = extractGoalsFromText(goalWriteUp);
-      const newlyFound = extracted.filter(
-        (goal) => !previousExtractedRef.current.includes(goal),
-      );
-
-      previousExtractedRef.current = extracted;
-      setExtractedGoals(extracted);
-
-      if (newlyFound.length > 0) {
-        setGoals((prev) => [...new Set([...prev, ...newlyFound])]);
-      }
-    }, 350);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [goalWriteUp]);
-
-  const toggleGoal = (g: string) => {
-    setGoals((prev) =>
-      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g],
-    );
-  };
-
-  const quickPickGoals = GOAL_QUICK_PICKS.filter((goal) => !extractedGoals.includes(goal));
-  const hasGoalInput = goals.length > 0 || goalWriteUp.trim().length > 0;
 
   const next = () => {
     if (step < STEPS.length - 1) setStep(step + 1);
   };
 
   const finish = () => {
-    const finalGoals =
-      goals.length > 0 ? goals : extractGoalsFromText(goalWriteUp);
-
     completeOnboarding({
       ageRange: '25-34',
       sex: 'Prefer not to say',
-      goals: finalGoals,
-      goalNotes: goalWriteUp.trim() || undefined,
-      sensitiveMode,
+      goals: [],
+      goalNotes: undefined,
+      sensitiveMode: false,
     });
   };
 
@@ -125,7 +79,6 @@ export function Onboarding() {
   const isLast = step === STEPS.length - 1;
   const isWelcome = current.variant === 'welcome';
   const isSignin = current.variant === 'signin';
-  const isGoals = current.variant === 'goals';
 
   return (
     <div className={`onboarding onboarding--flo ${isWelcome ? 'onboarding--welcome' : ''}`}>
@@ -146,81 +99,7 @@ export function Onboarding() {
             exit={{ opacity: 0, y: -12 }}
             transition={SLIDE_TRANSITION}
           >
-            {isGoals ? (
-              <div className="onboarding-card onboarding-card--flo setup-form">
-                <div className="onboarding-slide-visual" aria-hidden="true">
-                  <div className="onboarding-slide-icon">
-                    <Target size={32} strokeWidth={1.5} />
-                  </div>
-                </div>
-                <h1 className="onboarding-title onboarding-title--flo">{current.title}</h1>
-                <p className="onboarding-subtitle onboarding-subtitle--flo">{current.subtitle}</p>
-
-                <div className="goal-writeup-field">
-                  <label htmlFor="goal-writeup" className="goal-writeup-label">
-                    Tell us in your own words
-                  </label>
-                  <textarea
-                    id="goal-writeup"
-                    className="goal-writeup-input"
-                    placeholder={GOAL_WRITEUP_PLACEHOLDER}
-                    value={goalWriteUp}
-                    onChange={(event) => setGoalWriteUp(event.target.value)}
-                    rows={3}
-                    spellCheck
-                  />
-                </div>
-
-                {extractedGoals.length > 0 ? (
-                  <div className="goal-chip-section">
-                    <p className="goal-chip-section-label">From your note</p>
-                    <div className="goal-chips">
-                      {extractedGoals.map((goal) => (
-                        <button
-                          key={goal}
-                          type="button"
-                          className={`goal-chip goal-chip--from-note ${goals.includes(goal) ? 'selected' : ''}`}
-                          onClick={() => toggleGoal(goal)}
-                        >
-                          {goal}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="goal-chip-section">
-                  <p className="goal-chip-section-label">Quick picks</p>
-                  <div className="goal-chips">
-                    {quickPickGoals.map((goal) => (
-                      <button
-                        key={goal}
-                        type="button"
-                        className={`goal-chip ${goals.includes(goal) ? 'selected' : ''}`}
-                        onClick={() => toggleGoal(goal)}
-                      >
-                        {goal}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="sensitive-toggle-row">
-                  <div>
-                    <p className="toggle-label">Sensitive Mode</p>
-                    <p className="toggle-desc">Blur personal health details on screen</p>
-                  </div>
-                  <button
-                    type="button"
-                    className={`native-switch ${sensitiveMode ? 'on' : ''}`}
-                    onClick={() => setSensitiveModeLocal(!sensitiveMode)}
-                    aria-pressed={sensitiveMode}
-                  >
-                    <span className="switch-thumb" />
-                  </button>
-                </div>
-              </div>
-            ) : isSignin ? (
+            {isSignin ? (
               <div className="onboarding-card onboarding-card--flo onboarding-card--signin">
                 <div className="onboarding-hero-cluster onboarding-hero-cluster--compact">
                   <div className="onboarding-icon-halo" aria-hidden="true" />
@@ -239,7 +118,7 @@ export function Onboarding() {
                 <button
                   type="button"
                   className="onboarding-secondary-btn"
-                  onClick={next}
+                  onClick={finish}
                 >
                   I already have an account
                 </button>
@@ -371,7 +250,6 @@ export function Onboarding() {
             type="button"
             className="btn btn-primary btn-pill onboarding-continue-btn"
             onClick={finish}
-            disabled={!hasGoalInput}
             whileTap={{ scale: 0.98 }}
           >
             <span className="button-label">Get started</span>

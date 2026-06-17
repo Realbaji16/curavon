@@ -21,6 +21,7 @@ import { FullFlowScreen } from './screens/FullFlow';
 import { CareCircleScreen } from './screens/CareCircle';
 
 import { SettingsScreen } from './screens/Settings';
+import { AuthFlow } from './screens/AuthFlow';
 
 import { softPageTransition } from './motion/variants';
 
@@ -100,7 +101,15 @@ function PhoneFrameShell({
 
 function PhoneShell() {
 
-  const { onboardingComplete, activeTab, sensitiveMode, showSafetyEscalation, theme } = useApp();
+  const {
+    onboardingComplete,
+    authDemoUser,
+    setupComplete,
+    activeTab,
+    sensitiveMode,
+    showSafetyEscalation,
+    theme,
+  } = useApp();
 
 
 
@@ -128,6 +137,14 @@ function PhoneShell() {
 
     );
 
+  }
+
+  if (!authDemoUser || !setupComplete) {
+    return (
+      <PhoneFrameShell cloudMood="onboarding" theme={theme}>
+        <AuthFlow />
+      </PhoneFrameShell>
+    );
   }
 
 
