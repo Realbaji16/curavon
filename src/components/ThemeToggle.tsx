@@ -5,9 +5,10 @@ import { themes } from '../theme/themes';
 import type { ThemePreset } from '../theme/themes';
 
 const PRESETS: { id: ThemePreset; label: string; emoji: string }[] = [
-  { id: 'calm', label: 'Calm', emoji: '🌿' },
-  { id: 'warm', label: 'Warm', emoji: '☀️' },
-  { id: 'minimal', label: 'Minimal', emoji: '◻️' },
+  { id: 'sky', label: 'Sky', emoji: '☁️' },
+  { id: 'mist', label: 'Mist', emoji: '🌫️' },
+  { id: 'dawn', label: 'Dawn', emoji: '🌅' },
+  { id: 'night', label: 'Night', emoji: '🌙' },
 ];
 
 export function ThemeToggle() {
@@ -16,19 +17,20 @@ export function ThemeToggle() {
   const tokens = themes[theme];
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="theme-toggle-wrap">
       <button
+        type="button"
         className="theme-toggle-btn"
         onClick={() => setOpen(!open)}
-        aria-label="Switch design preset"
-        style={{
-          background: tokens.surface,
-          border: `1.5px solid ${tokens.border}`,
-          color: tokens.text,
-        }}
+        aria-label="Switch mood"
+        aria-expanded={open}
       >
-        <span className="theme-dot" style={{ background: tokens.primary }} />
-        {tokens.name.split(' ')[0]}
+        <span
+          className="theme-dot"
+          style={{ background: tokens.primary }}
+          aria-hidden="true"
+        />
+        <span className="theme-toggle-label">{tokens.name}</span>
       </button>
       <AnimatePresence>
         {open && (
@@ -39,27 +41,30 @@ export function ThemeToggle() {
               initial={{ opacity: 0, y: -8, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.95 }}
-              style={{
-                background: tokens.surface,
-                border: `1px solid ${tokens.border}`,
-                boxShadow: tokens.shadow,
-              }}
+              role="menu"
+              aria-label="Choose appearance mode"
             >
               {PRESETS.map((p) => (
                 <button
                   key={p.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={theme === p.id}
                   className={`theme-option ${theme === p.id ? 'active' : ''}`}
                   onClick={() => {
                     setTheme(p.id);
                     setOpen(false);
                   }}
-                  style={{
-                    color: themes[p.id].text,
-                    background: theme === p.id ? themes[p.id].primarySoft : 'transparent',
-                  }}
                 >
-                  <span>{p.emoji}</span>
-                  {themes[p.id].name}
+                  <span className="theme-option-emoji" aria-hidden="true">
+                    {p.emoji}
+                  </span>
+                  <span className="theme-option-label">{p.label}</span>
+                  <span
+                    className="theme-option-swatch"
+                    style={{ background: themes[p.id].primary }}
+                    aria-hidden="true"
+                  />
                 </button>
               ))}
             </motion.div>

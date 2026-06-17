@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../context/AppContext';
 import { themes } from '../theme/themes';
 import { ThemeToggle } from './ThemeToggle';
+import { CuravonBrandLockup } from './CuravonBrand';
 
 interface ScreenHeaderProps {
   title?: string;
@@ -10,20 +11,19 @@ interface ScreenHeaderProps {
 }
 
 export function ScreenHeader({ title, showThemeToggle = true, subtitle }: ScreenHeaderProps) {
-  const { theme } = useApp();
-  const tokens = themes[theme];
-
   return (
-    <header className="screen-header" style={{ color: tokens.text }}>
+    <header className="screen-header">
       <div className="header-content">
-        {title && (
+        {title ? (
           <div>
             <h1 className="header-title">{title}</h1>
             {subtitle && (
-              <p className="header-subtitle" style={{ color: tokens.textMuted }}>
-                {subtitle}
-              </p>
+              <p className="header-subtitle">{subtitle}</p>
             )}
+          </div>
+        ) : (
+          <div className="header-brand">
+            <CuravonBrandLockup className="brand-name" iconSize={36} compact />
           </div>
         )}
         {showThemeToggle && <ThemeToggle />}

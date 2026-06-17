@@ -1,201 +1,197 @@
 import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Lock, Sparkles } from 'lucide-react';
+import { CheckCircle2, Circle, AlertCircle, FileText, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { themes, type ThemeTokens } from '../theme/themes';
+import { themes } from '../theme/themes';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { DoctorSummary } from '../components/DoctorSummary';
+import { staggerContainer, fadeUp, tapScale } from '../motion/variants';
 
-type PhaseStatus = 'completed' | 'active' | 'locked';
+const FLOW = {
+  title: 'Energy & Sleep Flow',
+  stage: 'Tracking patterns',
+  reviewDate: 'Review in 5 days',
+  nextAction: 'Drink a glass of water and log your energy tonight.',
+  completed: ['Morning check-in', 'Evening wind-down'],
+  blockers: ['Busy workdays'],
+  escalation: 'If energy drops sharply or you feel unwell, seek care promptly.',
+  progress: 2,
+  total: 4,
+};
 
-interface Phase {
-  id: string;
-  days: string;
-  title: string;
-  description: string;
-  status: PhaseStatus;
-  tasks: string[];
-}
-
-const PHASES: Phase[] = [
+const SECTIONS = [
   {
-    id: '1',
-    days: 'Day 1–3',
-    title: 'Gentle Routine Reset',
-    description: 'Establish baseline habits with low-friction daily actions.',
-    status: 'completed',
-    tasks: ['Morning hydration ritual', '5-min gentle stretch', 'Sleep wind-down routine'],
+    id: 'today',
+    label: 'Today',
+    items: ['Log energy after water', 'Note sleep quality tonight'],
+    active: true,
   },
   {
-    id: '2',
-    days: 'Day 4–5',
-    title: 'Trigger Evaluation',
-    description: 'Identify patterns and potential triggers affecting your goals.',
-    status: 'active',
-    tasks: ['Log daily skin observations', 'Track sleep quality', 'Note food & stress patterns'],
+    id: 'week',
+    label: 'This week',
+    items: ['Track evening energy pattern', 'Gentle movement 3×', 'Review weekly rhythm'],
+    active: false,
   },
   {
-    id: '3',
-    days: 'Day 6–7',
-    title: 'Lifestyle Adjustments',
-    description: 'Apply personalized micro-changes based on your data.',
-    status: 'locked',
-    tasks: ['Adjust evening routine', 'Introduce targeted nutrition tweak', 'Review weekly wins'],
+    id: 'worse',
+    label: 'If it gets worse',
+    items: ['Pause new habits', 'Use Doctor Summary', 'Contact a clinician if concerned'],
+    active: false,
+  },
+  {
+    id: 'clinician',
+    label: 'For your clinician',
+    items: ['Share timeline from Doctor Summary', 'Bring list of actions tried'],
+    active: false,
   },
 ];
 
-const StatusIcon = ({ status, tokens }: { status: PhaseStatus; tokens: ThemeTokens }) => {
-  if (status === 'completed') return <CheckCircle2 size={20} style={{ color: tokens.success }} />;
-  if (status === 'active') return <Sparkles size={20} style={{ color: tokens.primary }} />;
-  return <Lock size={18} style={{ color: tokens.textMuted }} />;
-};
-
 export function FullFlowScreen() {
-  const { theme, flowView, setFlowView } = useApp();
+  const { theme, blockedReason, openDoctorSummary, showDoctorSummary, closeDoctorSummary } = useApp();
   const tokens = themes[theme];
+  const progressPct = (FLOW.progress / FLOW.total) * 100;
 
   return (
     <div className="screen flow-screen">
-      <ScreenHeader title="Full Flow" subtitle="Your 7-day health journey" />
+      <ScreenHeader title="Health Flow" subtitle="Your gentle health journey" />
 
-      <div
-        className="segment-control"
-        style={{
-          background: tokens.surfaceElevated,
-          border: `1px solid ${tokens.border}`,
-        }}
-      >
-        {(['timeline', 'daily'] as const).map((view) => (
-          <button
-            key={view}
-            className={`segment-btn ${flowView === view ? 'active' : ''}`}
-            onClick={() => setFlowView(view)}
-            style={{
-              background: flowView === view ? tokens.surface : 'transparent',
-              color: flowView === view ? tokens.primary : tokens.textMuted,
-              boxShadow: flowView === view ? tokens.shadow : 'none',
-            }}
-          >
-            {view === 'timeline' ? 'Timeline' : 'Daily Action'}
-          </button>
-        ))}
-      </div>
-
-      {flowView === 'daily' ? (
-        <motion.div
-          className="daily-redirect-card"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{
-            background: tokens.heroGradient,
-            boxShadow: tokens.shadow,
-            color: '#fff',
-          }}
-        >
-          <h3>Today's Focus</h3>
-          <p>Hydrate with 500ml of water and stretch for 5 minutes</p>
-          <p className="daily-hint">Switch to Home tab for full interactivity</p>
-        </motion.div>
-      ) : (
-        <div className="timeline-track">
-          {PHASES.map((phase, index) => (
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+        <motion.div className="flow-hero warm-card glass-card-inner" variants={fadeUp}>
+          <p className="flow-hero-label">Current flow</p>
+          <h2 className="flow-hero-title">{FLOW.title}</h2>
+          <span className="progress-pill progress-pill--teal">{FLOW.stage}</span>
+          <p className="flow-review">{FLOW.reviewDate}</p>
+          <div className="flow-timeline-bar">
             <motion.div
-              key={phase.id}
-              className="timeline-node"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.15 }}
-            >
-              <div className="timeline-rail">
-                <div
-                  className={`node-dot ${phase.status}`}
-                  style={{
-                    background:
-                      phase.status === 'completed'
-                        ? tokens.success
-                        : phase.status === 'active'
-                          ? tokens.primary
-                          : tokens.border,
-                    border: `3px solid ${tokens.surface}`,
-                    boxShadow:
-                      phase.status === 'active'
-                        ? `0 0 0 4px ${tokens.primarySoft}`
-                        : 'none',
-                  }}
-                >
-                  <StatusIcon status={phase.status} tokens={tokens} />
-                </div>
-                {index < PHASES.length - 1 && (
-                  <div
-                    className="rail-line"
-                    style={{
-                      background:
-                        phase.status === 'completed'
-                          ? tokens.success
-                          : tokens.border,
-                    }}
-                  />
-                )}
-              </div>
+              className="flow-timeline-fill"
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1], delay: 0.2 }}
+            />
+          </div>
+        </motion.div>
 
-              <div
-                className={`phase-card ${phase.status}`}
-                style={{
-                  background: tokens.cardGradient,
-                  border: `1px solid ${phase.status === 'active' ? tokens.primary : tokens.border}`,
-                  boxShadow: phase.status === 'active' ? tokens.shadow : 'none',
-                  opacity: phase.status === 'locked' ? 0.65 : 1,
-                }}
+        <motion.div className="flow-next-action hero-card" variants={fadeUp}>
+          <p className="hero-label">Current next action</p>
+          <p className="hero-task" style={{ fontSize: 18 }}>{FLOW.nextAction}</p>
+        </motion.div>
+
+        <motion.div className="flow-section warm-card glass-card-inner" variants={fadeUp}>
+          <h3>Completed</h3>
+          <ul className="flow-list">
+            {FLOW.completed.map((item, i) => (
+              <motion.li
+                key={item}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + i * 0.08, duration: 0.24 }}
               >
-                <div className="phase-header">
-                  <span
-                    className="phase-days"
-                    style={{
-                      background: tokens.primarySoft,
-                      color: tokens.primary,
-                    }}
-                  >
-                    {phase.days}
-                  </span>
-                  <span
-                    className={`status-badge ${phase.status}`}
-                    style={{
-                      background:
-                        phase.status === 'completed'
-                          ? tokens.accentSoft
-                          : phase.status === 'active'
-                            ? tokens.primarySoft
-                            : tokens.surfaceElevated,
-                      color:
-                        phase.status === 'completed'
-                          ? tokens.success
-                          : phase.status === 'active'
-                            ? tokens.primary
-                            : tokens.textMuted,
-                    }}
-                  >
-                    {phase.status === 'completed'
-                      ? 'Completed'
-                      : phase.status === 'active'
-                        ? 'Active'
-                        : 'Locked'}
-                  </span>
-                </div>
-                <h3 style={{ color: tokens.text, margin: '8px 0 4px' }}>{phase.title}</h3>
-                <p style={{ color: tokens.textMuted, fontSize: 14, margin: '0 0 12px' }}>
-                  {phase.description}
-                </p>
-                <ul className="phase-tasks">
-                  {phase.tasks.map((task) => (
-                    <li key={task} style={{ color: tokens.textSecondary }}>
-                      <Circle size={8} fill={tokens.primary} stroke="none" />
-                      {task}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </motion.div>
-          ))}
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.35 + i * 0.08, type: 'spring', stiffness: 400, damping: 20 }}
+                >
+                  <CheckCircle2 size={16} className="icon-success" />
+                </motion.span>
+                {item}
+              </motion.li>
+            ))}
+          </ul>
+        </motion.div>
+
+        <motion.div className="flow-section warm-card glass-card-inner" variants={fadeUp}>
+          <h3>Blockers logged</h3>
+          <ul className="flow-list">
+            {FLOW.blockers.map((item) => (
+              <li key={item}>
+                <Circle size={8} fill="var(--text-label-warm)" stroke="none" />
+                {item}
+              </li>
+            ))}
+          </ul>
+          <AnimatePresenceBlocker blockedReason={blockedReason} />
+        </motion.div>
+
+        {SECTIONS.map((section) => (
+          <motion.div
+            key={section.id}
+            className={`flow-section warm-card glass-card-inner ${section.active ? 'flow-section--active' : ''}`}
+            variants={fadeUp}
+          >
+            <h3 style={{ fontSize: 15, marginBottom: 10 }}>{section.label}</h3>
+            <ul className="flow-list">
+              {section.items.map((item) => (
+                <li key={item}>
+                  <ChevronRight size={14} className="icon-teal" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        ))}
+
+        <motion.div
+          className="flow-escalation safety-card"
+          variants={fadeUp}
+        >
+          <AlertCircle size={18} style={{ color: tokens.warning, flexShrink: 0 }} />
+          <span>{FLOW.escalation}</span>
+        </motion.div>
+
+        <motion.button
+          type="button"
+          className="doctor-shortcut-card warm-card glass-card-inner"
+          variants={fadeUp}
+          {...tapScale}
+          onClick={openDoctorSummary}
+        >
+          <FileText size={20} className="icon-warm" />
+          <div className="doctor-shortcut-text">
+            <span>Doctor Summary</span>
+            <span>Share with your clinician</span>
+          </div>
+          <ChevronRight size={18} className="icon-muted" />
+        </motion.button>
+      </motion.div>
+
+      {showDoctorSummary && (
+        <div className="summary-overlay">
+          <div className="summary-overlay-backdrop" onClick={closeDoctorSummary} />
+          <div className="summary-overlay-panel">
+            <DoctorSummary variant="full" onClose={closeDoctorSummary} />
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function AnimatePresenceBlocker({
+  blockedReason,
+}: {
+  blockedReason: import('../context/AppContext').BlockedReason;
+}) {
+  if (!blockedReason) return null;
+
+  const labels: Record<NonNullable<typeof blockedReason>, string> = {
+    time: 'No time',
+    forgot: 'Forgot',
+    hard: 'Too hard',
+    confusing: 'Confusing',
+    worse: 'Felt worse',
+    cost: 'Cost',
+    work: 'Work / school',
+    other: 'Other',
+  };
+
+  return (
+    <motion.p
+      className="flow-blocker-note"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28 }}
+      style={{ fontSize: 13, marginTop: 10 }}
+    >
+      Latest blocker: {labels[blockedReason]}
+    </motion.p>
   );
 }
