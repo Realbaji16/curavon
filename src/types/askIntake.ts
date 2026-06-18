@@ -93,3 +93,15 @@ export const EMPTY_ASK_INTAKE: AskIntakeData = {
 };
 
 export const ASK_INTAKE_STEP_COUNT = 9;
+
+export const ASK_STEP_HELPERS = [
+  'Use your own words — there is no wrong way to describe this.',
+  'This helps Curavon organize your notes, not label you.',
+  'Rough timing is enough.',
+  'Your first instinct is fine.',
+  'Sleep, food, stress, medication, activity, illness — anything unusual.',
+  'Rest, water, medication, talking to someone, nothing yet…',
+  'Select all that apply. Choose “None of these” if none fit.',
+  'Pick what would feel most helpful right now.',
+  'Review before Curavon suggests one safe next step.',
+];

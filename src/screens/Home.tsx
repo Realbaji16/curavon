@@ -1,19 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2,
   Ban,
   SlidersHorizontal,
-  ChevronRight,
-  BellOff,
+  BookOpen,
   FileText,
   Sparkles,
-  Moon,
-  Zap,
-  Wind,
-  MessageCircle,
   ClipboardCheck,
   CalendarDays,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useHealth } from '../context/HealthContext';
@@ -21,6 +18,10 @@ import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
 import { TodayCheckIn } from '../components/TodayCheckIn';
 import { HealthActionSheets } from '../components/HealthActionSheets';
 import { staggerContainer, fadeUp, tapScale, cardEntrance } from '../motion/variants';
+import { buildNextBestActionPlan } from '../utils/nextBestActionEngine';
+import { readCuravonMemorySnapshot } from '../utils/nextBestActionMemory';
+import type { SupportingInsightCard } from '../types/nextBestAction';
+import { buildNextBestAction, type ActionEngineCategory } from '../utils/actionEngineV2';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -37,30 +38,44 @@ function formatTodayLabel() {
   });
 }
 
-const RHYTHM_METRICS = [
-  { key: 'sleepQuality' as const, label: 'Sleep', icon: Moon },
-  { key: 'energyLevel' as const, label: 'Energy', icon: Zap },
-  { key: 'stressLevel' as const, label: 'Stress', icon: Wind },
-];
+function categoryLabel(category: ActionEngineCategory | string | undefined): string {
+  if (!category) return 'stabilize';
+  switch (category) {
+    case 'stabilize':
+      return 'stabilize';
+    case 'track':
+      return 'track';
+    case 'prepare':
+      return 'prepare';
+    case 'reduce_friction':
+      return 'reduce friction';
+    case 'escalate':
+      return 'escalate';
+    default:
+      return 'stabilize';
+  }
+}
 
 export function HomeScreen() {
   const {
     sensitiveMode,
     setActiveTab,
     openDoctorSummary,
+    openGuidesWithFlow,
+    showToast,
   } = useApp();
   const {
     healthProfile,
+    dailyCheckins,
     todayCheckIn,
     nextActionState,
+    healthSnapshot,
     openCheckIn,
     markActionDone,
     openHealthBlockedSheet,
     openHealthAdjustSheet,
-    smartSilenceLabel,
-    recentConcerns,
+    saveCurrentActionToSummary,
   } = useHealth();
-
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
 
@@ -71,13 +86,67 @@ export function HomeScreen() {
   const isDone = actionStatus === 'done';
   const actionText = nextActionState?.currentAction ?? '';
 
+  const personalizationPlan = useMemo(() => {
+    const snapshot = readCuravonMemorySnapshot();
+    const merged = {
+      ...snapshot,
+      healthProfile,
+      dailyCheckins,
+      nextActionState,
+    };
+    return buildNextBestActionPlan(merged);
+  }, [healthProfile, dailyCheckins, nextActionState]);
+
+  const activeRecommendation = useMemo(
+    () => buildNextBestAction(healthSnapshot),
+    [healthSnapshot, dailyCheckins, nextActionState],
+  );
+
+  const noCheckInSignal = personalizationPlan.signals.includes('no_checkin_today');
+  const canRespondToAction = Boolean(nextActionState) && !noCheckInSignal;
+
+  const safetyNote =
+    activeRecommendation.primaryAction.safetyLevel === 'normal'
+      ? null
+      : 'If symptoms are severe, sudden, or unsafe, seek local urgent or emergency support.';
+
   const handleDone = () => {
-    if (isDone || !hasCheckInToday) return;
+    if (isDone || !canRespondToAction) return;
     setDonePressed(true);
     markActionDone();
     setShowDoneMessage(true);
     if (navigator.vibrate) navigator.vibrate(10);
     setTimeout(() => setDonePressed(false), 280);
+  };
+
+  const handleRelatedGuide = () => {
+    if (nextActionState?.relatedGuideFlowId) {
+      openGuidesWithFlow(nextActionState.relatedGuideFlowId);
+      return;
+    }
+    setActiveTab('circle');
+    const guideName = nextActionState?.relatedGuide ?? activeRecommendation.primaryAction.relatedGuide;
+    if (guideName) {
+      showToast(`Recommended guide: ${guideName}`);
+    }
+  };
+
+  const handleInsightAction = (card: SupportingInsightCard) => {
+    if (card.actionTarget === 'checkin') {
+      openCheckIn();
+      return;
+    }
+    if (card.actionTarget === 'summary') {
+      openDoctorSummary();
+      return;
+    }
+    if (card.actionTarget === 'profile') {
+      setActiveTab('settings');
+      return;
+    }
+    if (card.actionTarget === 'guides') {
+      setActiveTab('circle');
+    }
   };
 
   return (
@@ -94,9 +163,17 @@ export function HomeScreen() {
           <p className="home-greeting-lede">One gentle step based on what you&apos;ve shared.</p>
         </motion.header>
 
+        <motion.section className="home-pattern-card warm-card glass-card-inner" variants={fadeUp}>
+          <p className="home-pattern-label">Your current pattern</p>
+          <p className="home-pattern-summary">{healthSnapshot.trendSummary}</p>
+          <p className="home-pattern-focus">
+            Focus area: <strong>{healthSnapshot.recommendedFocusArea}</strong>
+          </p>
+        </motion.section>
+
         <AnimatePresence mode="wait">
           <motion.section
-            key={hasCheckInToday ? actionText : 'no-checkin'}
+            key={nextActionState?.actionId ?? activeRecommendation.primaryAction.title}
             className="home-hero-card hero-action-card hero-card hero-action-card--premium"
             variants={cardEntrance}
             initial="hidden"
@@ -111,22 +188,25 @@ export function HomeScreen() {
                   <Sparkles size={20} />
                 </span>
                 <div>
-                  <span className="hero-label">Today&apos;s next best action</span>
+                  <span className="hero-label">{activeRecommendation.primaryAction.title}</span>
                   <p className="home-hero-sub">One clear step — calm and safe.</p>
                 </div>
               </div>
-              <span className={`home-status-pill ${hasCheckInToday ? 'home-status-pill--ready' : ''}`}>
-                {hasCheckInToday ? 'Check-in saved' : 'Check-in pending'}
+              <span
+                className={`home-status-pill ${hasCheckInToday ? 'home-status-pill--ready' : ''}`}
+                title="Primary action category"
+              >
+                {categoryLabel(nextActionState?.category ?? activeRecommendation.primaryAction.category)}
               </span>
             </div>
 
-            {!hasCheckInToday ? (
+            {noCheckInSignal ? (
               <div className="home-hero-empty">
                 <div className="home-hero-empty-icon" aria-hidden="true">
                   <ClipboardCheck size={28} strokeWidth={1.5} />
                 </div>
                 <p className="hero-task hero-task--prompt">
-                  Start today&apos;s check-in to help Curavon suggest one clearer next step.
+                  {activeRecommendation.primaryAction.action}
                 </p>
                 <motion.button
                   type="button"
@@ -145,15 +225,23 @@ export function HomeScreen() {
                 {actionStatus === 'blocked' && (
                   <p className="home-hero-note">We&apos;ll keep this gentle for today.</p>
                 )}
+                <p className="home-hero-why-label">Why this step</p>
+                <p className="home-hero-why-text">{activeRecommendation.primaryAction.reason}</p>
                 <p className="hero-task hero-task--action">
-                  <SensitiveBlur sensitive={sensitiveMode}>{actionText}</SensitiveBlur>
+                  <SensitiveBlur sensitive={sensitiveMode}>
+                    {nextActionState?.currentAction || activeRecommendation.primaryAction.action || actionText}
+                  </SensitiveBlur>
                 </p>
-                {nextActionState?.source && (
-                  <p className="hero-source">
-                    <span className="hero-source-dot" aria-hidden="true" />
-                    From {nextActionState.source}
+                {activeRecommendation.supportingInsight ? (
+                  <p className="home-hero-note">{activeRecommendation.supportingInsight}</p>
+                ) : null}
+
+                {safetyNote ? (
+                  <p className="hero-safety-note">
+                    <AlertTriangle size={14} />
+                    {safetyNote}
                   </p>
-                )}
+                ) : null}
 
                 <AnimatePresence>
                   {isDone && (
@@ -182,12 +270,32 @@ export function HomeScreen() {
                 </AnimatePresence>
 
                 <div className="action-buttons action-buttons--today">
+                  {(nextActionState?.relatedGuide || activeRecommendation.primaryAction.relatedGuide) ? (
+                    <motion.button
+                      type="button"
+                      className="action-btn btn-health-adjust adjust-btn"
+                      {...tapScale}
+                      onClick={handleRelatedGuide}
+                    >
+                      <BookOpen size={18} />
+                      Related guide
+                    </motion.button>
+                  ) : null}
+                  <motion.button
+                    type="button"
+                    className="action-btn btn-health-blocked blocked-btn"
+                    {...tapScale}
+                    onClick={saveCurrentActionToSummary}
+                  >
+                    <FileText size={18} />
+                    Add to summary
+                  </motion.button>
                   <motion.button
                     type="button"
                     className={`action-btn btn-health-done done-btn ${isDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
                     whileTap={isDone ? undefined : { scale: 0.94 }}
                     onClick={handleDone}
-                    disabled={isDone}
+                    disabled={isDone || !canRespondToAction}
                   >
                     <CheckCircle2 size={18} />
                     Done
@@ -197,7 +305,7 @@ export function HomeScreen() {
                     className="action-btn btn-health-blocked blocked-btn"
                     {...tapScale}
                     onClick={openHealthBlockedSheet}
-                    disabled={isDone}
+                    disabled={isDone || !canRespondToAction}
                   >
                     <Ban size={18} />
                     Blocked
@@ -207,7 +315,7 @@ export function HomeScreen() {
                     className="action-btn btn-health-adjust adjust-btn"
                     {...tapScale}
                     onClick={openHealthAdjustSheet}
-                    disabled={isDone}
+                    disabled={isDone || !canRespondToAction}
                   >
                     <SlidersHorizontal size={18} />
                     Adjust
@@ -219,125 +327,39 @@ export function HomeScreen() {
         </AnimatePresence>
 
         <motion.p className="home-section-label" variants={fadeUp}>
-          At a glance
+          Supporting insights
         </motion.p>
 
         <motion.div className="home-glance-grid" variants={fadeUp}>
-          <section className="home-support-card health-rhythm-card warm-card glass-card-inner">
-            <div className="home-card-head">
-              <span className="home-card-icon home-card-icon--teal" aria-hidden="true">
-                <Moon size={18} />
-              </span>
-              <div>
-                <h3>Your health rhythm</h3>
-                <p className="home-card-sub">How today feels so far</p>
+          {personalizationPlan.supportingInsights.map((card) => (
+            <section key={card.id} className="home-support-card warm-card glass-card-inner">
+              <div className="home-card-head">
+                <span className="home-card-icon home-card-icon--teal" aria-hidden="true">
+                  <Info size={18} />
+                </span>
+                <div>
+                  <h3>{card.title}</h3>
+                  <p className="home-card-sub">Based on your latest check-ins and notes.</p>
+                </div>
               </div>
-            </div>
-            {todayCheckIn ? (
-              <div className="health-rhythm-metrics">
-                {RHYTHM_METRICS.map(({ key, label, icon: Icon }) => (
-                  <div key={key} className="rhythm-metric">
-                    <span className="rhythm-metric-icon" aria-hidden="true">
-                      <Icon size={15} />
-                    </span>
-                    <span className="rhythm-metric-label">{label}</span>
-                    <strong className="rhythm-metric-value">{todayCheckIn[key]}</strong>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="health-rhythm-empty">
-                {RHYTHM_METRICS.map(({ label, icon: Icon }) => (
-                  <div key={label} className="rhythm-metric rhythm-metric--empty">
-                    <span className="rhythm-metric-icon" aria-hidden="true">
-                      <Icon size={15} />
-                    </span>
-                    <span className="rhythm-metric-label">{label}</span>
-                    <span className="rhythm-metric-placeholder">—</span>
-                  </div>
-                ))}
-                <p className="home-card-footnote">No check-in yet today.</p>
-              </div>
-            )}
-          </section>
-
-          <section className="home-support-card recent-concerns-card warm-card glass-card-inner">
-            <div className="home-card-head">
-              <span className="home-card-icon home-card-icon--warm" aria-hidden="true">
-                <MessageCircle size={18} />
-              </span>
-              <div>
-                <h3>Recent concerns</h3>
-                <p className="home-card-sub">Symptoms &amp; notes Curavon remembers</p>
-              </div>
-            </div>
-            {recentConcerns.length > 0 ? (
-              <ul className="recent-concerns-list recent-concerns-list--today">
-                {recentConcerns.map((concern, i) => (
-                  <li key={`${concern}-${i}`} className="recent-concern-item">
-                    <span className="recent-concern-dot" aria-hidden="true" />
-                    <span className="recent-concern-label">
-                      <SensitiveBlur sensitive={sensitiveMode}>{concern}</SensitiveBlur>
-                    </span>
-                  </li>
+              <ul className="home-insight-list">
+                {card.lines.map((line) => (
+                  <li key={line}>{line}</li>
                 ))}
               </ul>
-            ) : (
-              <p className="home-card-empty-copy">
-                Symptoms and notes from check-ins will appear here.
-              </p>
-            )}
-          </section>
+              {card.actionLabel ? (
+                <button
+                  type="button"
+                  className="home-text-link"
+                  onClick={() => handleInsightAction(card)}
+                >
+                  {card.actionLabel}
+                </button>
+              ) : null}
+            </section>
+          ))}
+
         </motion.div>
-
-        <motion.p className="home-section-label" variants={fadeUp}>
-          Support tools
-        </motion.p>
-
-        <motion.button
-          type="button"
-          className="home-support-card home-feature-card doctor-shortcut-card warm-card glass-card-inner"
-          variants={fadeUp}
-          {...tapScale}
-          onClick={openDoctorSummary}
-        >
-          <span className="home-feature-accent" aria-hidden="true" />
-          <span className="home-card-icon home-card-icon--teal home-feature-icon" aria-hidden="true">
-            <FileText size={20} />
-          </span>
-          <div className="doctor-shortcut-text">
-            <span className="doctor-shortcut-title">Doctor-ready summary</span>
-            <span className="doctor-shortcut-desc">
-              Turn recent notes, symptoms, and actions into a clear summary.
-            </span>
-          </div>
-          <ChevronRight size={18} className="icon-muted home-feature-chevron" />
-        </motion.button>
-
-        <motion.section
-          className="home-support-card smart-silence-card warm-card glass-card-inner"
-          variants={fadeUp}
-        >
-          <div className="smart-silence-row">
-            <span className="home-card-icon home-card-icon--accent" aria-hidden="true">
-              <BellOff size={18} />
-            </span>
-            <div className="smart-silence-copy">
-              <h3>Smart Silence</h3>
-              <p>No random reminders. Only useful nudges.</p>
-            </div>
-          </div>
-          <div className="smart-silence-footer">
-            <span className="smart-silence-badge">{smartSilenceLabel}</span>
-            <button
-              type="button"
-              className="home-text-link"
-              onClick={() => setActiveTab('settings')}
-            >
-              Manage in Profile
-            </button>
-          </div>
-        </motion.section>
       </motion.div>
 
       <TodayCheckIn />

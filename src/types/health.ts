@@ -49,11 +49,44 @@ export interface DailyStepsState {
 
 export interface NextActionState {
   currentAction: string;
+  title?: string;
+  reason?: string;
   source: string;
+  sourceSignals?: string[];
+  sourceChips?: string[];
+  effort?: 'very_low' | 'low' | 'medium';
+  category?:
+    | 'stabilize'
+    | 'track'
+    | 'prepare'
+    | 'reduce_friction'
+    | 'escalate'
+    | 'checkin'
+    | 'stress'
+    | 'medication'
+    | 'doctor_prep'
+    | 'symptom_tracking'
+    | 'sleep_energy'
+    | 'profile'
+    | 'general';
+  relatedGuide?: string;
+  relatedGuideFlowId?:
+    | 'something-feels-off'
+    | 'doctor-visit-prep'
+    | 'mood-stress-checkin'
+    | 'headache'
+    | 'stomach-pain'
+    | 'medication-review';
+  relatedDoctorSummaryPrompt?: string;
+  safetyLevel?: 'normal' | 'caution' | 'urgent';
+  actionId?: string;
   status: ActionStatus;
   updatedAt: string;
+  completedAt?: string;
   blockedReason?: HealthBlockedReason;
+  blockedLabel?: string;
   adjustNote?: string;
+  adjustLabel?: string;
 }
 
 export type CheckInDraft = Partial<

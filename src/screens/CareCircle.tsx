@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useDoctorSummary } from '../context/DoctorSummaryContext';
+import { useHealth } from '../context/HealthContext';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useScreenBack } from '../hooks/useScreenBack';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
+import { CALM_URGENT_TITLE, detectUrgentConcern } from '../utils/healthSafety';
 
 type FlowId =
   | 'something-feels-off'
@@ -437,6 +439,30 @@ const FLOW_RUNNERS: Record<FlowId, FlowDefinition> = {
   },
   'monthly-wellness-review': {
     id: 'monthly-wellness-review',
+    questions: [
+      {
+        id: 'month-theme',
+        prompt: 'What felt most noticeable this month?',
+        type: 'single',
+        options: ['Sleep changes', 'Stress pressure', 'Symptoms', 'Energy shifts', 'Medication or routine changes'],
+      },
+      {
+        id: 'month-pattern',
+        prompt: 'Which pattern appeared most often?',
+        type: 'shortText',
+      },
+      {
+        id: 'month-support',
+        prompt: 'What one support step felt most helpful?',
+        type: 'shortText',
+      },
+      {
+        id: 'month-urgent',
+        prompt: 'Any urgent warning signs this month?',
+        type: 'multi',
+        options: ['Chest pain', 'Trouble breathing', 'Fainting', 'Severe sudden pain', 'None of these'],
+      },
+    ],
     watch: ['Sleep consistency', 'Stress pattern', 'Symptom recurrence'],
     nextStep:
       'Pick one pattern from the month and choose one manageable action for the coming week.',
@@ -444,6 +470,33 @@ const FLOW_RUNNERS: Record<FlowId, FlowDefinition> = {
   },
   headache: {
     id: 'headache',
+    questions: [
+      {
+        id: 'headache-when',
+        prompt: 'When do headaches usually appear?',
+        type: 'single',
+        options: ['Morning', 'Afternoon', 'Evening', 'No clear time', 'Not sure'],
+      },
+      {
+        id: 'headache-intensity',
+        prompt: 'How strong has it felt recently?',
+        helper: '1 = very mild, 10 = very intense',
+        type: 'scale',
+        min: 1,
+        max: 10,
+      },
+      {
+        id: 'headache-triggers',
+        prompt: 'Possible triggers you noticed',
+        type: 'shortText',
+      },
+      {
+        id: 'headache-urgent',
+        prompt: 'Any urgent warning signs?',
+        type: 'multi',
+        options: ['Worst headache', 'Face drooping', 'Sudden weakness', 'Trouble breathing', 'None of these'],
+      },
+    ],
     watch: ['Timing and trigger pattern', 'Intensity shifts', 'Any urgent warning signs'],
     nextStep:
       'Track headache timing and possible triggers this week, and seek urgent care if severe or sudden symptoms appear.',
@@ -451,6 +504,34 @@ const FLOW_RUNNERS: Record<FlowId, FlowDefinition> = {
   },
   'stomach-pain': {
     id: 'stomach-pain',
+    questions: [
+      {
+        id: 'stomach-when',
+        prompt: 'When are symptoms most noticeable?',
+        type: 'single',
+        options: ['Before meals', 'After meals', 'At night', 'Random', 'Not sure'],
+      },
+      {
+        id: 'stomach-feel',
+        prompt: 'Which symptoms fit best?',
+        type: 'multi',
+        options: ['Pain', 'Nausea', 'Cramping', 'Diarrhea', 'Bloating', 'None of these'],
+      },
+      {
+        id: 'stomach-intensity',
+        prompt: 'How intense has it felt recently?',
+        helper: '1 = very mild, 10 = very intense',
+        type: 'scale',
+        min: 1,
+        max: 10,
+      },
+      {
+        id: 'stomach-urgent',
+        prompt: 'Any urgent warning signs?',
+        type: 'multi',
+        options: ['Severe sudden pain', 'Heavy bleeding', 'Fainting', 'Trouble breathing', 'None of these'],
+      },
+    ],
     watch: ['Meal timing relationship', 'Pain pattern', 'Worsening or urgent changes'],
     nextStep:
       'Track food timing and symptom pattern for a few days, and seek urgent care if pain becomes severe or sudden.',
@@ -458,6 +539,29 @@ const FLOW_RUNNERS: Record<FlowId, FlowDefinition> = {
   },
   'medication-review': {
     id: 'medication-review',
+    questions: [
+      {
+        id: 'med-name',
+        prompt: 'Which medication or supplement is your main concern?',
+        type: 'shortText',
+      },
+      {
+        id: 'med-change',
+        prompt: 'What did you notice?',
+        type: 'shortText',
+      },
+      {
+        id: 'med-question',
+        prompt: 'What question do you want to ask a clinician or pharmacist?',
+        type: 'shortText',
+      },
+      {
+        id: 'med-urgent',
+        prompt: 'Any urgent warning signs?',
+        type: 'multi',
+        options: ['Trouble breathing', 'Fainting', 'Severe sudden pain', 'Heavy bleeding', 'None of these'],
+      },
+    ],
     watch: ['Dose/timing consistency', 'Side effects', 'Questions for clinician'],
     nextStep:
       'Prepare medication notes with timing and side effects before your next clinician conversation.',
@@ -485,8 +589,9 @@ function isAnswered(question: FlowQuestion, value: unknown): boolean {
 }
 
 export function CareCircleScreen() {
-  const { setActiveTab, showToast, openDoctorSummary, pendingGuideFlowId, clearPendingGuideFlow } = useApp();
-  const { addFromFlow } = useDoctorSummary();
+  const { showToast, openDoctorSummary, pendingGuideFlowId, clearPendingGuideFlow } = useApp();
+  const { addFromFlow, logRedFlag } = useDoctorSummary();
+  const { openUrgentSafety, closeUrgentSafety } = useHealth();
   const [viewMode, setViewMode] = useState<ViewMode>('browse');
   const [selectedFlowId, setSelectedFlowId] = useState<FlowId | null>(null);
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
@@ -498,6 +603,13 @@ export function CareCircleScreen() {
   const [doctorDraftSaved, setDoctorDraftSaved] = useState(false);
   const flowSummarySavedRef = useRef<string | null>(null);
   const [savedGuides, setSavedGuides] = useState<Record<string, boolean>>({});
+  const [showGuidesSafety, setShowGuidesSafety] = useState(false);
+  const [guidesSafetyTitle, setGuidesSafetyTitle] = useState(CALM_URGENT_TITLE);
+  const [guidesSafetyBody, setGuidesSafetyBody] = useState('');
+  const [guidesSafetyAcknowledged, setGuidesSafetyAcknowledged] = useState(false);
+  const [pendingAdvance, setPendingAdvance] = useState(false);
+  const [pendingToResult, setPendingToResult] = useState(false);
+  const [lastSafetySignature, setLastSafetySignature] = useState('');
 
   const selectedFlow = useMemo(
     () => FLOW_CARDS.find((flow) => flow.id === selectedFlowId) ?? null,
@@ -572,18 +684,16 @@ export function CareCircleScreen() {
 
   const startSelectedFlow = () => {
     if (!selectedFlowId) return;
-    const runner = FLOW_RUNNERS[selectedFlowId];
     setResultSaved(false);
     setDoctorDraftSaved(false);
     flowSummarySavedRef.current = null;
-    if (runner.questions && runner.questions.length > 0) {
-      setRunnerStep(0);
-      setRunnerAnswers({});
-      setViewMode('flowRunner');
-      return;
-    }
-    showToast(`Opening ${selectedFlow?.title ?? 'flow'} in Flow tab`);
-    setActiveTab('flow');
+    setGuidesSafetyAcknowledged(false);
+    setPendingAdvance(false);
+    setPendingToResult(false);
+    setLastSafetySignature('');
+    setRunnerStep(0);
+    setRunnerAnswers({});
+    setViewMode('flowRunner');
   };
 
   const backToBrowse = () => {
@@ -607,6 +717,47 @@ export function CareCircleScreen() {
   const setAnswer = (question: FlowQuestion, value: unknown) => {
     setRunnerAnswers((prev) => ({ ...prev, [question.id]: value }));
   };
+
+  const detectRunnerUrgent = (answers: Record<string, unknown>) => {
+    const flattened = Object.values(answers)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .map((value) => String(value));
+    const moodSafetyRaw = typeof answers.safety === 'string' ? answers.safety : '';
+    const moodSafetySelected = ['yes', "i'm not sure"].includes(moodSafetyRaw.toLowerCase());
+    const urgent = moodSafetySelected
+      ? detectUrgentConcern('thoughts of harming myself')
+      : detectUrgentConcern(flattened);
+    return {
+      urgent,
+      text: moodSafetySelected ? `Mood safety answer: ${moodSafetyRaw}` : flattened.join(', '),
+      signature: [...urgent.matches].sort().join('|'),
+    };
+  };
+
+  const proceedRunner = useCallback(() => {
+    if (!selectedFlowRunner?.questions) return;
+    const lastStep = selectedFlowRunner.questions.length - 1;
+    if (runnerStep >= lastStep) {
+      setViewMode('flowResult');
+      return;
+    }
+    setRunnerStep((step) => Math.min(step + 1, lastStep));
+  }, [runnerStep, selectedFlowRunner]);
+
+  const openGuidesSafety = useCallback(
+    (title: string, body: string) => {
+      setGuidesSafetyTitle(title);
+      setGuidesSafetyBody(body);
+      setShowGuidesSafety(true);
+      openUrgentSafety();
+    },
+    [openUrgentSafety],
+  );
+
+  const closeGuidesSafety = useCallback(() => {
+    setShowGuidesSafety(false);
+    closeUrgentSafety();
+  }, [closeUrgentSafety]);
 
   const toggleMultiOption = (question: FlowQuestion, option: string) => {
     const existing = Array.isArray(runnerAnswers[question.id]) ? (runnerAnswers[question.id] as string[]) : [];
@@ -633,12 +784,25 @@ export function CareCircleScreen() {
 
   const goRunnerNext = () => {
     if (!selectedFlowRunner?.questions || !currentQuestion || !canContinue) return;
-    const lastStep = selectedFlowRunner.questions.length - 1;
-    if (runnerStep >= lastStep) {
-      setViewMode('flowResult');
+    const nextAnswers = { ...runnerAnswers, [currentQuestion.id]: currentAnswer };
+    const { urgent, text, signature } = detectRunnerUrgent(nextAnswers);
+    if (urgent.hasUrgent && !guidesSafetyAcknowledged) {
+      if (signature && signature !== lastSafetySignature) {
+        logRedFlag({
+          source: 'Guides',
+          userText: text,
+          matchedConcern: urgent.matches[0] ?? 'urgent concern',
+          guidanceShown: urgent.body,
+        });
+        setLastSafetySignature(signature);
+      }
+      const lastStep = selectedFlowRunner.questions.length - 1;
+      setPendingAdvance(true);
+      setPendingToResult(runnerStep >= lastStep);
+      openGuidesSafety(urgent.title, urgent.body);
       return;
     }
-    setRunnerStep((step) => Math.min(step + 1, lastStep));
+    proceedRunner();
   };
 
   const saveResult = () => {
@@ -652,14 +816,7 @@ export function CareCircleScreen() {
     selectedFlowRunner.questions?.forEach((question) => {
       answerMap[question.prompt] = runnerAnswers[question.id];
     });
-    const redFlags = Object.values(runnerAnswers)
-      .flatMap((v) => (Array.isArray(v) ? v : [v]))
-      .filter((v) =>
-        ['Yes', "I'm not sure", 'Chest pain', 'Trouble breathing', 'Severe sudden pain'].includes(
-          String(v),
-        ),
-      )
-      .map(String);
+    const redFlags = detectRunnerUrgent(runnerAnswers).urgent.matches;
 
     addFromFlow({
       title: selectedFlow.title,
@@ -689,6 +846,8 @@ export function CareCircleScreen() {
     viewMode === 'flowRunner' &&
     typeof runnerAnswers.safety === 'string' &&
     ['Yes', "I'm not sure"].includes(runnerAnswers.safety);
+
+  const guidesSafetyNeedsAcknowledgement = showGuidesSafety && pendingAdvance;
 
   const handleGuidesBack = useCallback(() => {
     if (viewMode === 'flowRunner') {
@@ -999,6 +1158,54 @@ export function CareCircleScreen() {
             </div>
           ) : null}
 
+          {showGuidesSafety ? (
+            <div className="guides-safety-modal warm-card glass-card-inner">
+              <h4>{guidesSafetyTitle}</h4>
+              <p>{guidesSafetyBody}</p>
+              <div className="guides-safety-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-glass"
+                  onClick={() => {
+                    setGuidesSafetyAcknowledged(true);
+                    closeGuidesSafety();
+                    if (guidesSafetyNeedsAcknowledgement) {
+                      if (pendingToResult) {
+                        setViewMode('flowResult');
+                      } else {
+                        proceedRunner();
+                      }
+                    }
+                    setPendingAdvance(false);
+                    setPendingToResult(false);
+                  }}
+                >
+                  I understand
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-pill"
+                  onClick={() => {
+                    setGuidesSafetyAcknowledged(true);
+                    closeGuidesSafety();
+                    openDoctorSummary();
+                    if (guidesSafetyNeedsAcknowledgement) {
+                      if (pendingToResult) {
+                        setViewMode('flowResult');
+                      } else {
+                        proceedRunner();
+                      }
+                    }
+                    setPendingAdvance(false);
+                    setPendingToResult(false);
+                  }}
+                >
+                  Prepare summary
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="guides-runner-actions">
             <button type="button" className="btn btn-secondary btn-glass" onClick={goRunnerBack}>
               Back
@@ -1056,6 +1263,11 @@ export function CareCircleScreen() {
               {selectedFlowRunner.doctorSummaryTemplate} This may be worth tracking and useful to
               mention to a clinician.
             </p>
+          </div>
+
+          <div className="guides-result-safety-footer">
+            Curavon can help organize your notes, but severe, sudden, or unsafe symptoms should be
+            handled by local emergency services or a clinician now.
           </div>
 
           <div className="guides-result-actions">

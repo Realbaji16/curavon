@@ -16,6 +16,7 @@ import type {
   NextActionState,
   SmartSilencePreference,
 } from '../types/health';
+import type { HealthSnapshot } from '../types/healthSnapshot';
 import {
   createDefaultHealthProfile,
   getTodayCheckIn,
@@ -23,11 +24,12 @@ import {
   loadTodaySteps,
   normalizeCheckIn,
   safeRead,
+  safeRemove,
   safeWrite,
   todayDateKey,
   clearHealthStorage,
 } from '../utils/healthStorage';
-import { generateNextActionFromCheckIn, ADJUSTED_ACTIONS } from '../utils/nextActionRules';
+import { ADJUSTED_ACTIONS } from '../utils/nextActionRules';
 import { stepsBandToCount } from '../utils/stepsUtils';
 import {
   addDoctorSummaryItem,
@@ -41,6 +43,12 @@ import {
   createNextActionSummaryItem,
 } from '../utils/doctorSummaryItems';
 import { clearAskHistory, loadAskHistory } from '../utils/askIntakeStorage';
+import {
+  adjustedOptionLabel,
+  blockedReasonLabel,
+} from '../utils/nextBestActionEngine';
+import { loadHealthSnapshot, refreshHealthSnapshot as recomputeHealthSnapshot } from '../utils/healthSnapshot';
+import { buildNextBestAction, toNextActionStateFromV2 } from '../utils/actionEngineV2';
 
 interface HealthContextValue {
   healthProfile: HealthProfile;
@@ -53,6 +61,7 @@ interface HealthContextValue {
   addTodaySteps: (amount: number) => void;
   setTodayStepsCount: (steps: number) => void;
   nextActionState: NextActionState | null;
+  healthSnapshot: HealthSnapshot;
   showCheckIn: boolean;
   openCheckIn: () => void;
   closeCheckIn: () => void;
@@ -61,6 +70,8 @@ interface HealthContextValue {
   markActionBlocked: (reason: HealthBlockedReason) => void;
   markActionAdjusted: (option: AdjustOption) => void;
   setNextActionFromSource: (action: string, source: string) => void;
+  saveCurrentActionToSummary: () => void;
+  refreshPersonalizedAction: () => void;
   showHealthBlockedSheet: boolean;
   showHealthAdjustSheet: boolean;
   openHealthBlockedSheet: () => void;
@@ -74,6 +85,7 @@ interface HealthContextValue {
   exportHealthData: () => void;
   smartSilenceLabel: string;
   recentConcerns: string[];
+  refreshHealthSnapshot: () => void;
 }
 
 const HealthContext = createContext<HealthContextValue | null>(null);
@@ -100,12 +112,26 @@ function persistNextAction(state: NextActionState | null) {
   if (state) {
     safeWrite(HEALTH_STORAGE_KEYS.nextActionState, state);
   } else {
-    localStorage.removeItem(HEALTH_STORAGE_KEYS.nextActionState);
+    safeRemove(HEALTH_STORAGE_KEYS.nextActionState);
   }
 }
 
+function normalizeNextActionState(state: NextActionState | null): NextActionState | null {
+  if (!state) return null;
+  return {
+    ...state,
+    title: state.title ?? "Today's next best action",
+    reason:
+      state.reason ??
+      'Based on your latest check-in and notes.',
+    sourceSignals: state.sourceSignals ?? [],
+    sourceChips: state.sourceChips ?? [state.source as string],
+    safetyLevel: state.safetyLevel ?? 'normal',
+  };
+}
+
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const { profileSetup, setupComplete, sensitiveMode, setSensitiveMode } = useApp();
+  const { setSensitiveMode } = useApp();
 
   const [healthProfile, setHealthProfile] = useState<HealthProfile>(() =>
     safeRead(HEALTH_STORAGE_KEYS.healthProfile, createDefaultHealthProfile()),
@@ -115,31 +141,50 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   );
   const [dailySteps, setDailySteps] = useState<DailyStepsState>(() => loadTodaySteps());
   const [nextActionState, setNextActionState] = useState<NextActionState | null>(() =>
-    safeRead<NextActionState | null>(HEALTH_STORAGE_KEYS.nextActionState, null),
+    normalizeNextActionState(
+      safeRead<NextActionState | null>(HEALTH_STORAGE_KEYS.nextActionState, null),
+    ),
   );
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showHealthBlockedSheet, setShowHealthBlockedSheet] = useState(false);
   const [showHealthAdjustSheet, setShowHealthAdjustSheet] = useState(false);
   const [showUrgentSafety, setShowUrgentSafety] = useState(false);
+  const [healthSnapshot, setHealthSnapshot] = useState<HealthSnapshot>(() => loadHealthSnapshot());
 
   const todayCheckIn = getTodayCheckIn(dailyCheckins);
 
+  const refreshSnapshotState = useCallback(() => {
+    setHealthSnapshot(recomputeHealthSnapshot());
+  }, []);
+
+  const derivePersonalizedAction = useCallback(
+    (_memoryOverride?: unknown) => {
+      const healthSnapshot = recomputeHealthSnapshot();
+      const decision = buildNextBestAction(healthSnapshot);
+      return toNextActionStateFromV2(decision);
+    },
+    [],
+  );
+
   const refreshNextActionFromToday = useCallback(
-    (checkIn: DailyCheckIn, steps: number, onlyIfPending = true) => {
+    (_checkIn: DailyCheckIn, _steps: number, onlyIfPending = true) => {
       setNextActionState((prev) => {
         if (onlyIfPending && prev && prev.status !== 'pending') return prev;
-        const next = generateNextActionFromCheckIn(checkIn, steps);
+        const next = derivePersonalizedAction(
+          prev ? { nextActionState: prev } : undefined,
+        );
         persistNextAction(next);
         return next;
       });
     },
-    [],
+    [derivePersonalizedAction],
   );
 
   useEffect(() => {
     const today = todayDateKey();
     setDailySteps((prev) => (prev.date === today ? prev : loadTodaySteps()));
-  }, []);
+    refreshSnapshotState();
+  }, [refreshSnapshotState]);
 
   const addTodaySteps = useCallback(
     (amount: number) => {
@@ -192,21 +237,15 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!profileSetup || !setupComplete) return;
-    setHealthProfile((prev) => {
-      const next: HealthProfile = {
-        ...prev,
-        preferredName: profileSetup.preferredName || prev.preferredName,
-        primaryGoals: profileSetup.primaryGoals.length
-          ? profileSetup.primaryGoals
-          : prev.primaryGoals,
-        smartSilencePreference: profileSetup.smartSilencePreference,
-        sensitiveMode,
-      };
-      persistProfile(next);
-      return next;
-    });
-  }, [profileSetup, setupComplete, sensitiveMode]);
+    if (nextActionState && nextActionState.status !== 'pending') return;
+    const next = derivePersonalizedAction();
+    setNextActionState(next);
+    persistNextAction(next);
+  }, [healthProfile, dailyCheckins, nextActionState?.status, derivePersonalizedAction]);
+
+  useEffect(() => {
+    setSensitiveMode(healthProfile.sensitiveMode);
+  }, [healthProfile.sensitiveMode, setSensitiveMode]);
 
   const updateHealthProfile = useCallback((patch: Partial<HealthProfile>) => {
     setHealthProfile((prev) => {
@@ -271,6 +310,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       });
 
+      const nextCheckins = [entry, ...dailyCheckins.filter((c) => c.date !== today)];
       setDailyCheckins((prev) => {
         const filtered = prev.filter((c) => c.date !== today);
         const next = [entry, ...filtered];
@@ -289,13 +329,16 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         return next;
       });
 
-      const nextAction = generateNextActionFromCheckIn(entry, resolvedSteps);
+      const nextAction = derivePersonalizedAction({
+        dailyCheckins: nextCheckins,
+      });
       setNextActionState(nextAction);
       persistNextAction(nextAction);
       addDoctorSummaryItem(createCheckInSummaryItem(entry));
+      refreshSnapshotState();
       setShowCheckIn(false);
     },
-    [dailySteps.steps],
+    [dailyCheckins, dailySteps.steps, derivePersonalizedAction, refreshSnapshotState],
   );
 
   const markActionDone = useCallback(() => {
@@ -304,10 +347,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       const next: NextActionState = {
         ...prev,
         status: 'done',
+        completedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
       addDoctorSummaryItem(createNextActionSummaryItem(next));
+      setHealthSnapshot(recomputeHealthSnapshot());
       return next;
     });
   }, []);
@@ -319,10 +364,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         ...prev,
         status: 'blocked',
         blockedReason: reason,
+        blockedLabel: blockedReasonLabel(reason),
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
       addDoctorSummaryItem(createNextActionSummaryItem(next, { blockedReason: reason }));
+      setHealthSnapshot(recomputeHealthSnapshot());
       return next;
     });
     setShowHealthBlockedSheet(false);
@@ -336,10 +383,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         status: 'adjusted',
         currentAction: ADJUSTED_ACTIONS[option] ?? prev.currentAction,
         adjustNote: option,
+        adjustLabel: adjustedOptionLabel(option),
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
       addDoctorSummaryItem(createNextActionSummaryItem(next, { adjustOption: option }));
+      setHealthSnapshot(recomputeHealthSnapshot());
       return next;
     });
     setShowHealthAdjustSheet(false);
@@ -348,32 +397,50 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   const setNextActionFromSource = useCallback((action: string, source: string) => {
     const next: NextActionState = {
       currentAction: action,
+      title: "Today's next best action",
+      reason: 'Based on your latest notes.',
       source,
+      sourceSignals: [],
+      sourceChips: [source],
+      effort: 'low',
+      category: 'general',
+      safetyLevel: 'normal',
       status: 'pending',
       updatedAt: new Date().toISOString(),
     };
     setNextActionState(next);
     persistNextAction(next);
-  }, []);
+    refreshSnapshotState();
+  }, [refreshSnapshotState]);
+
+  const saveCurrentActionToSummary = useCallback(() => {
+    if (!nextActionState) return;
+    addDoctorSummaryItem(createNextActionSummaryItem(nextActionState));
+    refreshSnapshotState();
+  }, [nextActionState, refreshSnapshotState]);
+
+  const refreshPersonalizedAction = useCallback(() => {
+    setNextActionState((prev) => {
+      if (prev && prev.status !== 'pending') return prev;
+      const next = derivePersonalizedAction(prev ? { nextActionState: prev } : undefined);
+      persistNextAction(next);
+      return next;
+    });
+  }, [derivePersonalizedAction]);
 
   const clearHealthData = useCallback(() => {
     clearHealthStorage();
     clearDoctorSummaryStorage();
     clearAskHistory();
     const fresh = createDefaultHealthProfile();
-    if (profileSetup) {
-      fresh.preferredName = profileSetup.preferredName;
-      fresh.primaryGoals = profileSetup.primaryGoals;
-      fresh.smartSilencePreference = profileSetup.smartSilencePreference;
-      fresh.sensitiveMode = sensitiveMode;
-      persistProfile(fresh);
-    }
     setHealthProfile(fresh);
     setDailyCheckins([]);
     setDailySteps(loadTodaySteps());
     setNextActionState(null);
     persistNextAction(null);
-  }, [profileSetup, sensitiveMode]);
+    setSensitiveMode(false);
+    refreshSnapshotState();
+  }, [setSensitiveMode, refreshSnapshotState]);
 
   const exportHealthData = useCallback(() => {
     const payload = {
@@ -385,6 +452,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       doctorSummaryDrafts: loadDoctorSummaryDrafts(),
       redFlagLogs: loadRedFlagLogs(),
       askHistory: loadAskHistory(),
+      healthSnapshot: loadHealthSnapshot(),
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -421,6 +489,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         addTodaySteps,
         setTodayStepsCount,
         nextActionState,
+        healthSnapshot,
         showCheckIn,
         openCheckIn: () => setShowCheckIn(true),
         closeCheckIn: () => setShowCheckIn(false),
@@ -429,6 +498,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         markActionBlocked,
         markActionAdjusted,
         setNextActionFromSource,
+        saveCurrentActionToSummary,
+        refreshPersonalizedAction,
         showHealthBlockedSheet,
         showHealthAdjustSheet,
         openHealthBlockedSheet: () => setShowHealthBlockedSheet(true),
@@ -442,6 +513,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         exportHealthData,
         smartSilenceLabel,
         recentConcerns,
+        refreshHealthSnapshot: refreshSnapshotState,
       }}
     >
       {children}

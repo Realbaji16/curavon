@@ -7,16 +7,23 @@ import {
   BookOpen,
   CheckCircle2,
   EyeOff,
+  MessageCircle,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { useHealth } from '../context/HealthContext';
 import { useScreenBack } from '../hooks/useScreenBack';
-import { URGENT_SAFETY_MESSAGE } from '../utils/healthSafety';
+import {
+  CALM_URGENT_BODY,
+  CALM_URGENT_TITLE,
+  SELF_HARM_URGENT_BODY,
+  SELF_HARM_URGENT_TITLE,
+} from '../utils/healthSafety';
 import {
   ASK_GOAL_OPTIONS,
   ASK_INTAKE_STEP_COUNT,
   ASK_QUICK_STARTS,
+  ASK_STEP_HELPERS,
   CONCERN_TYPE_OPTIONS,
   EMPTY_ASK_INTAKE,
   RED_FLAG_OPTIONS,
@@ -66,9 +73,72 @@ function AskFitShell({ children, className = '' }: { children: ReactNode; classN
   return <div className={`ask-fit-shell ${className}`.trim()}>{children}</div>;
 }
 
+function AskHistorySection({
+  history,
+  sensitive,
+  revealedHistoryIds,
+  onReveal,
+  onSaveEntry,
+  onViewSummary,
+  compact = false,
+}: {
+  history: AskHistoryEntry[];
+  sensitive: boolean;
+  revealedHistoryIds: Set<string>;
+  onReveal: (id: string) => void;
+  onSaveEntry: (entry: AskHistoryEntry) => void;
+  onViewSummary: () => void;
+  compact?: boolean;
+}) {
+  if (history.length === 0) return null;
+
+  return (
+    <section className={`ask-history-section ${compact ? 'ask-history-section--compact' : ''}`}>
+      <h3 className="ask-history-title">Recent intakes</h3>
+      <ul className="ask-history-list">
+        {history.slice(0, compact ? 1 : 3).map((entry) => {
+          const hidden = sensitive && !revealedHistoryIds.has(entry.id);
+          return (
+            <li key={entry.id} className="ask-history-card warm-card glass-card-inner ask-history-card--premium">
+              <div className="ask-history-head">
+                <p className="ask-history-concern">
+                  {hidden ? (
+                    <button type="button" className="ask-history-reveal" onClick={() => onReveal(entry.id)}>
+                      <EyeOff size={12} />
+                      Sensitive detail hidden — tap to reveal
+                    </button>
+                  ) : (
+                    <SensitiveBlur sensitive={sensitive}>{entry.concern}</SensitiveBlur>
+                  )}
+                </p>
+                <span className="ask-history-date">{formatHistoryDate(entry.createdAt)}</span>
+              </div>
+              <p className="ask-history-preview">
+                {hidden ? 'Next step hidden' : entry.nextStep.slice(0, 72)}
+                {!hidden && entry.nextStep.length > 72 ? '…' : ''}
+              </p>
+              <div className="ask-history-actions">
+                {entry.savedToDoctorSummary ? (
+                  <button type="button" className="btn btn-secondary btn-glass btn-sm" onClick={onViewSummary}>
+                    View Summary
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-secondary btn-glass btn-sm" onClick={() => onSaveEntry(entry)}>
+                    Save to Summary
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export function AskCuravonScreen() {
   const { setActiveTab, openDoctorSummary, openGuidesWithFlow, showToast } = useApp();
-  const { healthProfile, setNextActionFromSource } = useHealth();
+  const { healthProfile, setNextActionFromSource, refreshHealthSnapshot } = useHealth();
   const { addFromAsk, logRedFlag } = useDoctorSummary();
 
   const [mode, setMode] = useState<AskMode>('landing');
@@ -79,6 +149,8 @@ export function AskCuravonScreen() {
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
   const [history, setHistory] = useState<AskHistoryEntry[]>(() => loadAskHistory());
   const [revealedHistoryIds, setRevealedHistoryIds] = useState<Set<string>>(new Set());
+  const [safetyTitle, setSafetyTitle] = useState(CALM_URGENT_TITLE);
+  const [safetyBody, setSafetyBody] = useState(CALM_URGENT_BODY);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
@@ -110,13 +182,15 @@ export function AskCuravonScreen() {
       concernType: intake.concernType || 'Not sure',
       nextStep: nextSafeStep,
     });
+    refreshHealthSnapshot();
     setHistoryEntryId(entry.id);
     setHistory(loadAskHistory());
 
     if (hasUrgentRedFlags(flags)) {
-      const guidance = hasSelfHarmRedFlag(flags)
-        ? MENTAL_HEALTH_SAFETY_MESSAGE
-        : URGENT_SAFETY_MESSAGE;
+      const selfHarm = hasSelfHarmRedFlag(flags);
+      const guidance = selfHarm ? SELF_HARM_URGENT_BODY : CALM_URGENT_BODY;
+      setSafetyTitle(selfHarm ? SELF_HARM_URGENT_TITLE : CALM_URGENT_TITLE);
+      setSafetyBody(guidance);
       logRedFlag({
         source: 'Ask Curavon',
         userText: flags.filter((f) => f !== 'None of these').join(', '),
@@ -194,6 +268,7 @@ export function AskCuravonScreen() {
     });
     if (historyEntryId) {
       markAskHistorySaved(historyEntryId);
+      refreshHealthSnapshot();
       setHistory(loadAskHistory());
     }
     setSavedToSummary(true);
@@ -223,6 +298,27 @@ export function AskCuravonScreen() {
     });
   };
 
+  const saveHistoryEntryToSummary = (entry: AskHistoryEntry) => {
+    addFromAsk({
+      mainConcern: entry.concern,
+      concernType: entry.concernType,
+      timeline: '',
+      intensity: 0,
+      whatChanged: '',
+      triedSoFar: '',
+      redFlags: [],
+      nextSafeStep: entry.nextStep,
+    });
+    markAskHistorySaved(entry.id);
+    refreshHealthSnapshot();
+    setHistory(loadAskHistory());
+    showToast('Saved to your doctor summary.');
+  };
+
+  const revealHistory = (id: string) => {
+    setRevealedHistoryIds((prev) => new Set(prev).add(id));
+  };
+
   if (mode === 'safety') {
     const showMentalHealth = hasSelfHarmRedFlag(redFlags);
     return (
@@ -230,15 +326,13 @@ export function AskCuravonScreen() {
         <div className="screen ask-safety-screen ask-screen-no-scroll">
           <ScreenHeader title="Safety check" subtitle="Stay calm" showThemeToggle={false} compact />
           <div className="ask-fit-body">
-            <div className="ask-safety-card warm-card glass-card-inner">
-              <h2 className="ask-safety-title">This may need urgent support</h2>
-              <p className="ask-safety-body">{URGENT_SAFETY_MESSAGE}</p>
-              {showMentalHealth ? (
-                <p className="ask-safety-body ask-safety-body--mental">{MENTAL_HEALTH_SAFETY_MESSAGE}</p>
-              ) : null}
+            <div className="ask-safety-card warm-card glass-card-inner ask-safety-card--premium">
+              <h2 className="ask-safety-title">{safetyTitle}</h2>
+              <p className="ask-safety-body">{safetyBody}</p>
+              {showMentalHealth ? <p className="ask-safety-body ask-safety-body--mental">{MENTAL_HEALTH_SAFETY_MESSAGE}</p> : null}
             </div>
           </div>
-          <div className="ask-fit-footer ask-safety-actions">
+          <div className="ask-fit-footer ask-fit-footer--dock ask-safety-actions">
             <button type="button" className="btn btn-primary btn-pill" onClick={openDoctorSummary}>
               <FileText size={18} />
               Prepare summary
@@ -256,7 +350,7 @@ export function AskCuravonScreen() {
     return (
       <AskFitShell className="ask-fit-shell--result">
         <div className="screen ask-result-screen ask-screen-no-scroll">
-          <ScreenHeader title="One safe next step" subtitle="Organized — not a diagnosis" showThemeToggle={false} compact />
+          <ScreenHeader title="Here's one safe next step" subtitle="Organized — not a diagnosis" showThemeToggle={false} compact />
 
           <div className="ask-fit-body ask-result-body">
             <div className="ask-result-card warm-card glass-card-inner">
@@ -266,6 +360,18 @@ export function AskCuravonScreen() {
                 {intake.concernType ? <div><span>Type</span>{intake.concernType}</div> : null}
                 {intake.timeline ? <div><span>Timeline</span>{intake.timeline}</div> : null}
                 <div><span>Intensity</span>{intake.intensity}/10</div>
+                {intake.whatChanged ? (
+                  <div className="ask-result-grid--wide">
+                    <span>Changes</span>
+                    <SensitiveBlur sensitive={sensitive}>{intake.whatChanged}</SensitiveBlur>
+                  </div>
+                ) : null}
+                {intake.triedSoFar ? (
+                  <div className="ask-result-grid--wide">
+                    <span>Tried so far</span>
+                    <SensitiveBlur sensitive={sensitive}>{intake.triedSoFar}</SensitiveBlur>
+                  </div>
+                ) : null}
               </div>
 
               <h3 className="ask-result-heading">What to watch</h3>
@@ -275,25 +381,45 @@ export function AskCuravonScreen() {
                 ))}
               </ul>
 
-              <h3 className="ask-result-heading ask-result-heading--accent">Your next safe step</h3>
-              <p className="ask-next-step-text">{nextSafeStep}</p>
+              <div className="ask-result-highlight">
+                <h3 className="ask-result-heading ask-result-heading--accent">Your next safe step</h3>
+                <p className="ask-next-step-text">{nextSafeStep}</p>
+                <p className="ask-result-guide-hint">
+                  Suggested guide: {recommendedGuide.title}
+                </p>
+              </div>
             </div>
+
+            <AskHistorySection
+              history={history}
+              sensitive={sensitive}
+              revealedHistoryIds={revealedHistoryIds}
+              onReveal={revealHistory}
+              onSaveEntry={saveHistoryEntryToSummary}
+              onViewSummary={openDoctorSummary}
+              compact
+            />
           </div>
 
-          <div className="ask-fit-footer ask-result-actions ask-result-actions--grid">
+          <div className="ask-fit-footer ask-fit-footer--dock ask-result-actions">
             <button type="button" className="btn btn-primary btn-pill" onClick={saveToDoctorSummary} disabled={savedToSummary}>
               <FileText size={16} />
-              {savedToSummary ? 'Saved' : 'Save summary'}
+              {savedToSummary ? 'Saved to Doctor Summary' : 'Save to Doctor Summary'}
             </button>
+            {savedToSummary ? (
+              <button type="button" className="btn btn-secondary btn-glass" onClick={openDoctorSummary}>
+                View Doctor Summary
+              </button>
+            ) : null}
             <button type="button" className="btn btn-secondary btn-glass" onClick={startRelatedGuide}>
               <BookOpen size={16} />
-              Guide
+              Start related Guide
             </button>
             <button type="button" className="btn btn-secondary btn-glass" onClick={markAsNextAction}>
               <CheckCircle2 size={16} />
-              Today action
+              Mark as Today&apos;s next action
             </button>
-            <button type="button" className="btn btn-secondary btn-glass" onClick={resetToLanding}>
+            <button type="button" className="btn btn-ghost ask-done-btn" onClick={resetToLanding}>
               Done
             </button>
           </div>
@@ -310,8 +436,16 @@ export function AskCuravonScreen() {
           <ScreenHeader title="Guided intake" subtitle={`Step ${intakeStep + 1} of ${ASK_INTAKE_STEP_COUNT}`} showThemeToggle={false} compact />
 
           <div className="intake-progress intake-progress--compact">
-            <div className="intake-progress-bar">
+            <div className="intake-progress-bar intake-progress-bar--premium">
               <motion.div className="intake-progress-fill" animate={{ width: `${progress}%` }} transition={{ duration: 0.35 }} />
+            </div>
+            <div className="ask-step-dots" aria-hidden>
+              {Array.from({ length: ASK_INTAKE_STEP_COUNT }, (_, i) => (
+                <span
+                  key={i}
+                  className={`ask-step-dot${i < intakeStep ? ' ask-step-dot--done' : ''}${i === intakeStep ? ' ask-step-dot--current' : ''}`}
+                />
+              ))}
             </div>
           </div>
 
@@ -333,12 +467,13 @@ export function AskCuravonScreen() {
                   redFlags={redFlags}
                   onSubmit={goNext}
                   canContinue={canContinueStep()}
+                  helperText={ASK_STEP_HELPERS[intakeStep]}
                 />
               </motion.div>
             </AnimatePresence>
           </div>
 
-          <div className="ask-fit-footer intake-nav">
+          <div className="ask-fit-footer ask-fit-footer--dock intake-nav">
             <button type="button" className="btn btn-secondary btn-glass" onClick={goBack}>Back</button>
             <button type="button" className="btn btn-primary btn-pill" onClick={goNext} disabled={!canContinueStep()}>
               {intakeStep === ASK_INTAKE_STEP_COUNT - 1 ? 'Get next step' : 'Continue'}
@@ -352,7 +487,11 @@ export function AskCuravonScreen() {
   return (
     <AskFitShell className="ask-fit-shell--landing">
       <div className="screen ask-landing-screen ask-screen-no-scroll">
-        <ScreenHeader title="Ask Curavon" subtitle="Organize a concern · one safe next step" compact />
+        <ScreenHeader
+          title="Ask Curavon"
+          subtitle="Tell Curavon what's going on. It will help organize the concern and suggest one safe next step."
+          compact
+        />
 
         <div className="ask-fit-body ask-landing-body">
           <div className="ask-trust-note">
@@ -360,8 +499,16 @@ export function AskCuravonScreen() {
             <span>Guided support — not a diagnosis.</span>
           </div>
 
-          <div className="ask-primary-card warm-card glass-card-inner">
-            <h2 className="ask-primary-title">What do you want help with today?</h2>
+          <h2 className="ask-landing-title">What do you want help with today?</h2>
+
+          <div className="ask-primary-card ask-primary-card--premium warm-card glass-card-inner">
+            <div className="ask-hero-accent" aria-hidden />
+            <div className="ask-hero-header">
+              <div className="ask-hero-icon" aria-hidden>
+                <MessageCircle size={20} strokeWidth={2.25} />
+              </div>
+              <p className="ask-hero-kicker">Quick starts</p>
+            </div>
             <div className="ask-quick-starts ask-quick-starts--grid">
               {ASK_QUICK_STARTS.map((item) => (
                 <button key={item.label} type="button" className="ask-quick-start-btn" onClick={() => startIntake(item.prefill)}>
@@ -369,13 +516,16 @@ export function AskCuravonScreen() {
                 </button>
               ))}
             </div>
+          </div>
 
+          <div className="ask-input-card warm-card glass-card-inner">
             <div className="intake-custom-field">
-              <label className="intake-custom-label" htmlFor="ask-landing-input">Or describe in your own words</label>
-              <textarea
+              <label className="intake-custom-label" htmlFor="ask-landing-input">Describe briefly</label>
+              <input
                 id="ask-landing-input"
-                className="intake-visible-input intake-visible-input--area"
-                placeholder="Type what's happening..."
+                type="text"
+                className="intake-visible-input ask-landing-input"
+                placeholder="Briefly describe what's happening"
                 value={landingInput}
                 onChange={(e) => setLandingInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -384,46 +534,31 @@ export function AskCuravonScreen() {
                     startIntake();
                   }
                 }}
-                rows={2}
               />
-              <button
-                type="button"
-                className="btn btn-primary btn-pill ask-inline-action"
-                onClick={() => startIntake()}
-                disabled={!landingInput.trim()}
-              >
-                Continue
-              </button>
             </div>
           </div>
 
-          {history.length > 0 ? (
-            <div className="ask-history-compact warm-card glass-card-inner">
-              <span className="ask-history-compact-label">Recent</span>
-              {(() => {
-                const entry = history[0];
-                const hidden = sensitive && !revealedHistoryIds.has(entry.id);
-                return (
-                  <>
-                    <p className="ask-history-compact-text">
-                      {hidden ? (
-                        <button type="button" className="ask-history-reveal" onClick={() => setRevealedHistoryIds((p) => new Set(p).add(entry.id))}>
-                          <EyeOff size={12} /> Hidden — tap to reveal
-                        </button>
-                      ) : (
-                        <SensitiveBlur sensitive={sensitive}>{entry.concern}</SensitiveBlur>
-                      )}
-                    </p>
-                    <span className="ask-history-date">{formatHistoryDate(entry.createdAt)}</span>
-                  </>
-                );
-              })()}
-            </div>
-          ) : null}
+          <AskHistorySection
+            history={history}
+            sensitive={sensitive}
+            revealedHistoryIds={revealedHistoryIds}
+            onReveal={revealHistory}
+            onSaveEntry={saveHistoryEntryToSummary}
+            onViewSummary={openDoctorSummary}
+            compact
+          />
         </div>
 
-        <div className="ask-fit-footer ask-landing-footer">
-          <button type="button" className="ask-browse-guides-btn ask-browse-guides-btn--full" onClick={() => setActiveTab('circle')}>
+        <div className="ask-fit-footer ask-fit-footer--dock ask-landing-footer">
+          <button
+            type="button"
+            className="btn btn-primary btn-pill"
+            onClick={() => startIntake()}
+            disabled={!landingInput.trim()}
+          >
+            Start guided intake
+          </button>
+          <button type="button" className="ask-browse-guides-btn" onClick={() => setActiveTab('circle')}>
             <BookOpen size={16} />
             Browse Guides
             <ChevronRight size={14} />
@@ -573,6 +708,7 @@ function IntakeStepContent({
   redFlags,
   onSubmit,
   canContinue,
+  helperText,
 }: {
   step: number;
   intake: AskIntakeData;
@@ -581,6 +717,7 @@ function IntakeStepContent({
   redFlags: string[];
   onSubmit: () => void;
   canContinue: boolean;
+  helperText: string;
 }) {
   const presetConcern = CONCERN_TYPE_OPTIONS.includes(intake.concernType as (typeof CONCERN_TYPE_OPTIONS)[number])
     ? intake.concernType
@@ -597,9 +734,16 @@ function IntakeStepContent({
     : '';
   const customGoal = presetGoal ? '' : intake.goal;
 
+  const renderWithHelper = (content: ReactNode) => (
+    <>
+      {content}
+      <p className="intake-helper">{helperText}</p>
+    </>
+  );
+
   switch (step) {
     case 0:
-      return (
+      return renderWithHelper(
         <>
           <h2 className="intake-question intake-question--compact">What feels most important right now?</h2>
           <IntakeVisibleInput
@@ -612,10 +756,10 @@ function IntakeStepContent({
             onSubmit={onSubmit}
             continueDisabled={!canContinue}
           />
-        </>
+        </>,
       );
     case 1:
-      return (
+      return renderWithHelper(
         <OptionStepWithCustom
           question="What kind of concern is this?"
           options={CONCERN_TYPE_OPTIONS}
@@ -628,10 +772,10 @@ function IntakeStepContent({
           inputId="ask-concern-type"
           onSubmit={onSubmit}
           canSubmit={canContinue}
-        />
+        />,
       );
     case 2:
-      return (
+      return renderWithHelper(
         <OptionStepWithCustom
           question="How long has this been happening?"
           options={TIMELINE_OPTIONS}
@@ -644,10 +788,10 @@ function IntakeStepContent({
           inputId="ask-timeline"
           onSubmit={onSubmit}
           canSubmit={canContinue}
-        />
+        />,
       );
     case 3:
-      return (
+      return renderWithHelper(
         <>
           <h2 className="intake-question intake-question--compact">How intense does it feel?</h2>
           <div className="intake-scale intake-scale--compact">
@@ -674,10 +818,10 @@ function IntakeStepContent({
             onSubmit={onSubmit}
             continueDisabled={!canContinue}
           />
-        </>
+        </>,
       );
     case 4:
-      return (
+      return renderWithHelper(
         <>
           <h2 className="intake-question intake-question--compact">Did anything change around the time it started?</h2>
           <IntakeVisibleInput
@@ -685,15 +829,15 @@ function IntakeStepContent({
             label="Type what changed"
             value={intake.whatChanged}
             onChange={(v) => setIntake((p) => ({ ...p, whatChanged: v }))}
-            placeholder="Sleep, food, stress, medication, activity..."
+            placeholder="Sleep, food, stress, medication, activity, illness, anything unusual..."
             multiline
             onSubmit={onSubmit}
             continueDisabled={!canContinue}
           />
-        </>
+        </>,
       );
     case 5:
-      return (
+      return renderWithHelper(
         <>
           <h2 className="intake-question intake-question--compact">What have you already tried?</h2>
           <IntakeVisibleInput
@@ -701,15 +845,15 @@ function IntakeStepContent({
             label="Type what you've tried"
             value={intake.triedSoFar}
             onChange={(v) => setIntake((p) => ({ ...p, triedSoFar: v }))}
-            placeholder="Rest, water, medication, talking to someone..."
+            placeholder="Rest, water, medication, talking to someone, nothing yet..."
             multiline
             onSubmit={onSubmit}
             continueDisabled={!canContinue}
           />
-        </>
+        </>,
       );
     case 6:
-      return (
+      return renderWithHelper(
         <OptionStepWithCustom
           question="Are any of these happening?"
           options={RED_FLAG_OPTIONS}
@@ -723,10 +867,10 @@ function IntakeStepContent({
           inputId="ask-red-flag-other"
           onSubmit={onSubmit}
           canSubmit={canContinue}
-        />
+        />,
       );
     case 7:
-      return (
+      return renderWithHelper(
         <OptionStepWithCustom
           question="What would help most right now?"
           options={ASK_GOAL_OPTIONS}
@@ -739,10 +883,10 @@ function IntakeStepContent({
           inputId="ask-goal"
           onSubmit={onSubmit}
           canSubmit={canContinue}
-        />
+        />,
       );
     case 8:
-      return (
+      return renderWithHelper(
         <>
           <h2 className="intake-question intake-question--compact">Review your intake</h2>
           <div className="ask-review-grid">
@@ -750,12 +894,12 @@ function IntakeStepContent({
             <div><span>Type</span>{intake.concernType || '—'}</div>
             <div><span>Timeline</span>{intake.timeline || '—'}</div>
             <div><span>Intensity</span>{intake.intensity}/10</div>
-            <div><span>Changes</span>{intake.whatChanged || '—'}</div>
-            <div><span>Tried</span>{intake.triedSoFar || '—'}</div>
+            <div><span>Changes noticed</span>{intake.whatChanged || '—'}</div>
+            <div><span>Tried so far</span>{intake.triedSoFar || '—'}</div>
             <div className="ask-review-grid--wide"><span>Red flags</span>{redFlags.length ? redFlags.join(', ') : '—'}</div>
-            <div><span>Help wanted</span>{intake.goal || '—'}</div>
+            <div><span>Desired help</span>{intake.goal || '—'}</div>
           </div>
-        </>
+        </>,
       );
     default:
       return null;
@@ -763,5 +907,6 @@ function IntakeStepContent({
 }
 
 export function SafetyEscalation() {
+  // Legacy placeholder. Active Ask safety is handled by the guided-intake safety screen above.
   return null;
 }

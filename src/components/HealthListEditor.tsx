@@ -7,10 +7,19 @@ interface HealthListEditorProps {
   onAdd: (value: string) => void;
   onRemove: (index: number) => void;
   placeholder?: string;
+  hideSensitiveValues?: boolean;
 }
 
-export function HealthListEditor({ label, items, onAdd, onRemove, placeholder }: HealthListEditorProps) {
+export function HealthListEditor({
+  label,
+  items,
+  onAdd,
+  onRemove,
+  placeholder,
+  hideSensitiveValues = false,
+}: HealthListEditorProps) {
   const [input, setInput] = useState('');
+  const [revealed, setRevealed] = useState(false);
 
   const handleAdd = () => {
     if (!input.trim()) return;
@@ -21,11 +30,25 @@ export function HealthListEditor({ label, items, onAdd, onRemove, placeholder }:
   return (
     <div className="health-list-editor">
       <p className="health-list-label">{label}</p>
+      {hideSensitiveValues ? (
+        <button
+          type="button"
+          className="health-list-reveal"
+          onClick={() => setRevealed((v) => !v)}
+        >
+          {revealed ? 'Hide details' : 'Sensitive detail hidden'}
+        </button>
+      ) : null}
       <div className="health-list-chips">
         {items.map((item, i) => (
           <span key={`${item}-${i}`} className="health-list-chip">
-            {item}
-            <button type="button" className="health-list-chip-remove" onClick={() => onRemove(i)} aria-label={`Remove ${item}`}>
+            {hideSensitiveValues && !revealed ? 'Sensitive detail hidden' : item}
+            <button
+              type="button"
+              className="health-list-chip-remove"
+              onClick={() => onRemove(i)}
+              aria-label={hideSensitiveValues && !revealed ? `Remove ${label} item ${i + 1}` : `Remove ${item}`}
+            >
               <X size={14} />
             </button>
           </span>

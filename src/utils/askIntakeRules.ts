@@ -1,4 +1,5 @@
 import type { AskIntakeData, ConcernType } from '../types/askIntake';
+import { SELF_HARM_URGENT_BODY } from './healthSafety';
 
 export type RecommendedGuideFlowId =
   | 'something-feels-off'
@@ -9,7 +10,7 @@ export type RecommendedGuideFlowId =
   | 'medication-review';
 
 export const MENTAL_HEALTH_SAFETY_MESSAGE =
-  'You deserve immediate support. If you may be in danger or might harm yourself, contact local emergency services or a trusted person now.';
+  SELF_HARM_URGENT_BODY;
 
 export const WATCH_POINTS = [
   'If symptoms become severe, sudden, or unsafe, seek medical help.',
@@ -69,6 +70,9 @@ export function recommendGuideFlow(intake: AskIntakeData): {
     if (/stomach|nausea|abdomen|belly|gut|cramp/.test(concern)) {
       return { id: 'stomach-pain', title: 'Stomach Pain' };
     }
+  }
+  if (intake.concernType === 'Sleep or energy') {
+    return { id: 'something-feels-off', title: 'Something Feels Off' };
   }
   if (intake.concernType === 'Not sure') {
     return { id: 'something-feels-off', title: 'Something Feels Off' };

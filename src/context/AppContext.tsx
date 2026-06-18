@@ -44,10 +44,20 @@ export interface ProfileSetupData {
   preferredName: string;
   primaryGoals: string[];
   smartSilencePreference: 'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications';
+  sensitiveMode?: boolean;
 }
 
 function normalizeProfileSetup(
-  data: ProfileSetupData | { preferredName: string; primaryGoal?: string; primaryGoals?: string[]; smartSilencePreference: ProfileSetupData['smartSilencePreference'] } | null,
+  data:
+    | ProfileSetupData
+    | {
+        preferredName: string;
+        primaryGoal?: string;
+        primaryGoals?: string[];
+        smartSilencePreference: ProfileSetupData['smartSilencePreference'];
+        sensitiveMode?: boolean;
+      }
+    | null,
 ): ProfileSetupData | null {
   if (!data) return null;
   if (Array.isArray(data.primaryGoals)) {
@@ -55,6 +65,7 @@ function normalizeProfileSetup(
       preferredName: data.preferredName,
       primaryGoals: data.primaryGoals,
       smartSilencePreference: data.smartSilencePreference,
+      sensitiveMode: data.sensitiveMode ?? false,
     };
   }
   const legacyGoal = 'primaryGoal' in data && typeof data.primaryGoal === 'string' ? data.primaryGoal : '';
@@ -62,6 +73,7 @@ function normalizeProfileSetup(
     preferredName: data.preferredName,
     primaryGoals: legacyGoal ? [legacyGoal] : [],
     smartSilencePreference: data.smartSilencePreference,
+    sensitiveMode: false,
   };
 }
 
@@ -178,6 +190,8 @@ function clearSessionForOnboarding() {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// Legacy prototype chat safety keywords.
+// Active safety flows are handled in Today Check-In, Ask guided intake, and Guides runner.
 const HIGH_RISK_KEYWORDS = [
   'severe pain',
   'chest pressure',
@@ -186,6 +200,7 @@ const HIGH_RISK_KEYWORDS = [
   'difficulty breathing',
 ];
 
+// Legacy prototype chat script kept for compatibility with older demo state.
 const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
   0: [
     { response: 'Thanks for sharing that. When did you first notice this change?' },
@@ -301,9 +316,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         preferredName: setup.preferredName,
         primaryGoals: setup.primaryGoals,
         smartSilencePreference: setup.smartSilencePreference,
+        sensitiveMode: setup.sensitiveMode,
       };
       safeWrite(STORAGE_KEYS.profileSetup, persistedProfile);
       safeWrite(STORAGE_KEYS.setupComplete, true);
+      safeWrite('curavon_health_profile', {
+        preferredName: setup.preferredName,
+        primaryGoals: setup.primaryGoals,
+        sensitiveMode: setup.sensitiveMode,
+        smartSilencePreference: setup.smartSilencePreference,
+        conditions: [],
+        medications: [],
+        allergies: [],
+        healthNotes: [],
+        doctorQuestions: [],
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+      });
       setState((s) => ({
         ...s,
         setupComplete: true,

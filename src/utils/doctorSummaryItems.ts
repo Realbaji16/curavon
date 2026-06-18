@@ -72,8 +72,17 @@ export function createNextActionSummaryItem(
   state: NextActionState,
   extra?: { blockedReason?: HealthBlockedReason; adjustOption?: AdjustOption },
 ) {
+  const recordedAt = state.completedAt ?? state.updatedAt;
+  const timestamp = new Date(recordedAt).toLocaleString();
+  const actionLine = `Action: ${state.currentAction}`;
+
+  let title = 'Next action response';
+  if (state.status === 'done') title = 'Completed next action';
+  if (state.status === 'blocked') title = 'Blocked next action';
+  if (state.status === 'adjusted') title = 'Adjusted next action';
+
   const lines = [
-    `Action: ${state.currentAction}`,
+    actionLine,
     `Status: ${state.status}`,
   ];
   if (extra?.blockedReason) {
@@ -82,12 +91,15 @@ export function createNextActionSummaryItem(
   if (extra?.adjustOption) {
     lines.push(`Adjustment: ${ADJUSTED_ACTIONS[extra.adjustOption] ?? extra.adjustOption}`);
   }
-  lines.push(`Recorded: ${new Date(state.updatedAt).toLocaleString()}`);
+  lines.push(`Recorded: ${timestamp}`);
+  if (state.relatedDoctorSummaryPrompt) {
+    lines.push(`Note: ${state.relatedDoctorSummaryPrompt}`);
+  }
 
   return {
     type: 'next_action' as const,
     source: 'Next Action' as const,
-    title: 'Next action response',
+    title,
     content: lines.join('\n'),
     tags: ['action response'],
     severity: 'normal' as const,

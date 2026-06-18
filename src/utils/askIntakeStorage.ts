@@ -1,5 +1,6 @@
 import type { AskHistoryEntry } from '../types/askIntake';
 import { safeRead, safeRemove, safeWrite } from './healthStorage';
+import { refreshHealthSnapshot } from './healthSnapshot';
 
 export const ASK_HISTORY_KEY = 'curavon_ask_history';
 
@@ -22,6 +23,7 @@ export function addAskHistoryEntry(
   };
   const next = [item, ...loadAskHistory()].slice(0, 20);
   saveAskHistory(next);
+  refreshHealthSnapshot();
   return item;
 }
 
@@ -30,8 +32,10 @@ export function markAskHistorySaved(id: string) {
     e.id === id ? { ...e, savedToDoctorSummary: true } : e,
   );
   saveAskHistory(next);
+  refreshHealthSnapshot();
 }
 
 export function clearAskHistory() {
   safeRemove(ASK_HISTORY_KEY);
+  refreshHealthSnapshot();
 }

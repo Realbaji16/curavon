@@ -5,7 +5,10 @@ import { useHealth } from '../context/HealthContext';
 import { useApp } from '../context/AppContext';
 import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { useScreenBack } from '../hooks/useScreenBack';
-import { hasUrgentHealthLanguage, URGENT_SAFETY_MESSAGE } from '../utils/healthSafety';
+import {
+  CALM_URGENT_TITLE,
+  detectUrgentConcern,
+} from '../utils/healthSafety';
 import { STEPS_BAND_OPTIONS, stepsBandToCount } from '../utils/stepsUtils';
 import type { CheckInDraft } from '../types/health';
 import { fadeUp, tapScale } from '../motion/variants';
@@ -45,12 +48,17 @@ export function TodayCheckIn() {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<CheckInDraft>(INITIAL_DRAFT);
   const [textInput, setTextInput] = useState('');
+  const [urgentSafetyContext, setUrgentSafetyContext] = useState<{
+    title: string;
+    body: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!showCheckIn) {
       setStep(0);
       setDraft(INITIAL_DRAFT);
       setTextInput('');
+      setUrgentSafetyContext(null);
       return;
     }
     if (dailySteps.steps > 0) {
@@ -90,11 +98,21 @@ export function TodayCheckIn() {
     if (current.type === 'scale' && draft.painLevel === undefined) return;
     if (current.key === 'symptoms' || current.key === 'notes') {
       const value = current.type === 'text' ? textInput : String(draft[current.key as keyof CheckInDraft] ?? '');
-      if (hasUrgentHealthLanguage(value)) {
+      const urgent = detectUrgentConcern(value);
+      if (urgent.hasUrgent) {
         if (current.type === 'text') {
           setDraft((d) => ({ ...d, [current.key]: textInput }));
         }
-        logRedFlag({ source: 'Today Check-In', userText: value, guidanceShown: URGENT_SAFETY_MESSAGE });
+        logRedFlag({
+          source: 'Today Check-In',
+          userText: value,
+          guidanceShown: urgent.body,
+          matchedConcern: urgent.matches[0] ?? 'urgent concern',
+        });
+        setUrgentSafetyContext({
+          title: urgent.title,
+          body: urgent.body,
+        });
         openUrgentSafety();
         return;
       }
@@ -266,13 +284,15 @@ export function TodayCheckIn() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
             >
-              <p className="safety-calm-message">{URGENT_SAFETY_MESSAGE}</p>
+              <h3 className="safety-calm-title">{urgentSafetyContext?.title ?? CALM_URGENT_TITLE}</h3>
+              <p className="safety-calm-message">{urgentSafetyContext?.body}</p>
               <div className="safety-calm-actions">
                 <button
                   type="button"
                   className="btn btn-secondary btn-glass"
                   onClick={() => {
                     closeUrgentSafety();
+                    setUrgentSafetyContext(null);
                     if (current.type === 'text') {
                       setDraft((d) => ({ ...d, [current.key]: textInput }));
                       setTextInput('');
@@ -287,6 +307,7 @@ export function TodayCheckIn() {
                   className="btn btn-primary"
                   onClick={() => {
                     closeUrgentSafety();
+                    setUrgentSafetyContext(null);
                     if (current.type === 'text') {
                       setDraft((d) => ({ ...d, [current.key]: textInput }));
                       setTextInput('');

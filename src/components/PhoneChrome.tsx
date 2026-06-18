@@ -41,13 +41,13 @@ export function PhoneChrome() {
           className="phone-chrome__btn back-to-start-btn"
           onClick={() => {
             resetToOnboarding();
-            showToast('Back to onboarding');
+            showToast('Demo shell reset. Health notes kept on this device.');
           }}
-          aria-label="Back to start"
-          title="Back to start"
+          aria-label="Reset demo shell"
+          title="Reset demo shell"
         >
           <RotateCcw size={14} strokeWidth={2.2} aria-hidden="true" />
-          <span>Start over</span>
+          <span>Reset demo shell</span>
         </button>
       ) : null}
     </div>

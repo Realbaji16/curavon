@@ -6,6 +6,7 @@ import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HealthListEditor } from '../components/HealthListEditor';
 import type { SmartSilencePreference } from '../types/health';
+import { clearAskHistory } from '../utils/askIntakeStorage';
 
 const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
   { id: 'gentle-reminders', label: 'Gentle reminders' },
@@ -90,6 +91,7 @@ export function SettingsScreen() {
           onAdd={(v) => addListItem('conditions', v)}
           onRemove={(i) => removeListItem('conditions', i)}
           placeholder="Add a condition"
+          hideSensitiveValues={healthProfile.sensitiveMode}
         />
         <HealthListEditor
           label="Medications"
@@ -97,6 +99,7 @@ export function SettingsScreen() {
           onAdd={(v) => addListItem('medications', v)}
           onRemove={(i) => removeListItem('medications', i)}
           placeholder="Add a medication"
+          hideSensitiveValues={healthProfile.sensitiveMode}
         />
         <HealthListEditor
           label="Allergies"
@@ -104,6 +107,7 @@ export function SettingsScreen() {
           onAdd={(v) => addListItem('allergies', v)}
           onRemove={(i) => removeListItem('allergies', i)}
           placeholder="Add an allergy"
+          hideSensitiveValues={healthProfile.sensitiveMode}
         />
         <HealthListEditor
           label="Health notes"
@@ -111,6 +115,7 @@ export function SettingsScreen() {
           onAdd={(v) => addListItem('healthNotes', v)}
           onRemove={(i) => removeListItem('healthNotes', i)}
           placeholder="Add a note"
+          hideSensitiveValues={healthProfile.sensitiveMode}
         />
         <HealthListEditor
           label="Doctor questions"
@@ -118,6 +123,7 @@ export function SettingsScreen() {
           onAdd={(v) => addListItem('doctorQuestions', v)}
           onRemove={(i) => removeListItem('doctorQuestions', i)}
           placeholder="Add a question for your clinician"
+          hideSensitiveValues={healthProfile.sensitiveMode}
         />
         <p className="health-safety-note">
           These notes help organize your next steps. They are not used to diagnose.
@@ -223,6 +229,9 @@ export function SettingsScreen() {
           <h3>Data &amp; Privacy</h3>
         </div>
         <p className="section-desc">All data stays on your device for this prototype.</p>
+        <p className="settings-data-note">
+          Sign out keeps your saved health notes on this device. Delete all health data removes them from this prototype.
+        </p>
         <div className="settings-actions-list">
           <button type="button" className="btn btn-secondary btn-glass" onClick={() => { exportHealthData(); showToast('Health data exported'); }}>
             Export my data
@@ -230,9 +239,13 @@ export function SettingsScreen() {
           <button
             type="button"
             className="btn btn-secondary btn-glass"
-            onClick={() => { resetChat(); showToast('Chat history cleared'); }}
+            onClick={() => {
+              resetChat();
+              clearAskHistory();
+              showToast('Ask history cleared');
+            }}
           >
-            Clear chat history
+            Clear Ask history
           </button>
           <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteHealthData}>
             {confirmClear ? 'Tap again to delete all health data' : 'Delete all health data'}
