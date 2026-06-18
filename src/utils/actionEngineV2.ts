@@ -1,3 +1,4 @@
+// Legacy next-action path. Do not use for new generation. Route through Plan Engine v2 via nextActionAdapter.
 import type { AskHistoryEntry } from '../types/askIntake';
 import type { RedFlagLog } from '../types/doctorSummary';
 import type { DailyCheckIn, NextActionState } from '../types/health';

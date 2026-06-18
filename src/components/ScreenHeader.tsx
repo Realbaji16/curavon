@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../context/AppContext';
+import { useHealth } from '../context/HealthContext';
 import { themes } from '../theme/themes';
 import { ThemeToggle } from './ThemeToggle';
 import { CuravonBrandLockup } from './CuravonBrand';
@@ -58,7 +59,9 @@ export function Toast() {
 }
 
 export function SensitiveBlur({ children, sensitive = false }: { children: React.ReactNode; sensitive?: boolean }) {
-  const { sensitiveMode } = useApp();
+  const { healthProfile } = useHealth();
+  const { sensitiveMode: legacySensitiveMode } = useApp();
+  const sensitiveMode = healthProfile.sensitiveMode ?? legacySensitiveMode;
   const shouldBlur = sensitiveMode && sensitive;
 
   return (

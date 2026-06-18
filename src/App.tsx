@@ -3,8 +3,9 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 
 import { AppProvider, useApp } from './context/AppContext';
-import { HealthProvider } from './context/HealthContext';
+import { HealthProvider, useHealth } from './context/HealthContext';
 import { DoctorSummaryProvider } from './context/DoctorSummaryContext';
+import { CuravonAuthProvider } from './lib/auth/authProvider';
 
 import { TabBar } from './components/TabBar';
 import { DoctorSummaryOverlay } from './components/DoctorSummaryOverlay';
@@ -19,8 +20,6 @@ import { Onboarding } from './screens/Onboarding';
 import { HomeScreen } from './screens/Home';
 
 import { AskCuravonScreen } from './screens/AskCuravon';
-
-import { FullFlowScreen } from './screens/FullFlow';
 
 import { CareCircleScreen } from './screens/CareCircle';
 
@@ -113,10 +112,12 @@ function PhoneShell() {
     authDemoUser,
     setupComplete,
     activeTab,
-    sensitiveMode,
     showSafetyEscalation,
     theme,
   } = useApp();
+
+  const { healthProfile } = useHealth();
+  const sensitiveMode = healthProfile.sensitiveMode;
 
 
 
@@ -162,7 +163,7 @@ function PhoneShell() {
 
     ask: <AskCuravonScreen />,
 
-    flow: <FullFlowScreen />,
+    flow: <CareCircleScreen />,
 
     circle: <CareCircleScreen />,
 
@@ -245,27 +246,21 @@ function App() {
   return (
 
     <MotionConfig reducedMotion="user">
-
-      <AppProvider>
-        <HealthProvider>
-        <DoctorSummaryProvider>
-        <div className="app-root">
-
-          <div className="phone-scaler">
-
-            <div className="phone-device">
-
-              <PhoneShell />
-
-            </div>
-
-          </div>
-
-        </div>
-        </DoctorSummaryProvider>
-        </HealthProvider>
-      </AppProvider>
-
+      <CuravonAuthProvider mode="local_demo">
+        <AppProvider>
+          <HealthProvider>
+            <DoctorSummaryProvider>
+              <div className="app-root">
+                <div className="phone-scaler">
+                  <div className="phone-device">
+                    <PhoneShell />
+                  </div>
+                </div>
+              </div>
+            </DoctorSummaryProvider>
+          </HealthProvider>
+        </AppProvider>
+      </CuravonAuthProvider>
     </MotionConfig>
 
   );

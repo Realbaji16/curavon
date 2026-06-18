@@ -78,6 +78,11 @@ export interface NextActionState {
     | 'stomach-pain'
     | 'medication-review';
   relatedDoctorSummaryPrompt?: string;
+  watchFor?: string;
+  followUpPrompt?: string;
+  selectedBy?: 'ai' | 'rules';
+  aiReasoned?: boolean;
+  fallbackUsed?: boolean;
   safetyLevel?: 'normal' | 'caution' | 'urgent';
   actionId?: string;
   status: ActionStatus;

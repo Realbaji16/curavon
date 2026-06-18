@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronRight, Lock, Shield } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fadeUp } from '../motion/variants';
 import { useScreenBack } from '../hooks/useScreenBack';
+import { useCuravonAuth } from '../lib/auth/authProvider';
 
 type AuthStage = 'start' | 'create' | 'signin' | 'consent' | 'profile';
 
@@ -60,6 +61,7 @@ export function AuthFlow() {
     showToast,
     resetToOnboarding,
   } = useApp();
+  const { signIn, signUp } = useCuravonAuth();
   const [stage, setStage] = useState<AuthStage>(() =>
     resolveAuthStage(authDemoUser, setupComplete, consentComplete),
   );
@@ -96,8 +98,8 @@ export function AuthFlow() {
       },
       {
         id: 'privacy',
-        title: 'Privacy controls',
-        copy: 'You can use Sensitive Mode, export data, and delete health notes from your profile.',
+        title: 'Local-first storage',
+        copy: 'In this version, your data is stored on this device. You can export or delete it anytime from Profile.',
         icon: 'shield' as const,
       },
     ],
@@ -109,7 +111,7 @@ export function AuthFlow() {
     setStage('consent');
   };
 
-  const submitCreate = () => {
+  const submitCreate = async () => {
     const nextErrors: Record<string, string> = {};
     if (!createForm.fullName.trim()) nextErrors.fullName = 'Full name is required.';
     if (!isValidEmail(createForm.email)) nextErrors.email = 'Enter a valid email.';
@@ -124,6 +126,7 @@ export function AuthFlow() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    await signUp(createForm.email.trim(), createForm.password, createForm.fullName.trim());
     setAuthDemoUser({
       fullName: createForm.fullName.trim(),
       email: createForm.email.trim(),
@@ -132,7 +135,7 @@ export function AuthFlow() {
     goToConsent();
   };
 
-  const submitSignIn = () => {
+  const submitSignIn = async () => {
     const nextErrors: Record<string, string> = {};
     if (!isValidEmail(signInForm.email)) nextErrors.signInEmail = 'Enter a valid email.';
     if (!signInForm.password.trim()) nextErrors.signInPassword = 'Password is required.';
@@ -141,6 +144,7 @@ export function AuthFlow() {
 
     const inferredName = signInForm.email.split('@')[0].replace(/[._-]+/g, ' ').trim();
     const normalizedName = inferredName ? inferredName[0].toUpperCase() + inferredName.slice(1) : 'Curavon member';
+    await signIn(signInForm.email.trim(), signInForm.password);
     setAuthDemoUser({
       fullName: normalizedName,
       email: signInForm.email.trim(),
@@ -216,8 +220,7 @@ export function AuthFlow() {
             </div>
             <h1 className="auth-title">Create your account</h1>
             <p className="auth-subtitle">
-              Sign up or sign in to keep your health notes private, synced to you, and ready whenever
-              you return.
+              Set up your local Curavon profile. Your data is stored on this device in this version.
             </p>
             <p className="auth-trust-line">
               <Shield size={15} aria-hidden="true" />
@@ -230,7 +233,7 @@ export function AuthFlow() {
             <button type="button" className="btn btn-secondary btn-glass auth-secondary" onClick={() => setStage('signin')}>
               I already have an account
             </button>
-            <p className="auth-note">Your health notes stay tied to your account.</p>
+            <p className="auth-note">You can export or delete your local data anytime in Profile.</p>
           </>
         ) : null}
 
@@ -294,7 +297,7 @@ export function AuthFlow() {
                   checked={createForm.consentStorage}
                   onChange={(e) => setCreateForm((s) => ({ ...s, consentStorage: e.target.checked }))}
                 />
-                <span>I consent to Curavon storing my health notes for personalized support.</span>
+                <span>I consent to Curavon storing my health notes on this device for personalized support.</span>
               </label>
               {errors.consentStorage ? <span className="auth-error">{errors.consentStorage}</span> : null}
             </div>
@@ -346,7 +349,7 @@ export function AuthFlow() {
           <>
             <h1 className="auth-title">Before we begin</h1>
             <p className="auth-subtitle">
-              A few safety and privacy choices help Curavon support you responsibly.
+              Curavon helps you choose one safer next step. It organizes your notes — it does not diagnose.
             </p>
             <div className="auth-trust-cards">
               {trustCards.map((card) => (

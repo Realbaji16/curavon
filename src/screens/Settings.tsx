@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { Shield, Lock, Heart, User, FileText } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useHealth } from '../context/HealthContext';
@@ -7,6 +7,17 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { HealthListEditor } from '../components/HealthListEditor';
 import type { SmartSilencePreference } from '../types/health';
 import { clearAskHistory } from '../utils/askIntakeStorage';
+import { useCuravonAuth } from '../lib/auth/authProvider';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { safeRead } from '../utils/healthStorage';
+import {
+  downloadLocalBackup,
+  type CuravonLocalBackup,
+} from '../lib/data/dataBackup';
+import { restoreLocalBackup, validateBackupFile } from '../lib/data/dataRestore';
+import { runLocalDataHealthCheck } from '../lib/data/dataHealthCheck';
+import { deleteLocalAccountData } from '../lib/data/dataDeletion';
+import { DELETION_CONFIRMATION_COPY } from '../lib/data/dataDeletionConfirm';
 
 const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
   { id: 'gentle-reminders', label: 'Gentle reminders' },
@@ -32,10 +43,22 @@ export function SettingsScreen() {
     smartSilenceLabel,
   } = useHealth();
   const { includedCount, latestDraftDate, clearAllDoctorSummaryData } = useDoctorSummary();
+  const { session, signOut, deleteLocalAccount } = useCuravonAuth();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [restoreDraft, setRestoreDraft] = useState<CuravonLocalBackup | null>(null);
+  const [restorePreview, setRestorePreview] = useState<{
+    appName: string;
+    backupVersion: string;
+    exportedAt: string;
+    collectionCounts: Record<string, number>;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const primaryGoalsLabel =
     healthProfile.primaryGoals.length > 0 ? healthProfile.primaryGoals.join(' · ') : 'Not set';
+  const localUserId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
 
   const handleDeleteHealthData = () => {
     if (!confirmClear) {
@@ -46,6 +69,105 @@ export function SettingsScreen() {
     clearAllDoctorSummaryData();
     showToast('All health data cleared');
     setConfirmClear(false);
+  };
+
+  const handleBackupDownload = () => {
+    downloadLocalBackup(localUserId);
+    showToast('Local backup downloaded');
+  };
+
+  const handleOpenRestore = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleRestoreFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as CuravonLocalBackup;
+      const validation = validateBackupFile(parsed);
+      if (!validation.valid) {
+        showToast('Invalid backup file');
+        setRestoreDraft(null);
+        setRestorePreview(null);
+        return;
+      }
+      setRestoreDraft(parsed);
+      setRestorePreview({
+        appName: parsed.appName,
+        backupVersion: parsed.backupVersion,
+        exportedAt: parsed.exportedAt,
+        collectionCounts: {
+          dailyCheckins: parsed.collections.dailyCheckins.length,
+          askHistory: parsed.collections.askHistory.length,
+          doctorSummaryItems: parsed.collections.doctorSummaryItems.length,
+          followUps: parsed.collections.followUps.length,
+          guideResults: parsed.collections.guideResults.length,
+        },
+      });
+      showToast('Backup file ready to restore');
+    } catch {
+      showToast('Could not read backup file');
+      setRestoreDraft(null);
+      setRestorePreview(null);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const runRestore = (mode: 'merge' | 'replace') => {
+    if (!restoreDraft) return;
+    const result = restoreLocalBackup(restoreDraft, {
+      mode,
+      confirmReplace: mode === 'replace',
+    });
+    if (!result.ok) {
+      showToast('Restore failed');
+      return;
+    }
+    showToast(mode === 'replace' ? 'Backup restored (replace)' : 'Backup restored (merge)');
+    setRestoreDraft(null);
+    setRestorePreview(null);
+  };
+
+  const handleCheckDataHealth = () => {
+    const result = runLocalDataHealthCheck();
+    if (result.status === 'healthy') {
+      showToast('Your local data looks okay.');
+      return;
+    }
+    if (result.status === 'repaired') {
+      showToast('Curavon repaired one local storage issue.');
+      return;
+    }
+    showToast('Curavon found a local data issue. Export a backup before continuing.');
+  };
+
+  const handleDeleteLocalAccount = async () => {
+    if (!confirmDeleteAccount) {
+      setConfirmDeleteAccount(true);
+      return;
+    }
+    await deleteLocalAccount();
+    deleteLocalAccountData(localUserId, { deleteHealthData: false });
+    signOutDemo();
+    showToast('Local account deleted');
+    setConfirmDeleteAccount(false);
+  };
+
+  const handleDeleteAccountAndData = async () => {
+    if (!confirmDeleteAll) {
+      setConfirmDeleteAll(true);
+      return;
+    }
+    await deleteLocalAccount();
+    deleteLocalAccountData(localUserId, { deleteHealthData: true });
+    clearHealthData();
+    clearAllDoctorSummaryData();
+    signOutDemo();
+    showToast('Local account and health data deleted');
+    setConfirmDeleteAll(false);
   };
 
   return (
@@ -60,7 +182,11 @@ export function SettingsScreen() {
         <div className="settings-account-grid">
           <p className="settings-account-row">
             <span>Account status</span>
-            <strong>Prototype account</strong>
+            <strong>Local demo account</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Signed in as</span>
+            <strong>{authDemoUser?.email || session.user?.email || 'Guest'}</strong>
           </p>
           <p className="settings-account-row">
             <span>Primary goal</span>
@@ -74,6 +200,29 @@ export function SettingsScreen() {
             <span>Smart Silence</span>
             <strong>{smartSilenceLabel}</strong>
           </p>
+        </div>
+        <div className="settings-actions-list" style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            onClick={async () => {
+              await signOut();
+              signOutDemo();
+              showToast('Signed out');
+            }}
+          >
+            Sign out
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteLocalAccount}>
+            {confirmDeleteAccount
+              ? DELETION_CONFIRMATION_COPY.local_account_only.confirmLabel
+              : 'Delete local account'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteAccountAndData}>
+            {confirmDeleteAll
+              ? DELETION_CONFIRMATION_COPY.account_and_health_data.confirmLabel
+              : 'Delete account and health data'}
+          </button>
         </div>
       </section>
 
@@ -199,6 +348,13 @@ export function SettingsScreen() {
           ))}
         </div>
 
+        <p className="settings-data-note">
+          Curavon is for organization, reflection, and next-step support. It does not diagnose or
+          prescribe. It does not replace professional medical care. If symptoms are severe, sudden,
+          or unsafe, seek urgent care or local emergency support. AI may help organize safe next
+          steps, but safety rules limit what it can do.
+        </p>
+
         <div className="emergency-contact-fields">
           <label className="field-label">
             Emergency contact name
@@ -228,13 +384,29 @@ export function SettingsScreen() {
           <Lock size={20} className="icon-teal" />
           <h3>Data &amp; Privacy</h3>
         </div>
-        <p className="section-desc">All data stays on your device for this prototype.</p>
+        <p className="section-desc">Your data is stored on this device in this version.</p>
         <p className="settings-data-note">
-          Sign out keeps your saved health notes on this device. Delete all health data removes them from this prototype.
+          Sign out keeps your saved health notes on this device. Delete all health data removes them from this version.
         </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          style={{ display: 'none' }}
+          onChange={handleRestoreFileSelected}
+        />
         <div className="settings-actions-list">
           <button type="button" className="btn btn-secondary btn-glass" onClick={() => { exportHealthData(); showToast('Health data exported'); }}>
             Export my data
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleBackupDownload}>
+            Download local backup
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleOpenRestore}>
+            Restore from backup
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleCheckDataHealth}>
+            Check local data health
           </button>
           <button
             type="button"
@@ -250,23 +422,33 @@ export function SettingsScreen() {
           <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteHealthData}>
             {confirmClear ? 'Tap again to delete all health data' : 'Delete all health data'}
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-glass"
-            onClick={() => {
-              signOutDemo();
-              showToast('Signed out');
-            }}
-          >
-            Sign out
-          </button>
         </div>
+        {restorePreview ? (
+          <div className="settings-data-note" style={{ marginTop: 12 }}>
+            <p>
+              Backup: {restorePreview.appName} v{restorePreview.backupVersion} -{' '}
+              {new Date(restorePreview.exportedAt).toLocaleDateString()}
+            </p>
+            <p>
+              Items: check-ins {restorePreview.collectionCounts.dailyCheckins}, Ask {restorePreview.collectionCounts.askHistory}, summary {restorePreview.collectionCounts.doctorSummaryItems}
+            </p>
+            <div className="settings-actions-list" style={{ marginTop: 8 }}>
+              <button type="button" className="btn btn-secondary btn-glass" onClick={() => runRestore('merge')}>
+                Merge restore
+              </button>
+              <button type="button" className="btn btn-secondary btn-glass" onClick={() => runRestore('replace')}>
+                Replace restore
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <div className="disclaimer-box safety-card">
         <Shield size={18} />
         <span>
-          Curavon is not a doctor. It does not diagnose, prescribe, or replace emergency care.
+          Curavon is not a doctor or emergency service. It does not diagnose, prescribe, or replace
+          clinical care. Terms and privacy policy are placeholders in this test build.
         </span>
       </div>
     </div>

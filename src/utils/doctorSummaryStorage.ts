@@ -1,10 +1,13 @@
 import type { DoctorSummaryDraft, DoctorSummaryItem, RedFlagLog } from '../types/doctorSummary';
 import { safeRead, safeRemove, safeWrite } from './healthStorage';
+import { collectSafetyFromRedFlag } from './metaSystem';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { queueSyncForCurrentUser } from '../lib/sync/syncQueue';
 
 export const DOCTOR_SUMMARY_STORAGE_KEYS = {
-  items: 'curavon_doctor_summary_items',
-  drafts: 'curavon_doctor_summary_drafts',
-  redFlagLogs: 'curavon_red_flag_logs',
+  items: APP_STORAGE_KEYS.doctorSummaryItems,
+  drafts: APP_STORAGE_KEYS.doctorSummaryDrafts,
+  redFlagLogs: APP_STORAGE_KEYS.redFlagLogs,
 } as const;
 
 export function loadDoctorSummaryItems(): DoctorSummaryItem[] {
@@ -13,6 +16,15 @@ export function loadDoctorSummaryItems(): DoctorSummaryItem[] {
 
 export function saveDoctorSummaryItems(items: DoctorSummaryItem[]) {
   safeWrite(DOCTOR_SUMMARY_STORAGE_KEYS.items, items);
+  queueSyncForCurrentUser({
+    entityType: 'doctor_summary',
+    operationType: 'update',
+    payload: {
+      itemCount: items.length,
+      latestId: items[0]?.id ?? null,
+      updatedAt: new Date().toISOString(),
+    },
+  });
 }
 
 export function loadDoctorSummaryDrafts(): DoctorSummaryDraft[] {
@@ -21,6 +33,15 @@ export function loadDoctorSummaryDrafts(): DoctorSummaryDraft[] {
 
 export function saveDoctorSummaryDrafts(drafts: DoctorSummaryDraft[]) {
   safeWrite(DOCTOR_SUMMARY_STORAGE_KEYS.drafts, drafts);
+  queueSyncForCurrentUser({
+    entityType: 'doctor_summary',
+    operationType: 'update',
+    payload: {
+      draftCount: drafts.length,
+      latestDraftDate: drafts[0]?.updatedAt ?? null,
+      updatedAt: new Date().toISOString(),
+    },
+  });
 }
 
 export function loadRedFlagLogs(): RedFlagLog[] {
@@ -29,6 +50,15 @@ export function loadRedFlagLogs(): RedFlagLog[] {
 
 export function saveRedFlagLogs(logs: RedFlagLog[]) {
   safeWrite(DOCTOR_SUMMARY_STORAGE_KEYS.redFlagLogs, logs);
+  queueSyncForCurrentUser({
+    entityType: 'red_flag_logs',
+    operationType: 'update',
+    payload: {
+      count: logs.length,
+      latestId: logs[0]?.id ?? null,
+      updatedAt: new Date().toISOString(),
+    },
+  });
 }
 
 export function clearDoctorSummaryStorage() {
@@ -58,5 +88,6 @@ export function addRedFlagLog(
   };
   const next = [entry, ...loadRedFlagLogs()];
   saveRedFlagLogs(next);
+  collectSafetyFromRedFlag(entry);
   return entry;
 }

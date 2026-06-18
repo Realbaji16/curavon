@@ -11,6 +11,7 @@ import type {
   DoctorSummaryItem,
   RedFlagLog,
 } from '../types/doctorSummary';
+import type { DoctorSummaryOutput } from '../lib/doctorSummary/doctorSummaryTypes';
 import type { DailyCheckIn, HealthBlockedReason, NextActionState, AdjustOption } from '../types/health';
 import {
   addDoctorSummaryItem as persistAddItem,
@@ -33,6 +34,10 @@ import {
 import { findUrgentMatches, URGENT_SAFETY_MESSAGE } from '../utils/healthSafety';
 import { useHealth } from './HealthContext';
 import { useApp } from './AppContext';
+import {
+  formatDoctorSummaryAsPlainText,
+  generateDoctorSummaryAI,
+} from '../lib/doctorSummary/doctorSummaryAI';
 
 interface DoctorSummaryContextValue {
   items: DoctorSummaryItem[];
@@ -61,6 +66,12 @@ interface DoctorSummaryContextValue {
   copySummary: () => Promise<boolean>;
   downloadSummary: () => void;
   clearDraft: () => void;
+  saveSummary: () => void;
+  generateAISummary: () => Promise<void>;
+  refreshAISummary: () => Promise<void>;
+  aiSummary: DoctorSummaryOutput | null;
+  aiSummaryLoading: boolean;
+  renderedSummaryText: string;
   refreshFromStorage: () => void;
   clearAllDoctorSummaryData: () => void;
 }
@@ -74,6 +85,8 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
   const [drafts, setDrafts] = useState<DoctorSummaryDraft[]>(() => loadDoctorSummaryDrafts());
   const [redFlagLogs, setRedFlagLogs] = useState<RedFlagLog[]>(() => loadRedFlagLogs());
   const [clinicianQuestions, setClinicianQuestions] = useState<string[]>([]);
+  const [aiSummary, setAISummary] = useState<DoctorSummaryOutput | null>(null);
+  const [aiSummaryLoading, setAISummaryLoading] = useState(false);
 
   const refreshFromStorage = useCallback(() => {
     setItems(loadDoctorSummaryItems());
@@ -172,14 +185,19 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
 
   const latestDraftDate = drafts[0]?.updatedAt ?? null;
 
+  const renderedSummaryText = useMemo(() => {
+    if (aiSummary) return formatDoctorSummaryAsPlainText(aiSummary);
+    return builtSummary.fullText;
+  }, [aiSummary, builtSummary.fullText]);
+
   const saveCurrentDraft = useCallback(() => {
     const now = new Date().toISOString();
     const draft: DoctorSummaryDraft = {
       id: drafts[0]?.id ?? `draft-${Date.now()}`,
-      title: builtSummary.title,
-      dateRange: builtSummary.dateLabel,
+      title: aiSummary?.summaryTitle ?? builtSummary.title,
+      dateRange: aiSummary?.dateRange ?? builtSummary.dateLabel,
       includedItemIds: items.filter((i) => i.includedInSummary).map((i) => i.id),
-      summaryText: builtSummary.fullText,
+      summaryText: renderedSummaryText,
       questionsForClinician: clinicianQuestions,
       createdAt: drafts[0]?.createdAt ?? now,
       updatedAt: now,
@@ -187,23 +205,45 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
     const next = [draft, ...drafts.filter((d) => d.id !== draft.id)];
     saveDoctorSummaryDrafts(next);
     setDrafts(next);
-  }, [drafts, builtSummary, items, clinicianQuestions]);
+  }, [drafts, builtSummary, items, clinicianQuestions, aiSummary, renderedSummaryText]);
+
+  const generateAISummary = useCallback(async () => {
+    setAISummaryLoading(true);
+    try {
+      const selectedNoteIds = items.filter((i) => i.includedInSummary).map((i) => i.id);
+      const summary = await generateDoctorSummaryAI({
+        dateRange: '30',
+        selectedNoteIds,
+        userNotes: clinicianQuestions,
+      });
+      setAISummary(summary);
+      showToast('Doctor summary organized.');
+    } catch {
+      showToast('Could not generate AI summary. Using structured summary.');
+    } finally {
+      setAISummaryLoading(false);
+    }
+  }, [items, clinicianQuestions, showToast]);
+
+  const refreshAISummary = useCallback(async () => {
+    await generateAISummary();
+  }, [generateAISummary]);
 
   const copySummary = useCallback(async () => {
     saveCurrentDraft();
     try {
-      await navigator.clipboard.writeText(builtSummary.fullText);
+      await navigator.clipboard.writeText(renderedSummaryText);
       showToast('Summary copied.');
       return true;
     } catch {
       showToast('Could not copy — try download instead.');
       return false;
     }
-  }, [builtSummary.fullText, saveCurrentDraft, showToast]);
+  }, [renderedSummaryText, saveCurrentDraft, showToast]);
 
   const downloadSummary = useCallback(() => {
     saveCurrentDraft();
-    const blob = new Blob([builtSummary.fullText], { type: 'text/plain' });
+    const blob = new Blob([renderedSummaryText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -211,7 +251,12 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
     link.click();
     URL.revokeObjectURL(url);
     showToast('Summary downloaded.');
-  }, [builtSummary.fullText, saveCurrentDraft, showToast]);
+  }, [renderedSummaryText, saveCurrentDraft, showToast]);
+
+  const saveSummary = useCallback(() => {
+    saveCurrentDraft();
+    showToast('Summary saved.');
+  }, [saveCurrentDraft, showToast]);
 
   const clearDraft = useCallback(() => {
     saveDoctorSummaryDrafts([]);
@@ -225,6 +270,7 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
     setDrafts([]);
     setRedFlagLogs([]);
     setClinicianQuestions([]);
+    setAISummary(null);
   }, []);
 
   return (
@@ -248,6 +294,12 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
         copySummary,
         downloadSummary,
         clearDraft,
+        saveSummary,
+        generateAISummary,
+        refreshAISummary,
+        aiSummary,
+        aiSummaryLoading,
+        renderedSummaryText,
         refreshFromStorage,
         clearAllDoctorSummaryData,
       }}

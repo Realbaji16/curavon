@@ -4,9 +4,13 @@ import {
   useState,
   useCallback,
   useRef,
+  useEffect,
   type ReactNode,
 } from 'react';
 import type { ThemePreset } from '../theme/themes';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { useCuravonAuth } from '../lib/auth/authProvider';
+import { detectUrgentConcern } from '../utils/healthSafety';
 
 export type TabId = 'home' | 'ask' | 'flow' | 'circle' | 'settings';
 
@@ -79,12 +83,14 @@ function normalizeProfileSetup(
 
 interface AppState {
   onboardingComplete: boolean;
+  /** Legacy auth compatibility. Canonical auth source is CuravonAuthProvider. */
   authDemoUser: DemoAuthUser | null;
   consentComplete: boolean;
   setupComplete: boolean;
   profileSetup: ProfileSetupData | null;
   theme: ThemePreset;
   activeTab: TabId;
+  /** Legacy mirror. Sensitive Mode canonical source: Health Profile. */
   sensitiveMode: boolean;
   onboardingData: OnboardingData;
   actionDone: boolean;
@@ -152,11 +158,11 @@ const defaultOnboarding: OnboardingData = {
 };
 
 const STORAGE_KEYS = {
-  onboardingSeen: 'curavon_onboarding_seen',
-  authDemoUser: 'curavon_auth_demo_user',
-  consentComplete: 'curavon_consent_complete',
-  setupComplete: 'curavon_setup_complete',
-  profileSetup: 'curavon_profile_setup',
+  onboardingSeen: APP_STORAGE_KEYS.onboardingSeen,
+  authDemoUser: APP_STORAGE_KEYS.authDemoUser,
+  consentComplete: APP_STORAGE_KEYS.consentComplete,
+  setupComplete: APP_STORAGE_KEYS.setupComplete,
+  profileSetup: APP_STORAGE_KEYS.profileSetup,
 } as const;
 
 function safeRead<T>(key: string, fallback: T): T {
@@ -190,17 +196,7 @@ function clearSessionForOnboarding() {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-// Legacy prototype chat safety keywords.
-// Active safety flows are handled in Today Check-In, Ask guided intake, and Guides runner.
-const HIGH_RISK_KEYWORDS = [
-  'severe pain',
-  'chest pressure',
-  'chest pain',
-  'can\'t breathe',
-  'difficulty breathing',
-];
-
-// Legacy prototype chat script kept for compatibility with older demo state.
+// Legacy chat compatibility path. Active safety uses src/utils/healthSafety.ts.
 const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
   0: [
     { response: 'Thanks for sharing that. When did you first notice this change?' },
@@ -214,6 +210,7 @@ const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useCuravonAuth();
   const onboardingSeen = safeRead<boolean>(STORAGE_KEYS.onboardingSeen, false);
   const authDemoUser = safeRead<DemoAuthUser | null>(STORAGE_KEYS.authDemoUser, null);
   const consentComplete = safeRead<boolean>(STORAGE_KEYS.consentComplete, false);
@@ -261,6 +258,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showDoctorSummary: false,
     pendingGuideFlowId: null,
   });
+
+  useEffect(() => {
+    if (authLoading) return;
+    setState((s) => ({
+      ...s,
+      authDemoUser: user
+        ? { fullName: user.displayName, email: user.email }
+        : null,
+    }));
+  }, [user, authLoading]);
 
   const setScreenBack = useCallback((handler: (() => void) | null, visible = true) => {
     const active = Boolean(visible && handler);
@@ -320,7 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
       safeWrite(STORAGE_KEYS.profileSetup, persistedProfile);
       safeWrite(STORAGE_KEYS.setupComplete, true);
-      safeWrite('curavon_health_profile', {
+      safeWrite(APP_STORAGE_KEYS.healthProfile, {
         preferredName: setup.preferredName,
         primaryGoals: setup.primaryGoals,
         sensitiveMode: setup.sensitiveMode,
@@ -406,6 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setSensitiveMode = useCallback((sensitiveMode: boolean) => {
+    // Legacy mirror only. Writes should go through Health Profile (HealthContext).
     setState((s) => ({ ...s, sensitiveMode }));
   }, []);
 
@@ -441,8 +449,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addChatMessage = useCallback((text: string) => {
     setState((s) => {
-      const lower = text.toLowerCase();
-      const isHighRisk = HIGH_RISK_KEYWORDS.some((k) => lower.includes(k));
+      const urgent = detectUrgentConcern(text);
 
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -450,7 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         text,
       };
 
-      if (isHighRisk) {
+      if (urgent.hasUrgent) {
         return {
           ...s,
           chatMessages: [...s.chatMessages, userMsg],

@@ -1,11 +1,12 @@
 import type { DailyCheckIn, DailyStepsState, HealthProfile } from '../types/health';
 import { DEFAULT_STEPS_GOAL } from './stepsUtils';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
 
 export const HEALTH_STORAGE_KEYS = {
-  healthProfile: 'curavon_health_profile',
-  dailyCheckins: 'curavon_daily_checkins',
-  nextActionState: 'curavon_next_action_state',
-  dailySteps: 'curavon_daily_steps',
+  healthProfile: APP_STORAGE_KEYS.healthProfile,
+  dailyCheckins: APP_STORAGE_KEYS.dailyCheckins,
+  nextActionState: APP_STORAGE_KEYS.nextActionState,
+  dailySteps: APP_STORAGE_KEYS.dailySteps,
 } as const;
 
 export function safeRead<T>(key: string, fallback: T): T {

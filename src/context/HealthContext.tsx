@@ -17,6 +17,7 @@ import type {
   SmartSilencePreference,
 } from '../types/health';
 import type { HealthSnapshot } from '../types/healthSnapshot';
+import type { FollowUpOutcome, FollowUpRecord } from '../lib/followUp/followUpTypes';
 import {
   createDefaultHealthProfile,
   getTodayCheckIn,
@@ -27,28 +28,40 @@ import {
   safeRemove,
   safeWrite,
   todayDateKey,
-  clearHealthStorage,
 } from '../utils/healthStorage';
 import { ADJUSTED_ACTIONS } from '../utils/nextActionRules';
 import { stepsBandToCount } from '../utils/stepsUtils';
 import {
   addDoctorSummaryItem,
-  clearDoctorSummaryStorage,
-  loadDoctorSummaryDrafts,
-  loadDoctorSummaryItems,
   loadRedFlagLogs,
 } from '../utils/doctorSummaryStorage';
 import {
   createCheckInSummaryItem,
   createNextActionSummaryItem,
 } from '../utils/doctorSummaryItems';
-import { clearAskHistory, loadAskHistory } from '../utils/askIntakeStorage';
+import { loadAskHistory } from '../utils/askIntakeStorage';
 import {
   adjustedOptionLabel,
   blockedReasonLabel,
 } from '../utils/nextBestActionEngine';
 import { loadHealthSnapshot, refreshHealthSnapshot as recomputeHealthSnapshot } from '../utils/healthSnapshot';
-import { buildNextBestAction, toNextActionStateFromV2 } from '../utils/actionEngineV2';
+import {
+  generateCuravonNextAction,
+  toNextActionStateFromAdapter,
+  type NextActionSource,
+} from '../lib/plan/nextActionAdapter';
+import {
+  getFollowUps,
+  markFollowUpCompleted,
+  updateFollowUp,
+} from '../lib/followUp/followUpStorage';
+import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
+import { evaluateFollowUp } from '../lib/followUp/followUpEngine';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { exportCuravonData } from '../lib/data/dataExport';
+import { deleteAllHealthData } from '../lib/data/dataDeletion';
+import { queueSyncForCurrentUser } from '../lib/sync/syncQueue';
+import { collectActionOutcome, runMetaSystemCycle } from '../utils/metaSystem';
 
 interface HealthContextValue {
   healthProfile: HealthProfile;
@@ -86,6 +99,8 @@ interface HealthContextValue {
   smartSilenceLabel: string;
   recentConcerns: string[];
   refreshHealthSnapshot: () => void;
+  dueFollowUp: FollowUpRecord | null;
+  submitFollowUpOutcome: (outcome: FollowUpOutcome, note?: string) => void;
 }
 
 const HealthContext = createContext<HealthContextValue | null>(null);
@@ -98,10 +113,28 @@ const SMART_SILENCE_LABELS: Record<SmartSilencePreference, string> = {
 
 function persistProfile(profile: HealthProfile) {
   safeWrite(HEALTH_STORAGE_KEYS.healthProfile, profile);
+  queueSyncForCurrentUser({
+    entityType: 'health_profile',
+    operationType: 'update',
+    payload: {
+      updatedAt: new Date().toISOString(),
+      primaryGoalCount: profile.primaryGoals.length,
+      sensitiveMode: profile.sensitiveMode,
+    },
+  });
 }
 
 function persistCheckins(checkins: DailyCheckIn[]) {
   safeWrite(HEALTH_STORAGE_KEYS.dailyCheckins, checkins);
+  queueSyncForCurrentUser({
+    entityType: 'daily_checkins',
+    operationType: 'update',
+    payload: {
+      count: checkins.length,
+      latestId: checkins[0]?.id ?? null,
+      updatedAt: new Date().toISOString(),
+    },
+  });
 }
 
 function persistDailySteps(state: DailyStepsState) {
@@ -111,8 +144,24 @@ function persistDailySteps(state: DailyStepsState) {
 function persistNextAction(state: NextActionState | null) {
   if (state) {
     safeWrite(HEALTH_STORAGE_KEYS.nextActionState, state);
+    queueSyncForCurrentUser({
+      entityType: 'next_action_state',
+      operationType: 'update',
+      payload: {
+        actionId: state.actionId,
+        status: state.status,
+        updatedAt: state.updatedAt ?? new Date().toISOString(),
+      },
+    });
   } else {
     safeRemove(HEALTH_STORAGE_KEYS.nextActionState);
+    queueSyncForCurrentUser({
+      entityType: 'next_action_state',
+      operationType: 'delete',
+      payload: {
+        updatedAt: new Date().toISOString(),
+      },
+    });
   }
 }
 
@@ -150,6 +199,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   const [showHealthAdjustSheet, setShowHealthAdjustSheet] = useState(false);
   const [showUrgentSafety, setShowUrgentSafety] = useState(false);
   const [healthSnapshot, setHealthSnapshot] = useState<HealthSnapshot>(() => loadHealthSnapshot());
+  const [followUps, setFollowUps] = useState<FollowUpRecord[]>(() => getFollowUps());
 
   const todayCheckIn = getTodayCheckIn(dailyCheckins);
 
@@ -157,27 +207,89 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setHealthSnapshot(recomputeHealthSnapshot());
   }, []);
 
-  const derivePersonalizedAction = useCallback(
-    (_memoryOverride?: unknown) => {
-      const healthSnapshot = recomputeHealthSnapshot();
-      const decision = buildNextBestAction(healthSnapshot);
-      return toNextActionStateFromV2(decision);
+  const refreshFollowUps = useCallback(() => {
+    setFollowUps(getFollowUps());
+  }, []);
+
+  const dueFollowUp =
+    followUps
+      .filter((item) => item.status === 'pending')
+      .filter((item) => new Date(item.dueAt).getTime() <= Date.now())
+      .sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0] ?? null;
+
+  const createFollowUpForAction = useCallback(
+    (state: NextActionState | null) => {
+      if (!state?.actionId) return;
+      scheduleFollowUpForAction({
+        source: 'today',
+        action: {
+          actionId: state.actionId,
+          title: state.title ?? "Today's next best action",
+          category: state.category ?? 'stabilize',
+          safetyLevel: state.safetyLevel ?? 'normal',
+          sourceSignals: (state.sourceSignals ?? []).map(String),
+        },
+      });
+      refreshFollowUps();
     },
-    [],
+    [refreshFollowUps],
   );
 
-  const refreshNextActionFromToday = useCallback(
-    (_checkIn: DailyCheckIn, _steps: number, onlyIfPending = true) => {
+  const collectIgnoredPendingAction = useCallback((state: NextActionState | null) => {
+    if (!state || state.status !== 'pending') return;
+    collectActionOutcome({
+      actionId: state.actionId,
+      status: 'ignored',
+      category: state.category,
+      source: state.source,
+      reasonCode: 'replaced_pending_action',
+    });
+  }, []);
+
+  const applyNextActionFromPlan = useCallback(
+    async (params: {
+      source: NextActionSource;
+      concern?: string;
+      latestCheckIn?: DailyCheckIn | null;
+      followUpResult?: { outcome: FollowUpOutcome; note?: string };
+      onlyIfPending?: boolean;
+    }) => {
+      const snapshot = recomputeHealthSnapshot();
+      const output = await generateCuravonNextAction({
+        source: params.source,
+        snapshot,
+        latestCheckIn: params.latestCheckIn ?? todayCheckIn,
+        askHistory: loadAskHistory(),
+        nextActionState,
+        redFlagLogs: loadRedFlagLogs(),
+        profile: healthProfile,
+        currentConcern: params.concern ?? '',
+        intakeResult: params.concern
+          ? { concern: params.concern, concernType: '', redFlags: [] }
+          : null,
+        followUpResult: params.followUpResult ?? null,
+      });
       setNextActionState((prev) => {
-        if (onlyIfPending && prev && prev.status !== 'pending') return prev;
-        const next = derivePersonalizedAction(
-          prev ? { nextActionState: prev } : undefined,
-        );
+        if (params.onlyIfPending !== false && prev && prev.status !== 'pending') return prev;
+        const next = toNextActionStateFromAdapter(output, params.source);
         persistNextAction(next);
+        createFollowUpForAction(next);
         return next;
       });
     },
-    [derivePersonalizedAction],
+    [nextActionState, healthProfile, todayCheckIn, createFollowUpForAction],
+  );
+
+  const refreshNextActionFromToday = useCallback(
+    (checkIn: DailyCheckIn, _steps: number, onlyIfPending = true) => {
+      void applyNextActionFromPlan({
+        source: 'today',
+        concern: checkIn.symptoms || checkIn.notes || '',
+        latestCheckIn: checkIn,
+        onlyIfPending,
+      });
+    },
+    [applyNextActionFromPlan],
   );
 
   useEffect(() => {
@@ -238,11 +350,11 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (nextActionState && nextActionState.status !== 'pending') return;
-    const next = derivePersonalizedAction();
-    setNextActionState(next);
-    persistNextAction(next);
-  }, [healthProfile, dailyCheckins, nextActionState?.status, derivePersonalizedAction]);
+    void applyNextActionFromPlan({ source: 'today', onlyIfPending: true });
+  }, [healthProfile, dailyCheckins, nextActionState?.status, applyNextActionFromPlan]);
 
+
+  // Sensitive Mode canonical source: Health Profile. Mirror to AppContext for legacy UI shell.
   useEffect(() => {
     setSensitiveMode(healthProfile.sensitiveMode);
   }, [healthProfile.sensitiveMode, setSensitiveMode]);
@@ -310,7 +422,6 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       });
 
-      const nextCheckins = [entry, ...dailyCheckins.filter((c) => c.date !== today)];
       setDailyCheckins((prev) => {
         const filtered = prev.filter((c) => c.date !== today);
         const next = [entry, ...filtered];
@@ -329,16 +440,19 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         return next;
       });
 
-      const nextAction = derivePersonalizedAction({
-        dailyCheckins: nextCheckins,
+      collectIgnoredPendingAction(nextActionState);
+      void applyNextActionFromPlan({
+        source: 'today',
+        concern: entry.symptoms || entry.notes || '',
+        latestCheckIn: entry,
+        onlyIfPending: false,
       });
-      setNextActionState(nextAction);
-      persistNextAction(nextAction);
       addDoctorSummaryItem(createCheckInSummaryItem(entry));
       refreshSnapshotState();
+      runMetaSystemCycle();
       setShowCheckIn(false);
     },
-    [dailyCheckins, dailySteps.steps, derivePersonalizedAction, refreshSnapshotState],
+    [dailyCheckins, dailySteps.steps, applyNextActionFromPlan, refreshSnapshotState, collectIgnoredPendingAction, nextActionState],
   );
 
   const markActionDone = useCallback(() => {
@@ -353,6 +467,13 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       persistNextAction(next);
       addDoctorSummaryItem(createNextActionSummaryItem(next));
       setHealthSnapshot(recomputeHealthSnapshot());
+      collectActionOutcome({
+        actionId: next.actionId,
+        status: 'done',
+        category: next.category,
+        source: next.source,
+      });
+      runMetaSystemCycle();
       return next;
     });
   }, []);
@@ -370,6 +491,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       persistNextAction(next);
       addDoctorSummaryItem(createNextActionSummaryItem(next, { blockedReason: reason }));
       setHealthSnapshot(recomputeHealthSnapshot());
+      collectActionOutcome({
+        actionId: next.actionId,
+        status: 'blocked',
+        category: next.category,
+        source: next.source,
+        reasonCode: reason,
+      });
+      runMetaSystemCycle();
       return next;
     });
     setShowHealthBlockedSheet(false);
@@ -389,29 +518,43 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       persistNextAction(next);
       addDoctorSummaryItem(createNextActionSummaryItem(next, { adjustOption: option }));
       setHealthSnapshot(recomputeHealthSnapshot());
+      collectActionOutcome({
+        actionId: next.actionId,
+        status: 'adjusted',
+        category: next.category,
+        source: next.source,
+        reasonCode: option,
+      });
+      runMetaSystemCycle();
       return next;
     });
     setShowHealthAdjustSheet(false);
   }, []);
 
   const setNextActionFromSource = useCallback((action: string, source: string) => {
-    const next: NextActionState = {
-      currentAction: action,
-      title: "Today's next best action",
-      reason: 'Based on your latest notes.',
-      source,
-      sourceSignals: [],
-      sourceChips: [source],
-      effort: 'low',
-      category: 'general',
-      safetyLevel: 'normal',
-      status: 'pending',
-      updatedAt: new Date().toISOString(),
-    };
-    setNextActionState(next);
-    persistNextAction(next);
+    setNextActionState((prev) => {
+      collectIgnoredPendingAction(prev);
+      const next: NextActionState = {
+        currentAction: action,
+        title: "Today's next best action",
+        reason: 'Based on your latest notes.',
+        source,
+        sourceSignals: [],
+        sourceChips: [source],
+        effort: 'low',
+        category: 'general',
+        safetyLevel: 'normal',
+        actionId: `manual-${Date.now()}`,
+        status: 'pending',
+        updatedAt: new Date().toISOString(),
+      };
+      persistNextAction(next);
+      createFollowUpForAction(next);
+      return next;
+    });
     refreshSnapshotState();
-  }, [refreshSnapshotState]);
+    runMetaSystemCycle();
+  }, [refreshSnapshotState, collectIgnoredPendingAction, createFollowUpForAction]);
 
   const saveCurrentActionToSummary = useCallback(() => {
     if (!nextActionState) return;
@@ -420,18 +563,85 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, [nextActionState, refreshSnapshotState]);
 
   const refreshPersonalizedAction = useCallback(() => {
-    setNextActionState((prev) => {
-      if (prev && prev.status !== 'pending') return prev;
-      const next = derivePersonalizedAction(prev ? { nextActionState: prev } : undefined);
-      persistNextAction(next);
-      return next;
-    });
-  }, [derivePersonalizedAction]);
+    void applyNextActionFromPlan({ source: 'today', onlyIfPending: true });
+  }, [applyNextActionFromPlan]);
+
+  const submitFollowUpOutcome = useCallback(
+    (outcome: FollowUpOutcome, note = '') => {
+      if (!dueFollowUp) return;
+
+      const decision = evaluateFollowUp(dueFollowUp, outcome, note, {
+        snapshot: healthSnapshot,
+        nextActionState,
+      });
+
+      markFollowUpCompleted(dueFollowUp.id, outcome, note);
+      updateFollowUp(dueFollowUp.id, {
+        escalationFlag: decision.shouldEscalate,
+        savedToDoctorSummary: decision.shouldSaveToDoctorSummary,
+      });
+      refreshFollowUps();
+
+      setNextActionState((prev) => {
+        if (!prev) return prev;
+        const next: NextActionState = {
+          ...prev,
+          sourceSignals: Array.from(
+            new Set([
+              ...(prev.sourceSignals ?? []),
+              outcome === 'blocked' ? 'followup_blocked' : '',
+              outcome === 'helped' ? 'followup_helped' : '',
+              outcome === 'worse' ? 'followup_worse' : '',
+              outcome === 'not_done' ? 'followup_not_done' : '',
+            ].filter(Boolean)),
+          ),
+          reason: decision.recommendedNextStep,
+          safetyLevel: decision.shouldEscalate ? 'urgent' : prev.safetyLevel,
+          updatedAt: new Date().toISOString(),
+        };
+        persistNextAction(next);
+        return next;
+      });
+
+      if (decision.shouldEscalate) {
+        setShowUrgentSafety(true);
+      }
+
+      if (decision.shouldSaveToDoctorSummary && nextActionState) {
+        const followUpSummary = createNextActionSummaryItem({
+          ...nextActionState,
+          reason: `${nextActionState.reason ?? ''}\nFollow-up outcome: ${outcome}. ${note.trim() || decision.reason}`,
+          safetyLevel: decision.shouldEscalate ? 'urgent' : nextActionState.safetyLevel,
+          updatedAt: new Date().toISOString(),
+        });
+        addDoctorSummaryItem(followUpSummary);
+      }
+
+      if (decision.shouldGenerateNewAction) {
+        void applyNextActionFromPlan({
+          source: 'followup',
+          followUpResult: { outcome, note },
+          onlyIfPending: false,
+        });
+      }
+
+      refreshSnapshotState();
+      runMetaSystemCycle();
+    },
+    [
+      dueFollowUp,
+      healthSnapshot,
+      nextActionState,
+      refreshFollowUps,
+      applyNextActionFromPlan,
+      createFollowUpForAction,
+      refreshSnapshotState,
+    ],
+  );
 
   const clearHealthData = useCallback(() => {
-    clearHealthStorage();
-    clearDoctorSummaryStorage();
-    clearAskHistory();
+    const userId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
+    deleteAllHealthData(userId);
     const fresh = createDefaultHealthProfile();
     setHealthProfile(fresh);
     setDailyCheckins([]);
@@ -443,18 +653,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, [setSensitiveMode, refreshSnapshotState]);
 
   const exportHealthData = useCallback(() => {
-    const payload = {
-      healthProfile,
-      dailyCheckins,
-      dailySteps,
-      nextActionState,
-      doctorSummaryItems: loadDoctorSummaryItems(),
-      doctorSummaryDrafts: loadDoctorSummaryDrafts(),
-      redFlagLogs: loadRedFlagLogs(),
-      askHistory: loadAskHistory(),
-      healthSnapshot: loadHealthSnapshot(),
-      exportedAt: new Date().toISOString(),
-    };
+    const userId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
+    const payload = exportCuravonData(userId);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -462,7 +662,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     link.download = `curavon-health-export-${todayDateKey()}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [healthProfile, dailyCheckins, dailySteps, nextActionState]);
+  }, []);
 
   const recentConcerns = dailyCheckins
     .slice(0, 5)
@@ -514,6 +714,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         smartSilenceLabel,
         recentConcerns,
         refreshHealthSnapshot: refreshSnapshotState,
+        dueFollowUp,
+        submitFollowUpOutcome,
       }}
     >
       {children}

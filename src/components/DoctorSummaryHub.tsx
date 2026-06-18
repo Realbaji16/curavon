@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Copy, Download, Trash2, Plus } from 'lucide-react';
+import { FileText, Copy, Download, Trash2, Plus, Sparkles, RefreshCw, Save } from 'lucide-react';
 import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { SensitiveBlur } from './ScreenHeader';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
@@ -25,6 +25,11 @@ export function DoctorSummaryHub() {
     copySummary,
     downloadSummary,
     clearDraft,
+    saveSummary,
+    generateAISummary,
+    refreshAISummary,
+    aiSummary,
+    aiSummaryLoading,
   } = useDoctorSummary();
   const [questionInput, setQuestionInput] = useState('');
 
@@ -56,6 +61,9 @@ export function DoctorSummaryHub() {
         </div>
         <p className="summary-hub-safety">
           This summary is not a diagnosis or medical advice.
+        </p>
+        <p className="summary-hub-safety">
+          Curavon organizes your notes. It does not diagnose.
         </p>
       </motion.div>
 
@@ -105,6 +113,24 @@ export function DoctorSummaryHub() {
 
       <motion.section className="summary-hub-section" variants={fadeUp}>
         <h4>Selected for summary ({includedCount})</h4>
+        {aiSummaryLoading ? <p className="summary-hub-empty">Organizing your notes…</p> : null}
+        {aiSummary ? (
+          <div className="summary-built-preview">
+            <div className="summary-built-block">
+              <h5>{aiSummary.summaryTitle}</h5>
+              <p>Date range: {aiSummary.dateRange}</p>
+            </div>
+            <div className="summary-built-block">
+              <h5>Main concerns</h5>
+              <p><SensitiveBlur sensitive>{aiSummary.mainConcerns.join(' • ') || 'No concerns recorded.'}</SensitiveBlur></p>
+            </div>
+            <div className="summary-built-block">
+              <h5>Recent patterns</h5>
+              <p><SensitiveBlur sensitive>{aiSummary.recentPatterns.join(' • ') || 'No patterns recorded.'}</SensitiveBlur></p>
+            </div>
+            <p className="summary-built-footer">{aiSummary.footer}</p>
+          </div>
+        ) : null}
         <div className="summary-built-preview">
           {builtSummary.sections.map((section) => (
             <div key={section.heading} className="summary-built-block">
@@ -143,6 +169,35 @@ export function DoctorSummaryHub() {
       </motion.section>
 
       <motion.div className="summary-hub-actions" variants={fadeUp}>
+        <motion.button
+          type="button"
+          className="btn btn-secondary btn-glass"
+          {...tapScale}
+          onClick={() => void generateAISummary()}
+          disabled={aiSummaryLoading}
+        >
+          <Sparkles size={18} />
+          Generate AI Summary
+        </motion.button>
+        <motion.button
+          type="button"
+          className="btn btn-secondary btn-glass"
+          {...tapScale}
+          onClick={() => void refreshAISummary()}
+          disabled={aiSummaryLoading}
+        >
+          <RefreshCw size={18} />
+          Refresh Summary
+        </motion.button>
+        <motion.button
+          type="button"
+          className="btn btn-secondary btn-glass"
+          {...tapScale}
+          onClick={saveSummary}
+        >
+          <Save size={18} />
+          Save Summary
+        </motion.button>
         <motion.button
           type="button"
           className="btn btn-primary"

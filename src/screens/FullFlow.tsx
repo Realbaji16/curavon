@@ -44,6 +44,7 @@ const SECTIONS = [
   },
 ];
 
+/** @deprecated Legacy placeholder screen. Flow tab now routes to CareCircleScreen. */
 export function FullFlowScreen() {
   const { theme, blockedReason, openDoctorSummary } = useApp();
   const tokens = themes[theme];

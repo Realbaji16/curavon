@@ -1,6 +1,8 @@
 import type { ActionStatus, DailyCheckIn, HealthProfile, NextActionState } from './health';
 import type { AskHistoryEntry } from './askIntake';
 import type { DoctorSummaryItem, RedFlagLog } from './doctorSummary';
+import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
+import type { GuideResultRecord } from '../utils/guideResultStorage';
 
 export type PersonalizationSignal =
   | 'low_sleep'
@@ -78,6 +80,8 @@ export interface PersonalizationMemorySnapshot {
   doctorSummaryItems: DoctorSummaryItem[];
   askHistory: AskHistoryEntry[];
   redFlagLogs: RedFlagLog[];
+  followUps: FollowUpRecord[];
+  guideResults: GuideResultRecord[];
 }
 
 export interface NextBestActionPlan {

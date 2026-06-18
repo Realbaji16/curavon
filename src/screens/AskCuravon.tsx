@@ -45,6 +45,11 @@ import {
   WATCH_POINTS,
 } from '../utils/askIntakeRules';
 import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
+import { collectAskCompletion, runMetaSystemCycle } from '../utils/metaSystem';
+import { runAIOrchestrator } from '../lib/ai/orchestrator/aiOrchestrator';
+import { generateCuravonNextAction } from '../lib/plan/nextActionAdapter';
+import type { PlanAction } from '../lib/plan/planTypes';
+import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
 
 type AskMode = 'landing' | 'intake' | 'safety' | 'result';
 
@@ -138,7 +143,7 @@ function AskHistorySection({
 
 export function AskCuravonScreen() {
   const { setActiveTab, openDoctorSummary, openGuidesWithFlow, showToast } = useApp();
-  const { healthProfile, setNextActionFromSource, refreshHealthSnapshot } = useHealth();
+  const { healthProfile, setNextActionFromSource, refreshHealthSnapshot, healthSnapshot, nextActionState } = useHealth();
   const { addFromAsk, logRedFlag } = useDoctorSummary();
 
   const [mode, setMode] = useState<AskMode>('landing');
@@ -151,6 +156,9 @@ export function AskCuravonScreen() {
   const [revealedHistoryIds, setRevealedHistoryIds] = useState<Set<string>>(new Set());
   const [safetyTitle, setSafetyTitle] = useState(CALM_URGENT_TITLE);
   const [safetyBody, setSafetyBody] = useState(CALM_URGENT_BODY);
+  const [aiRefinedConcern, setAiRefinedConcern] = useState('');
+  const [aiMissingQuestions, setAiMissingQuestions] = useState<string[]>([]);
+  const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
@@ -165,6 +173,9 @@ export function AskCuravonScreen() {
     setSavedToSummary(false);
     setHistoryEntryId(null);
     setHistory(loadAskHistory());
+    setAiRefinedConcern('');
+    setAiMissingQuestions([]);
+    setAskFinalAction(null);
   }, []);
 
   const startIntake = (prefill = '') => {
@@ -175,16 +186,8 @@ export function AskCuravonScreen() {
     setMode('intake');
   };
 
-  const finishIntake = useCallback(() => {
+  const finishIntake = useCallback(async () => {
     const flags = effectiveRedFlags(intake);
-    const entry = addAskHistoryEntry({
-      concern: intake.mainConcern,
-      concernType: intake.concernType || 'Not sure',
-      nextStep: nextSafeStep,
-    });
-    refreshHealthSnapshot();
-    setHistoryEntryId(entry.id);
-    setHistory(loadAskHistory());
 
     if (hasUrgentRedFlags(flags)) {
       const selfHarm = hasSelfHarmRedFlag(flags);
@@ -197,11 +200,83 @@ export function AskCuravonScreen() {
         guidanceShown: guidance,
         matchedConcern: flags.find((f) => f !== 'None of these') ?? 'urgent concern',
       });
+      const entry = addAskHistoryEntry({
+        concern: intake.mainConcern,
+        concernType: intake.concernType || 'Not sure',
+        nextStep: 'Safety guidance shown — no self-care plan generated.',
+      });
+      setHistoryEntryId(entry.id);
+      setHistory(loadAskHistory());
+      refreshHealthSnapshot();
       setMode('safety');
-    } else {
-      setMode('result');
+      runMetaSystemCycle();
+      return;
     }
-  }, [intake, nextSafeStep, logRedFlag]);
+
+    const aiEnhancement = await runAIOrchestrator({
+      userInput: intake.mainConcern,
+      contextSnapshot: {
+        concernType: intake.concernType,
+        timeline: intake.timeline,
+      },
+      safetyLevel: 'normal',
+      stageHint: 'ask_input',
+      source: 'ask',
+    });
+    const aiResult = aiEnhancement.result as {
+      refinedConcern?: string;
+      missingQuestions?: string[];
+    };
+    const refinedConcern = (aiResult.refinedConcern ?? '').trim() || intake.mainConcern;
+    setAiRefinedConcern(refinedConcern);
+    setAiMissingQuestions((aiResult.missingQuestions ?? []).slice(0, 2));
+    const entry = addAskHistoryEntry({
+      concern: refinedConcern,
+      concernType: intake.concernType || 'Not sure',
+      nextStep: nextSafeStep,
+    });
+    collectAskCompletion();
+    refreshHealthSnapshot();
+    setHistoryEntryId(entry.id);
+    setHistory(loadAskHistory());
+    setMode('result');
+    const plan = await generateCuravonNextAction({
+        source: 'ask',
+        snapshot: healthSnapshot,
+        intakeResult: {
+          concern: refinedConcern,
+          concernType: intake.concernType,
+          redFlags: flags,
+        },
+        latestCheckIn: null,
+        askHistory: history,
+        nextActionState,
+        redFlagLogs: [],
+        profile: healthProfile,
+        currentConcern: refinedConcern,
+      });
+      setAskFinalAction({
+        id: plan.actionId.replace(/^ask-v2-/, ''),
+        title: plan.title,
+        actionText: plan.actionText,
+        reason: plan.reason,
+        category: plan.category,
+        safetyLevel: plan.safetyLevel,
+        relatedGuide: plan.relatedGuide,
+        followUpPrompt: plan.followUpPrompt,
+        watchFor: plan.watchFor,
+        sourceSignals: plan.sourceSignals,
+        selectedBy: plan.selectedBy,
+        aiReasoned: plan.aiReasoned,
+        fallbackUsed: plan.fallbackUsed,
+      });
+      scheduleFollowUpForAction({
+        source: 'ask',
+        action: plan,
+        context: { entryId: entry.id },
+      });
+    runMetaSystemCycle();
+  }, [intake, nextSafeStep, logRedFlag, refreshHealthSnapshot, healthSnapshot, history, nextActionState, healthProfile]);
 
   const canContinueStep = (): boolean => {
     switch (intakeStep) {
@@ -232,7 +307,7 @@ export function AskCuravonScreen() {
       setIntakeStep((s) => s + 1);
       return;
     }
-    finishIntake();
+    void finishIntake();
   };
 
   const goBack = () => {
@@ -256,15 +331,17 @@ export function AskCuravonScreen() {
   useScreenBack(handleScreenBack, mode !== 'landing');
 
   const saveToDoctorSummary = () => {
+    const concernForSummary = aiRefinedConcern || intake.mainConcern;
+    const actionForSummary = askFinalAction?.actionText || nextSafeStep;
     addFromAsk({
-      mainConcern: intake.mainConcern,
+      mainConcern: concernForSummary,
       concernType: intake.concernType || 'Not sure',
       timeline: intake.timeline,
       intensity: intake.intensity,
       whatChanged: intake.whatChanged,
       triedSoFar: intake.triedSoFar,
       redFlags,
-      nextSafeStep,
+      nextSafeStep: actionForSummary,
     });
     if (historyEntryId) {
       markAskHistorySaved(historyEntryId);
@@ -276,7 +353,7 @@ export function AskCuravonScreen() {
   };
 
   const markAsNextAction = () => {
-    setNextActionFromSource(nextSafeStep, 'Ask Curavon');
+    setNextActionFromSource(askFinalAction?.actionText || nextSafeStep, 'Ask Curavon');
     showToast('Added to Today.');
     setActiveTab('home');
   };
@@ -337,8 +414,11 @@ export function AskCuravonScreen() {
               <FileText size={18} />
               Prepare summary
             </button>
-            <button type="button" className="btn btn-secondary btn-glass" onClick={() => setMode('result')}>
-              I understand
+            <button type="button" className="btn btn-secondary btn-glass" onClick={() => setActiveTab('home')}>
+              Return to Today
+            </button>
+            <button type="button" className="btn btn-secondary btn-glass" onClick={resetToLanding}>
+              Edit concern / start over
             </button>
           </div>
         </div>
@@ -357,6 +437,12 @@ export function AskCuravonScreen() {
               <h3 className="ask-result-heading">What Curavon organized</h3>
               <div className="ask-result-grid">
                 <div><span>Concern</span><SensitiveBlur sensitive={sensitive}>{intake.mainConcern}</SensitiveBlur></div>
+                {aiRefinedConcern ? (
+                  <div className="ask-result-grid--wide">
+                    <span>Refined concern</span>
+                    <SensitiveBlur sensitive={sensitive}>{aiRefinedConcern}</SensitiveBlur>
+                  </div>
+                ) : null}
                 {intake.concernType ? <div><span>Type</span>{intake.concernType}</div> : null}
                 {intake.timeline ? <div><span>Timeline</span>{intake.timeline}</div> : null}
                 <div><span>Intensity</span>{intake.intensity}/10</div>
@@ -382,12 +468,28 @@ export function AskCuravonScreen() {
               </ul>
 
               <div className="ask-result-highlight">
-                <h3 className="ask-result-heading ask-result-heading--accent">Your next safe step</h3>
-                <p className="ask-next-step-text">{nextSafeStep}</p>
+                <h3 className="ask-result-heading ask-result-heading--accent">
+                  {askFinalAction?.title || 'Your next safe step'}
+                </h3>
+                <p className="ask-next-step-text">{askFinalAction?.actionText || nextSafeStep}</p>
+                <p className="ask-result-guide-hint">{askFinalAction?.reason || 'One safe, simple next action for now.'}</p>
                 <p className="ask-result-guide-hint">
-                  Suggested guide: {recommendedGuide.title}
+                  Suggested guide: {askFinalAction?.relatedGuide || recommendedGuide.title}
                 </p>
               </div>
+              {aiRefinedConcern || aiMissingQuestions.length ? (
+                <div className="ask-result-highlight">
+                  <h3 className="ask-result-heading">Intake clarity</h3>
+                  {aiRefinedConcern ? <p className="ask-next-step-text">{aiRefinedConcern}</p> : null}
+                  {aiMissingQuestions.length ? (
+                    <ul className="ask-watch-list ask-watch-list--compact">
+                      {aiMissingQuestions.map((question) => (
+                        <li key={question}>{question}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <AskHistorySection

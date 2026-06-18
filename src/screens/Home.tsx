@@ -21,7 +21,11 @@ import { staggerContainer, fadeUp, tapScale, cardEntrance } from '../motion/vari
 import { buildNextBestActionPlan } from '../utils/nextBestActionEngine';
 import { readCuravonMemorySnapshot } from '../utils/nextBestActionMemory';
 import type { SupportingInsightCard } from '../types/nextBestAction';
-import { buildNextBestAction, type ActionEngineCategory } from '../utils/actionEngineV2';
+import type { FollowUpOutcome } from '../lib/followUp/followUpTypes';
+
+function formatFocusArea(area: string): string {
+  return area.replace(/_/g, ' ');
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -38,7 +42,7 @@ function formatTodayLabel() {
   });
 }
 
-function categoryLabel(category: ActionEngineCategory | string | undefined): string {
+function categoryLabel(category: string | undefined): string {
   if (!category) return 'stabilize';
   switch (category) {
     case 'stabilize':
@@ -58,7 +62,6 @@ function categoryLabel(category: ActionEngineCategory | string | undefined): str
 
 export function HomeScreen() {
   const {
-    sensitiveMode,
     setActiveTab,
     openDoctorSummary,
     openGuidesWithFlow,
@@ -75,12 +78,17 @@ export function HomeScreen() {
     openHealthBlockedSheet,
     openHealthAdjustSheet,
     saveCurrentActionToSummary,
+    dueFollowUp,
+    submitFollowUpOutcome,
   } = useHealth();
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
+  const [followUpNote, setFollowUpNote] = useState('');
+  const [followUpResult, setFollowUpResult] = useState('');
 
   const name = healthProfile.preferredName.trim();
   const greetingLine = name ? `${getGreeting()}, ${name}` : 'Welcome back';
+  const sensitiveMode = healthProfile.sensitiveMode;
   const hasCheckInToday = Boolean(todayCheckIn);
   const actionStatus = nextActionState?.status ?? 'pending';
   const isDone = actionStatus === 'done';
@@ -94,21 +102,18 @@ export function HomeScreen() {
       dailyCheckins,
       nextActionState,
     };
+    // Legacy next-action path. Supporting insights only — hero action reads persisted nextActionState.
     return buildNextBestActionPlan(merged);
   }, [healthProfile, dailyCheckins, nextActionState]);
 
-  const activeRecommendation = useMemo(
-    () => buildNextBestAction(healthSnapshot),
-    [healthSnapshot, dailyCheckins, nextActionState],
-  );
-
-  const noCheckInSignal = personalizationPlan.signals.includes('no_checkin_today');
+  const noCheckInSignal = !hasCheckInToday;
   const canRespondToAction = Boolean(nextActionState) && !noCheckInSignal;
 
   const safetyNote =
-    activeRecommendation.primaryAction.safetyLevel === 'normal'
-      ? null
-      : 'If symptoms are severe, sudden, or unsafe, seek local urgent or emergency support.';
+    nextActionState?.safetyLevel && nextActionState.safetyLevel !== 'normal'
+      ? 'If symptoms are severe, sudden, or unsafe, seek local urgent or emergency support.'
+      : null;
+  const sourceChips = (nextActionState?.sourceSignals ?? []).slice(0, 3);
 
   const handleDone = () => {
     if (isDone || !canRespondToAction) return;
@@ -125,7 +130,7 @@ export function HomeScreen() {
       return;
     }
     setActiveTab('circle');
-    const guideName = nextActionState?.relatedGuide ?? activeRecommendation.primaryAction.relatedGuide;
+    const guideName = nextActionState?.relatedGuide;
     if (guideName) {
       showToast(`Recommended guide: ${guideName}`);
     }
@@ -149,6 +154,18 @@ export function HomeScreen() {
     }
   };
 
+  const handleFollowUpOutcome = (outcome: FollowUpOutcome) => {
+    submitFollowUpOutcome(outcome, followUpNote);
+    if (outcome === 'worse') {
+      setFollowUpResult('Safety noted. Curavon will prioritize a safer next step.');
+    } else if (outcome === 'blocked' || outcome === 'partly_helped' || outcome === 'not_done') {
+      setFollowUpResult('Got it. Curavon will adjust the next step.');
+    } else {
+      setFollowUpResult('Saved. This may help your doctor summary.');
+    }
+    setFollowUpNote('');
+  };
+
   return (
     <div className="screen home-screen home-screen--today">
       <ScreenHeader showThemeToggle />
@@ -160,20 +177,52 @@ export function HomeScreen() {
             {formatTodayLabel()}
           </span>
           <h1 className="home-greeting-title">{greetingLine}</h1>
-          <p className="home-greeting-lede">One gentle step based on what you&apos;ve shared.</p>
+          <p className="home-greeting-lede">One safer next step based on what you&apos;ve shared.</p>
         </motion.header>
 
         <motion.section className="home-pattern-card warm-card glass-card-inner" variants={fadeUp}>
           <p className="home-pattern-label">Your current pattern</p>
           <p className="home-pattern-summary">{healthSnapshot.trendSummary}</p>
           <p className="home-pattern-focus">
-            Focus area: <strong>{healthSnapshot.recommendedFocusArea}</strong>
+            Focus area: <strong>{formatFocusArea(healthSnapshot.recommendedFocusArea)}</strong>
           </p>
         </motion.section>
 
+        {dueFollowUp ? (
+          <motion.section className="home-pattern-card warm-card glass-card-inner" variants={fadeUp}>
+            <p className="home-pattern-label">Quick follow-up</p>
+            <p className="home-pattern-summary">{dueFollowUp.prompt}</p>
+            <input
+              type="text"
+              className="field-input"
+              value={followUpNote}
+              onChange={(event) => setFollowUpNote(event.target.value)}
+              placeholder="Optional short note"
+            />
+            <div className="action-buttons action-buttons--today">
+              <button type="button" className="action-btn btn-health-done done-btn" onClick={() => handleFollowUpOutcome('helped')}>
+                Helped
+              </button>
+              <button type="button" className="action-btn btn-health-adjust adjust-btn" onClick={() => handleFollowUpOutcome('partly_helped')}>
+                Partly
+              </button>
+              <button type="button" className="action-btn btn-health-blocked blocked-btn" onClick={() => handleFollowUpOutcome('blocked')}>
+                Blocked
+              </button>
+              <button type="button" className="action-btn btn-health-adjust adjust-btn" onClick={() => handleFollowUpOutcome('not_done')}>
+                Not done
+              </button>
+              <button type="button" className="action-btn btn-health-blocked blocked-btn" onClick={() => handleFollowUpOutcome('worse')}>
+                Worse
+              </button>
+            </div>
+            {followUpResult ? <p className="home-hero-note">{followUpResult}</p> : null}
+          </motion.section>
+        ) : null}
+
         <AnimatePresence mode="wait">
           <motion.section
-            key={nextActionState?.actionId ?? activeRecommendation.primaryAction.title}
+            key={nextActionState?.actionId ?? 'hero-action'}
             className="home-hero-card hero-action-card hero-card hero-action-card--premium"
             variants={cardEntrance}
             initial="hidden"
@@ -188,7 +237,7 @@ export function HomeScreen() {
                   <Sparkles size={20} />
                 </span>
                 <div>
-                  <span className="hero-label">{activeRecommendation.primaryAction.title}</span>
+                  <span className="hero-label">{nextActionState?.title ?? "Today's next step"}</span>
                   <p className="home-hero-sub">One clear step — calm and safe.</p>
                 </div>
               </div>
@@ -196,7 +245,7 @@ export function HomeScreen() {
                 className={`home-status-pill ${hasCheckInToday ? 'home-status-pill--ready' : ''}`}
                 title="Primary action category"
               >
-                {categoryLabel(nextActionState?.category ?? activeRecommendation.primaryAction.category)}
+                {categoryLabel(nextActionState?.category)}
               </span>
             </div>
 
@@ -206,7 +255,7 @@ export function HomeScreen() {
                   <ClipboardCheck size={28} strokeWidth={1.5} />
                 </div>
                 <p className="hero-task hero-task--prompt">
-                  {activeRecommendation.primaryAction.action}
+                  Complete today&apos;s check-in to get your next safe step.
                 </p>
                 <motion.button
                   type="button"
@@ -226,14 +275,23 @@ export function HomeScreen() {
                   <p className="home-hero-note">We&apos;ll keep this gentle for today.</p>
                 )}
                 <p className="home-hero-why-label">Why this step</p>
-                <p className="home-hero-why-text">{activeRecommendation.primaryAction.reason}</p>
+                <p className="home-hero-why-text">{nextActionState?.reason ?? 'Based on your latest check-in and notes.'}</p>
                 <p className="hero-task hero-task--action">
                   <SensitiveBlur sensitive={sensitiveMode}>
-                    {nextActionState?.currentAction || activeRecommendation.primaryAction.action || actionText}
+                    {nextActionState?.currentAction || actionText}
                   </SensitiveBlur>
                 </p>
-                {activeRecommendation.supportingInsight ? (
-                  <p className="home-hero-note">{activeRecommendation.supportingInsight}</p>
+                {sourceChips.length ? (
+                  <div className="hero-source-chips">
+                    {sourceChips.map((chip) => (
+                      <span key={chip} className="hero-source-chip">
+                        {chip.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {nextActionState?.watchFor ? (
+                  <p className="home-hero-note">Watch for: {nextActionState.watchFor}</p>
                 ) : null}
 
                 {safetyNote ? (
@@ -270,7 +328,7 @@ export function HomeScreen() {
                 </AnimatePresence>
 
                 <div className="action-buttons action-buttons--today">
-                  {(nextActionState?.relatedGuide || activeRecommendation.primaryAction.relatedGuide) ? (
+                  {(nextActionState?.relatedGuide) ? (
                     <motion.button
                       type="button"
                       className="action-btn btn-health-adjust adjust-btn"

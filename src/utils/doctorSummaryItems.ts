@@ -95,6 +95,24 @@ export function createNextActionSummaryItem(
   if (state.relatedDoctorSummaryPrompt) {
     lines.push(`Note: ${state.relatedDoctorSummaryPrompt}`);
   }
+  if (state.reason) {
+    lines.push(`Reason: ${state.reason}`);
+  }
+  if (state.sourceSignals?.length) {
+    lines.push(`Source signals: ${state.sourceSignals.join(', ')}`);
+  }
+  if (state.category) {
+    lines.push(`Category: ${state.category}`);
+  }
+  if (state.safetyLevel) {
+    lines.push(`Safety level: ${state.safetyLevel}`);
+  }
+  if (typeof state.aiReasoned === 'boolean') {
+    lines.push(`AI reasoning used: ${state.aiReasoned ? 'yes' : 'no'}`);
+  }
+  if (typeof state.fallbackUsed === 'boolean') {
+    lines.push(`Plan fallback used: ${state.fallbackUsed ? 'yes' : 'no'}`);
+  }
 
   return {
     type: 'next_action' as const,

@@ -1,17 +1,21 @@
 import type { AskHistoryEntry } from '../types/askIntake';
 import type { DoctorSummaryItem, RedFlagLog } from '../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../types/health';
+import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
 import type { PersonalizationMemorySnapshot } from '../types/nextBestAction';
+import { loadGuideResults } from './guideResultStorage';
 import {
   createDefaultHealthProfile,
   HEALTH_STORAGE_KEYS,
   normalizeCheckIn,
   safeRead,
 } from './healthStorage';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
 
-const ASK_HISTORY_KEY = 'curavon_ask_history';
-const DOCTOR_ITEMS_KEY = 'curavon_doctor_summary_items';
-const RED_FLAGS_KEY = 'curavon_red_flag_logs';
+const ASK_HISTORY_KEY = APP_STORAGE_KEYS.askHistory;
+const DOCTOR_ITEMS_KEY = APP_STORAGE_KEYS.doctorSummaryItems;
+const RED_FLAGS_KEY = APP_STORAGE_KEYS.redFlagLogs;
+const FOLLOW_UPS_KEY = APP_STORAGE_KEYS.followUps;
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -34,6 +38,8 @@ export function readCuravonMemorySnapshot(): PersonalizationMemorySnapshot {
   const doctorSummaryItems = asArray<DoctorSummaryItem>(safeRead<unknown>(DOCTOR_ITEMS_KEY, []));
   const askHistory = asArray<AskHistoryEntry>(safeRead<unknown>(ASK_HISTORY_KEY, []));
   const redFlagLogs = asArray<RedFlagLog>(safeRead<unknown>(RED_FLAGS_KEY, []));
+  const followUps = asArray<FollowUpRecord>(safeRead<unknown>(FOLLOW_UPS_KEY, []));
+  const guideResults = loadGuideResults();
 
   return {
     healthProfile,
@@ -42,5 +48,7 @@ export function readCuravonMemorySnapshot(): PersonalizationMemorySnapshot {
     doctorSummaryItems,
     askHistory,
     redFlagLogs,
+    followUps,
+    guideResults,
   };
 }

@@ -22,16 +22,16 @@ const STEPS = [
     variant: 'welcome' as const,
     title: 'Meet Curavon',
     subtitle: 'Your next-best-action health companion',
-    body: 'Move from health confusion to one clear, safe next step — without overwhelm.',
+    body: 'Curavon helps you find one safer next health action — without overwhelm.',
     safetyNote:
-      'Curavon does not diagnose or replace a clinician. It helps you organize concerns and choose safer next steps.',
+      'Curavon does not diagnose, prescribe, or replace a clinician. It helps you organize concerns and choose safer next steps.',
   },
   {
     id: 'symptoms',
     variant: 'symptoms' as const,
     title: 'Your symptoms, organized',
-    body: "Tell Curavon what's happening, and it helps sort the details into a clearer picture.",
-    safetyNote: 'Curavon helps organize concerns. It does not diagnose.',
+    body: "Tell Curavon what's happening, and it helps organize the details — not diagnose them.",
+    safetyNote: 'Curavon organizes your notes. It does not diagnose.',
   },
   {
     id: 'next-step',
@@ -44,8 +44,8 @@ const STEPS = [
     id: 'signin',
     variant: 'signin' as const,
     title: 'One last step',
-    body: 'Next, set up a private account so your notes, goals, and preferences stay with you.',
-    safetyNote: 'Account setup comes right after this — it only takes a minute.',
+    body: 'Next, set up a local profile on this device. Your notes, goals, and preferences stay here unless you export them.',
+    safetyNote: 'You can export or delete your local data anytime in Profile.',
   },
 ];
 

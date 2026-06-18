@@ -1,8 +1,10 @@
 import type { AskHistoryEntry } from '../types/askIntake';
 import { safeRead, safeRemove, safeWrite } from './healthStorage';
 import { refreshHealthSnapshot } from './healthSnapshot';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { queueSyncForCurrentUser } from '../lib/sync/syncQueue';
 
-export const ASK_HISTORY_KEY = 'curavon_ask_history';
+export const ASK_HISTORY_KEY = APP_STORAGE_KEYS.askHistory;
 
 export function loadAskHistory(): AskHistoryEntry[] {
   return safeRead<AskHistoryEntry[]>(ASK_HISTORY_KEY, []);
@@ -10,6 +12,15 @@ export function loadAskHistory(): AskHistoryEntry[] {
 
 export function saveAskHistory(entries: AskHistoryEntry[]) {
   safeWrite(ASK_HISTORY_KEY, entries);
+  queueSyncForCurrentUser({
+    entityType: 'ask_history',
+    operationType: 'update',
+    payload: {
+      count: entries.length,
+      latestId: entries[0]?.id ?? null,
+      updatedAt: new Date().toISOString(),
+    },
+  });
 }
 
 export function addAskHistoryEntry(

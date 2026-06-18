@@ -17,6 +17,11 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useScreenBack } from '../hooks/useScreenBack';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
 import { CALM_URGENT_TITLE, detectUrgentConcern } from '../utils/healthSafety';
+import { collectFlowBehavior, runMetaSystemCycle } from '../utils/metaSystem';
+import { generateCuravonNextAction } from '../lib/plan/nextActionAdapter';
+import { saveGuideResult } from '../utils/guideResultStorage';
+import type { PlanAction } from '../lib/plan/planTypes';
+import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
 
 type FlowId =
   | 'something-feels-off'
@@ -28,7 +33,7 @@ type FlowId =
   | 'medication-review';
 
 type FilterId = 'all' | 'flows' | 'mind' | 'symptoms' | 'doctor-prep' | 'basics';
-type ViewMode = 'browse' | 'flowDetail' | 'flowRunner' | 'flowResult' | 'guideDetail';
+type ViewMode = 'browse' | 'flowDetail' | 'flowRunner' | 'flowResult' | 'flowSafetyTerminal' | 'guideDetail';
 type QuestionType = 'single' | 'multi' | 'scale' | 'shortText' | 'yesno';
 
 type FlowCard = {
@@ -589,9 +594,9 @@ function isAnswered(question: FlowQuestion, value: unknown): boolean {
 }
 
 export function CareCircleScreen() {
-  const { showToast, openDoctorSummary, pendingGuideFlowId, clearPendingGuideFlow } = useApp();
+  const { showToast, openDoctorSummary, pendingGuideFlowId, clearPendingGuideFlow, setActiveTab } = useApp();
   const { addFromFlow, logRedFlag } = useDoctorSummary();
-  const { openUrgentSafety, closeUrgentSafety } = useHealth();
+  const { openUrgentSafety, closeUrgentSafety, healthSnapshot, nextActionState, healthProfile, refreshHealthSnapshot } = useHealth();
   const [viewMode, setViewMode] = useState<ViewMode>('browse');
   const [selectedFlowId, setSelectedFlowId] = useState<FlowId | null>(null);
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
@@ -601,14 +606,14 @@ export function CareCircleScreen() {
   const [runnerAnswers, setRunnerAnswers] = useState<Record<string, unknown>>({});
   const [resultSaved, setResultSaved] = useState(false);
   const [doctorDraftSaved, setDoctorDraftSaved] = useState(false);
+  const [flowPlanAction, setFlowPlanAction] = useState<PlanAction | null>(null);
   const flowSummarySavedRef = useRef<string | null>(null);
   const [savedGuides, setSavedGuides] = useState<Record<string, boolean>>({});
   const [showGuidesSafety, setShowGuidesSafety] = useState(false);
   const [guidesSafetyTitle, setGuidesSafetyTitle] = useState(CALM_URGENT_TITLE);
   const [guidesSafetyBody, setGuidesSafetyBody] = useState('');
   const [guidesSafetyAcknowledged, setGuidesSafetyAcknowledged] = useState(false);
-  const [pendingAdvance, setPendingAdvance] = useState(false);
-  const [pendingToResult, setPendingToResult] = useState(false);
+  const [flowUrgentTerminal, setFlowUrgentTerminal] = useState(false);
   const [lastSafetySignature, setLastSafetySignature] = useState('');
 
   const selectedFlow = useMemo(
@@ -658,6 +663,8 @@ export function CareCircleScreen() {
 
   const openFlowDetail = (flowId: FlowId) => {
     setSelectedFlowId(flowId);
+    setFlowUrgentTerminal(false);
+    setGuidesSafetyAcknowledged(false);
     setViewMode('flowDetail');
   };
 
@@ -688,12 +695,18 @@ export function CareCircleScreen() {
     setDoctorDraftSaved(false);
     flowSummarySavedRef.current = null;
     setGuidesSafetyAcknowledged(false);
-    setPendingAdvance(false);
-    setPendingToResult(false);
+    setFlowUrgentTerminal(false);
     setLastSafetySignature('');
     setRunnerStep(0);
     setRunnerAnswers({});
+    setFlowPlanAction(null);
     setViewMode('flowRunner');
+    collectFlowBehavior({
+      flowId: selectedFlowId,
+      event: 'start',
+      stepIndex: 0,
+      totalSteps: selectedFlowRunner?.questions?.length,
+    });
   };
 
   const backToBrowse = () => {
@@ -735,14 +748,20 @@ export function CareCircleScreen() {
   };
 
   const proceedRunner = useCallback(() => {
-    if (!selectedFlowRunner?.questions) return;
+    if (!selectedFlowRunner?.questions || flowUrgentTerminal) return;
+    const { urgent } = detectRunnerUrgent(runnerAnswers);
+    if (urgent.hasUrgent) {
+      setFlowUrgentTerminal(true);
+      setViewMode('flowSafetyTerminal');
+      return;
+    }
     const lastStep = selectedFlowRunner.questions.length - 1;
     if (runnerStep >= lastStep) {
       setViewMode('flowResult');
       return;
     }
     setRunnerStep((step) => Math.min(step + 1, lastStep));
-  }, [runnerStep, selectedFlowRunner]);
+  }, [runnerStep, selectedFlowRunner, runnerAnswers, flowUrgentTerminal]);
 
   const openGuidesSafety = useCallback(
     (title: string, body: string) => {
@@ -776,8 +795,24 @@ export function CareCircleScreen() {
   const goRunnerBack = () => {
     if (!selectedFlowRunner?.questions) return;
     if (runnerStep === 0) {
+      if (selectedFlowId) {
+        collectFlowBehavior({
+          flowId: selectedFlowId,
+          event: 'abandon',
+          stepIndex: 0,
+          totalSteps: selectedFlowRunner.questions.length,
+        });
+      }
       setViewMode('flowDetail');
       return;
+    }
+    if (selectedFlowId) {
+      collectFlowBehavior({
+        flowId: selectedFlowId,
+        event: 'back',
+        stepIndex: runnerStep,
+        totalSteps: selectedFlowRunner.questions.length,
+      });
     }
     setRunnerStep((step) => Math.max(step - 1, 0));
   };
@@ -796,48 +831,136 @@ export function CareCircleScreen() {
         });
         setLastSafetySignature(signature);
       }
-      const lastStep = selectedFlowRunner.questions.length - 1;
-      setPendingAdvance(true);
-      setPendingToResult(runnerStep >= lastStep);
+      setFlowUrgentTerminal(true);
+      if (selectedFlowId) {
+        collectFlowBehavior({
+          flowId: selectedFlowId,
+          event: 'skip',
+          stepIndex: runnerStep,
+          totalSteps: selectedFlowRunner.questions.length,
+        });
+      }
       openGuidesSafety(urgent.title, urgent.body);
       return;
+    }
+    if (selectedFlowId) {
+      collectFlowBehavior({
+        flowId: selectedFlowId,
+        event: runnerStep >= selectedFlowRunner.questions.length - 1 ? 'complete' : 'step',
+        stepIndex: runnerStep,
+        totalSteps: selectedFlowRunner.questions.length,
+      });
     }
     proceedRunner();
   };
 
   const saveResult = () => {
     setResultSaved(true);
+    runMetaSystemCycle();
     showToast('Result saved');
   };
 
-  const saveFlowToDoctorSummary = useCallback(() => {
+  const saveFlowToDoctorSummary = useCallback(async () => {
     if (!selectedFlow || !selectedFlowRunner) return;
+    const urgentCheck = detectRunnerUrgent(runnerAnswers);
+    if (flowUrgentTerminal || urgentCheck.urgent.hasUrgent) return;
+
     const answerMap: Record<string, unknown> = {};
     selectedFlowRunner.questions?.forEach((question) => {
       answerMap[question.prompt] = runnerAnswers[question.id];
     });
     const redFlags = detectRunnerUrgent(runnerAnswers).urgent.matches;
+    const concernSummary = Object.values(answerMap)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .map((value) => String(value))
+      .slice(0, 3)
+      .join(' | ');
+
+    const plan = await generateCuravonNextAction({
+      source: 'guides',
+      snapshot: healthSnapshot,
+      intakeResult: {
+        concern: concernSummary || selectedFlow.title,
+        concernType: selectedFlow.tag,
+        redFlags,
+      },
+      latestCheckIn: null,
+      askHistory: [],
+      guideHistory: [{ id: selectedFlow.id, title: selectedFlow.title }],
+      nextActionState,
+      redFlagLogs: [],
+      profile: healthProfile,
+      currentConcern: concernSummary || selectedFlow.title,
+    });
+    setFlowPlanAction({
+      id: plan.actionId.replace(/^guide-v2-/, ''),
+      title: plan.title,
+      actionText: plan.actionText,
+      reason: plan.reason,
+      category: plan.category,
+      safetyLevel: plan.safetyLevel,
+      relatedGuide: plan.relatedGuide,
+      followUpPrompt: plan.followUpPrompt,
+      watchFor: plan.watchFor,
+      sourceSignals: plan.sourceSignals,
+      selectedBy: plan.selectedBy,
+      aiReasoned: plan.aiReasoned,
+      fallbackUsed: plan.fallbackUsed,
+    });
+    saveGuideResult({
+      guideId: selectedFlow.id,
+      guideTitle: selectedFlow.title,
+      completedAt: new Date().toISOString(),
+      resultSummary: concernSummary || selectedFlow.title,
+      safeNextStep: plan.actionText,
+      safetyLevel: plan.safetyLevel,
+      sourceSignals: plan.sourceSignals,
+    });
+    refreshHealthSnapshot();
+    scheduleFollowUpForAction({
+      source: 'guides',
+      action: plan,
+      context: { guideId: selectedFlow.id },
+    });
 
     addFromFlow({
       title: selectedFlow.title,
       answers: answerMap,
       watch: selectedFlowRunner.watch.join('; '),
-      nextStep: selectedFlowRunner.nextStep,
+      nextStep: plan.actionText,
       redFlags,
       category: selectedFlow.tag,
     });
+    collectFlowBehavior({
+      flowId: selectedFlow.id,
+      event: 'complete',
+      stepIndex: selectedFlowRunner.questions?.length ?? 0,
+      totalSteps: selectedFlowRunner.questions?.length,
+    });
     setDoctorDraftSaved(true);
-  }, [selectedFlow, selectedFlowRunner, runnerAnswers, addFromFlow]);
+    runMetaSystemCycle();
+  }, [selectedFlow, selectedFlowRunner, runnerAnswers, addFromFlow, healthSnapshot, nextActionState, healthProfile, refreshHealthSnapshot, flowUrgentTerminal]);
 
   useEffect(() => {
-    if (viewMode !== 'flowResult' || !selectedFlow || !selectedFlowRunner) return;
+    if (viewMode !== 'flowResult' || !selectedFlow || !selectedFlowRunner || flowUrgentTerminal) return;
     if (flowSummarySavedRef.current === selectedFlow.id) return;
     flowSummarySavedRef.current = selectedFlow.id;
-    saveFlowToDoctorSummary();
-  }, [viewMode, selectedFlow, selectedFlowRunner, saveFlowToDoctorSummary]);
+    void saveFlowToDoctorSummary();
+  }, [viewMode, selectedFlow, selectedFlowRunner, saveFlowToDoctorSummary, flowUrgentTerminal]);
+
+  const restartFlow = useCallback(() => {
+    setRunnerStep(0);
+    setRunnerAnswers({});
+    setFlowUrgentTerminal(false);
+    setGuidesSafetyAcknowledged(false);
+    setShowGuidesSafety(false);
+    setFlowPlanAction(null);
+    flowSummarySavedRef.current = null;
+    setViewMode('flowRunner');
+  }, []);
 
   const saveDoctorDraft = () => {
-    saveFlowToDoctorSummary();
+    void saveFlowToDoctorSummary();
     showToast('Saved to Doctor Summary');
   };
 
@@ -847,9 +970,11 @@ export function CareCircleScreen() {
     typeof runnerAnswers.safety === 'string' &&
     ['Yes', "I'm not sure"].includes(runnerAnswers.safety);
 
-  const guidesSafetyNeedsAcknowledgement = showGuidesSafety && pendingAdvance;
-
   const handleGuidesBack = useCallback(() => {
+    if (viewMode === 'flowSafetyTerminal') {
+      backToBrowse();
+      return;
+    }
     if (viewMode === 'flowRunner') {
       goRunnerBack();
       return;
@@ -1165,42 +1290,26 @@ export function CareCircleScreen() {
               <div className="guides-safety-actions">
                 <button
                   type="button"
-                  className="btn btn-secondary btn-glass"
-                  onClick={() => {
-                    setGuidesSafetyAcknowledged(true);
-                    closeGuidesSafety();
-                    if (guidesSafetyNeedsAcknowledgement) {
-                      if (pendingToResult) {
-                        setViewMode('flowResult');
-                      } else {
-                        proceedRunner();
-                      }
-                    }
-                    setPendingAdvance(false);
-                    setPendingToResult(false);
-                  }}
-                >
-                  I understand
-                </button>
-                <button
-                  type="button"
                   className="btn btn-primary btn-pill"
                   onClick={() => {
                     setGuidesSafetyAcknowledged(true);
                     closeGuidesSafety();
                     openDoctorSummary();
-                    if (guidesSafetyNeedsAcknowledgement) {
-                      if (pendingToResult) {
-                        setViewMode('flowResult');
-                      } else {
-                        proceedRunner();
-                      }
-                    }
-                    setPendingAdvance(false);
-                    setPendingToResult(false);
+                    setViewMode('flowSafetyTerminal');
                   }}
                 >
                   Prepare summary
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-glass"
+                  onClick={() => {
+                    setGuidesSafetyAcknowledged(true);
+                    closeGuidesSafety();
+                    setViewMode('flowSafetyTerminal');
+                  }}
+                >
+                  Continue to safety options
                 </button>
               </div>
             </div>
@@ -1223,7 +1332,35 @@ export function CareCircleScreen() {
         </motion.section>
       ) : null}
 
-      {viewMode === 'flowResult' && selectedFlow && selectedFlowRunner ? (
+      {viewMode === 'flowSafetyTerminal' && selectedFlow ? (
+        <motion.section
+          className="guides-result-panel warm-card glass-card-inner"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <h3>Safety check</h3>
+          <p className="guides-result-sub">{guidesSafetyBody || 'This concern may need urgent support.'}</p>
+          <p className="guides-result-sub">
+            Curavon will not suggest a normal self-care step for this flow until you restart or exit.
+          </p>
+          <div className="guides-safety-actions">
+            <button type="button" className="btn btn-primary btn-pill" onClick={openDoctorSummary}>
+              Prepare doctor-ready note
+            </button>
+            <button type="button" className="btn btn-secondary btn-glass" onClick={backToBrowse}>
+              Return to Guides
+            </button>
+            <button type="button" className="btn btn-secondary btn-glass" onClick={() => setActiveTab('home')}>
+              Return to Today
+            </button>
+            <button type="button" className="btn btn-secondary btn-glass" onClick={restartFlow}>
+              Restart flow
+            </button>
+          </div>
+        </motion.section>
+      ) : null}
+
+      {viewMode === 'flowResult' && selectedFlow && selectedFlowRunner && !flowUrgentTerminal ? (
         <motion.section
           className="guides-result-panel warm-card glass-card-inner"
           initial={{ opacity: 0, y: 10 }}
@@ -1253,8 +1390,9 @@ export function CareCircleScreen() {
           </div>
 
           <div className="guides-result-block">
-            <h4>Your next safe step</h4>
-            <p>{selectedFlowRunner.nextStep}</p>
+            <h4>{flowPlanAction?.title || 'Your next safe step'}</h4>
+            <p>{flowPlanAction?.actionText || selectedFlowRunner.nextStep}</p>
+            {flowPlanAction?.reason ? <p>{flowPlanAction.reason}</p> : null}
           </div>
 
           <div className="guides-result-block">

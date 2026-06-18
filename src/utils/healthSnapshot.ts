@@ -1,15 +1,27 @@
 import type { AskHistoryEntry } from '../types/askIntake';
 import type { DoctorSummaryItem, RedFlagLog } from '../types/doctorSummary';
-import type { DailyCheckIn, NextActionState } from '../types/health';
+import type { DailyCheckIn, HealthProfile, NextActionState } from '../types/health';
 import type { HealthSnapshot, SnapshotFocusArea, SnapshotTrend } from '../types/healthSnapshot';
-import { safeRead, safeWrite, todayDateKey } from './healthStorage';
+import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
+import type { GuideResultRecord } from './guideResultStorage';
+import { loadGuideResults } from './guideResultStorage';
+import {
+  createDefaultHealthProfile,
+  safeRead,
+  safeWrite,
+  todayDateKey,
+} from './healthStorage';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { queueSyncForCurrentUser } from '../lib/sync/syncQueue';
 
-const DAILY_CHECKINS_KEY = 'curavon_daily_checkins';
-const ASK_HISTORY_KEY = 'curavon_ask_history';
-const NEXT_ACTION_KEY = 'curavon_next_action_state';
-const DOCTOR_ITEMS_KEY = 'curavon_doctor_summary_items';
-const RED_FLAGS_KEY = 'curavon_red_flag_logs';
-export const HEALTH_SNAPSHOT_KEY = 'curavon_health_snapshot';
+const DAILY_CHECKINS_KEY = APP_STORAGE_KEYS.dailyCheckins;
+const ASK_HISTORY_KEY = APP_STORAGE_KEYS.askHistory;
+const NEXT_ACTION_KEY = APP_STORAGE_KEYS.nextActionState;
+const DOCTOR_ITEMS_KEY = APP_STORAGE_KEYS.doctorSummaryItems;
+const RED_FLAGS_KEY = APP_STORAGE_KEYS.redFlagLogs;
+const FOLLOW_UPS_KEY = APP_STORAGE_KEYS.followUps;
+const HEALTH_PROFILE_KEY = APP_STORAGE_KEYS.healthProfile;
+export const HEALTH_SNAPSHOT_KEY = APP_STORAGE_KEYS.healthSnapshot;
 
 const MOOD_SCORE: Record<string, number> = {
   Clear: 4,
@@ -88,6 +100,76 @@ function lastNDates(n: number): string[] {
   });
 }
 
+function buildProfileContext(profile: HealthProfile): HealthSnapshot['profileContext'] {
+  const goals = profile.primaryGoals.filter(Boolean).slice(0, 3);
+  return {
+    goalCount: profile.primaryGoals.length,
+    hasMedications: profile.medications.length > 0,
+    hasConditions: profile.conditions.length > 0,
+    primaryGoalsSummary: goals.length > 0 ? goals.join(', ') : 'No goals noted yet',
+  };
+}
+
+function buildFollowUpSignals(followUps: FollowUpRecord[]): HealthSnapshot['followUpSignals'] {
+  const recent = followUps.filter(
+    (item) => item.status === 'completed' && inLastDays(item.createdAt, 14),
+  );
+  const recentHelped = recent.filter((item) => item.outcome === 'helped').length;
+  const recentBlocked = recent.filter(
+    (item) => item.outcome === 'blocked' || item.outcome === 'not_done',
+  ).length;
+  const recentWorse = recent.filter((item) => item.outcome === 'worse').length;
+  const recentNotDone = recent.filter((item) => item.outcome === 'not_done').length;
+  return {
+    recentHelped,
+    recentBlocked,
+    recentWorse,
+    recentNotDone,
+    repeatedBlocked: recentBlocked >= 2,
+    repeatedWorse: recentWorse >= 2,
+  };
+}
+
+function buildGuideActivity(guideResults: GuideResultRecord[]): HealthSnapshot['guideActivity'] {
+  const recent = guideResults.filter((item) => inLastDays(item.completedAt, 14));
+  return {
+    recentGuideTitles: recent.slice(0, 3).map((item) => item.guideTitle),
+    recentGuideCount: recent.length,
+  };
+}
+
+function buildSafetySignalSummary(redFlags: RedFlagLog[], followUpSignals: HealthSnapshot['followUpSignals']): string {
+  const recentFlags = redFlags.filter((log) => inLastDays(log.createdAt, 7));
+  if (recentFlags.length >= 2) {
+    return 'Multiple urgent concerns were noted recently. Safety-aware support is prioritized.';
+  }
+  if (recentFlags.length === 1) {
+    return 'A recent urgent concern was logged. Patterns are tracked without diagnosis.';
+  }
+  if (followUpSignals.repeatedWorse) {
+    return 'Follow-up responses suggest worsening patterns. Clinician preparation may help.';
+  }
+  return 'No recent urgent safety pattern detected in stored notes.';
+}
+
+function collectRecentBlockers(
+  doctorItems: DoctorSummaryItem[],
+  nextAction: NextActionState | null,
+): string[] {
+  const blockers: string[] = [];
+  doctorItems
+    .filter((item) => item.type === 'next_action' && /status:\s*blocked/i.test(item.content) && inLastDays(item.createdAt, 14))
+    .slice(0, 2)
+    .forEach((item) => {
+      const match = item.content.match(/blocker:\s*([^|]+)/i);
+      blockers.push(match?.[1]?.trim() || 'Action blocked recently');
+    });
+  if (nextAction?.status === 'blocked' && nextAction.blockedLabel) {
+    blockers.unshift(nextAction.blockedLabel);
+  }
+  return Array.from(new Set(blockers)).slice(0, 3);
+}
+
 export function createEmptyHealthSnapshot(): HealthSnapshot {
   return {
     updatedAt: new Date().toISOString(),
@@ -112,7 +194,27 @@ export function createEmptyHealthSnapshot(): HealthSnapshot {
       frequentAskUsage: false,
       repeatedBlockedActions: false,
     },
-    recommendedFocusArea: 'routine stabilization',
+    profileContext: {
+      goalCount: 0,
+      hasMedications: false,
+      hasConditions: false,
+      primaryGoalsSummary: 'No goals noted yet',
+    },
+    followUpSignals: {
+      recentHelped: 0,
+      recentBlocked: 0,
+      recentWorse: 0,
+      recentNotDone: 0,
+      repeatedBlocked: false,
+      repeatedWorse: false,
+    },
+    guideActivity: {
+      recentGuideTitles: [],
+      recentGuideCount: 0,
+    },
+    safetySignalSummary: 'No recent urgent safety pattern detected in stored notes.',
+    recentBlockers: [],
+    recommendedFocusArea: 'routine_stabilization',
     trendSummary: 'Build consistency with one small daily check-in.',
   };
 }
@@ -121,35 +223,55 @@ function chooseFocusArea(
   risk: HealthSnapshot['riskSignals'],
   trends: HealthSnapshot['currentState'],
   engagement: HealthSnapshot['engagementSignals'],
+  followUpSignals: HealthSnapshot['followUpSignals'],
 ): SnapshotFocusArea {
-  if (risk.repeatedRedFlags) return 'preparation for clinician visit';
-  if (risk.increasingSymptomFrequency) return 'symptom tracking consistency';
+  if (followUpSignals.repeatedWorse || risk.repeatedRedFlags) {
+    return followUpSignals.repeatedWorse ? 'safety_awareness' : 'clinician_preparation';
+  }
+  if (followUpSignals.repeatedBlocked || engagement.repeatedBlockedActions) {
+    return 'reduce_friction';
+  }
+  if (risk.increasingSymptomFrequency) return 'symptom_tracking';
   if (trends.stressTrend === 'declining' || trends.moodTrend === 'declining') {
-    return 'stress reduction support';
+    return 'stress_support';
   }
   if (trends.sleepTrend === 'declining' || trends.energyTrend === 'declining') {
-    return 'rest and recovery';
+    return 'general_wellness';
   }
-  if (engagement.repeatedBlockedActions || engagement.missedCheckins >= 3) {
-    return 'routine stabilization';
-  }
-  return 'symptom tracking consistency';
+  if (engagement.missedCheckins >= 3) return 'routine_stabilization';
+  return 'symptom_tracking';
 }
 
-function trendSummary(currentState: HealthSnapshot['currentState'], focus: SnapshotFocusArea): string {
+function formatFocusLabel(focus: SnapshotFocusArea): string {
+  return focus.replace(/_/g, ' ');
+}
+
+function trendSummary(
+  currentState: HealthSnapshot['currentState'],
+  focus: SnapshotFocusArea,
+  profileContext: HealthSnapshot['profileContext'],
+  guideActivity: HealthSnapshot['guideActivity'],
+): string {
   const declining = Object.entries(currentState)
     .filter(([, trend]) => trend === 'declining')
     .map(([key]) => key.replace('Trend', ''));
+  const focusLabel = formatFocusLabel(focus);
+  const guideHint =
+    guideActivity.recentGuideCount > 0
+      ? ` Recent guided flow activity: ${guideActivity.recentGuideTitles.slice(0, 2).join(', ')}.`
+      : '';
+  const goalHint =
+    profileContext.goalCount > 0 ? ` Profile goals noted: ${profileContext.primaryGoalsSummary}.` : '';
   if (declining.length > 0) {
-    return `${declining.slice(0, 2).join(' and ')} patterns look heavier recently. Focus: ${focus}.`;
+    return `${declining.slice(0, 2).join(' and ')} patterns look heavier recently. Focus: ${focusLabel}.${goalHint}${guideHint}`;
   }
   const improving = Object.entries(currentState)
     .filter(([, trend]) => trend === 'improving')
     .map(([key]) => key.replace('Trend', ''));
   if (improving.length > 0) {
-    return `${improving.slice(0, 2).join(' and ')} patterns look steadier. Keep focus on ${focus}.`;
+    return `${improving.slice(0, 2).join(' and ')} patterns look steadier. Keep focus on ${focusLabel}.${guideHint}`;
   }
-  return `Patterns are mostly stable. Keep focus on ${focus}.`;
+  return `Patterns are mostly stable. Keep focus on ${focusLabel}.${goalHint}${guideHint}`;
 }
 
 export function buildHealthSnapshot(): HealthSnapshot {
@@ -160,8 +282,25 @@ export function buildHealthSnapshot(): HealthSnapshot {
   const nextAction = safeRead<NextActionState | null>(NEXT_ACTION_KEY, null);
   const doctorItems = safeRead<DoctorSummaryItem[]>(DOCTOR_ITEMS_KEY, []);
   const redFlags = safeRead<RedFlagLog[]>(RED_FLAGS_KEY, []);
+  const profile = safeRead<HealthProfile>(HEALTH_PROFILE_KEY, createDefaultHealthProfile());
+  const followUps = safeRead<FollowUpRecord[]>(FOLLOW_UPS_KEY, []);
+  const guideResults = loadGuideResults();
 
-  if (checkins.length === 0 && askHistory.length === 0 && !nextAction && redFlags.length === 0) {
+  const profileContext = buildProfileContext(profile);
+  const followUpSignals = buildFollowUpSignals(followUps);
+  const guideActivity = buildGuideActivity(guideResults);
+  const safetySignalSummary = buildSafetySignalSummary(redFlags, followUpSignals);
+  const recentBlockers = collectRecentBlockers(doctorItems, nextAction);
+
+  if (
+    checkins.length === 0 &&
+    askHistory.length === 0 &&
+    !nextAction &&
+    redFlags.length === 0 &&
+    followUps.length === 0 &&
+    guideResults.length === 0 &&
+    profileContext.goalCount === 0
+  ) {
     return createEmptyHealthSnapshot();
   }
 
@@ -179,6 +318,11 @@ export function buildHealthSnapshot(): HealthSnapshot {
   });
   askHistory.slice(0, 10).forEach((entry) => {
     extractSymptoms(`${entry.concern} ${entry.nextStep} ${entry.concernType}`).forEach((symptom) => {
+      symptomCounts.set(symptom, (symptomCounts.get(symptom) ?? 0) + 1);
+    });
+  });
+  guideResults.slice(0, 5).forEach((entry) => {
+    extractSymptoms(entry.resultSummary).forEach((symptom) => {
       symptomCounts.set(symptom, (symptomCounts.get(symptom) ?? 0) + 1);
     });
   });
@@ -221,7 +365,7 @@ export function buildHealthSnapshot(): HealthSnapshot {
   const recentCheckinDates = new Set(checkins.slice(0, 14).map((c) => c.date));
   const missedCheckins = lastNDates(7).filter((date) => !recentCheckinDates.has(date)).length;
   const frequentAskUsage = askHistory.filter((entry) => inLastDays(entry.createdAt, 7)).length >= 3;
-  const repeatedBlockedActions = blockedActions >= 2;
+  const repeatedBlockedActions = blockedActions >= 2 || followUpSignals.repeatedBlocked;
 
   const currentState = { moodTrend, energyTrend, stressTrend, sleepTrend };
   const riskSignals = {
@@ -235,7 +379,12 @@ export function buildHealthSnapshot(): HealthSnapshot {
     repeatedBlockedActions,
   };
 
-  const recommendedFocusArea = chooseFocusArea(riskSignals, currentState, engagementSignals);
+  const recommendedFocusArea = chooseFocusArea(
+    riskSignals,
+    currentState,
+    engagementSignals,
+    followUpSignals,
+  );
 
   return {
     updatedAt: new Date().toISOString(),
@@ -247,17 +396,37 @@ export function buildHealthSnapshot(): HealthSnapshot {
     },
     riskSignals,
     engagementSignals,
+    profileContext,
+    followUpSignals,
+    guideActivity,
+    safetySignalSummary,
+    recentBlockers,
     recommendedFocusArea,
-    trendSummary: trendSummary(currentState, recommendedFocusArea),
+    trendSummary: trendSummary(currentState, recommendedFocusArea, profileContext, guideActivity),
   };
 }
 
 export function saveHealthSnapshot(snapshot: HealthSnapshot) {
   safeWrite(HEALTH_SNAPSHOT_KEY, snapshot);
+  queueSyncForCurrentUser({
+    entityType: 'memory_snapshot',
+    operationType: 'update',
+    payload: {
+      updatedAt: snapshot.updatedAt,
+      focus: snapshot.recommendedFocusArea,
+    },
+  });
 }
 
 export function loadHealthSnapshot(): HealthSnapshot {
-  return safeRead<HealthSnapshot>(HEALTH_SNAPSHOT_KEY, createEmptyHealthSnapshot());
+  const stored = safeRead<HealthSnapshot>(HEALTH_SNAPSHOT_KEY, createEmptyHealthSnapshot());
+  return {
+    ...createEmptyHealthSnapshot(),
+    ...stored,
+    profileContext: { ...createEmptyHealthSnapshot().profileContext, ...stored.profileContext },
+    followUpSignals: { ...createEmptyHealthSnapshot().followUpSignals, ...stored.followUpSignals },
+    guideActivity: { ...createEmptyHealthSnapshot().guideActivity, ...stored.guideActivity },
+  };
 }
 
 export function refreshHealthSnapshot(): HealthSnapshot {
