@@ -280,9 +280,9 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     text: '#EEF2FA',
 
-    textSecondary: '#B8C4DC',
+    textSecondary: '#DEE7F8',
 
-    textMuted: '#8898B8',
+    textMuted: '#CEDAF0',
 
     border: 'rgba(255, 255, 255, 0.1)',
 

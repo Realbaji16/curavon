@@ -3,7 +3,6 @@ import { CheckCircle2, Circle, AlertCircle, FileText, ChevronRight } from 'lucid
 import { useApp } from '../context/AppContext';
 import { themes } from '../theme/themes';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { DoctorSummary } from '../components/DoctorSummary';
 import { staggerContainer, fadeUp, tapScale } from '../motion/variants';
 
 const FLOW = {
@@ -45,8 +44,9 @@ const SECTIONS = [
   },
 ];
 
+/** @deprecated Legacy placeholder screen. Flow tab now routes to CareCircleScreen. */
 export function FullFlowScreen() {
-  const { theme, blockedReason, openDoctorSummary, showDoctorSummary, closeDoctorSummary } = useApp();
+  const { theme, blockedReason, openDoctorSummary } = useApp();
   const tokens = themes[theme];
   const progressPct = (FLOW.progress / FLOW.total) * 100;
 
@@ -152,15 +152,6 @@ export function FullFlowScreen() {
           <ChevronRight size={18} className="icon-muted" />
         </motion.button>
       </motion.div>
-
-      {showDoctorSummary && (
-        <div className="summary-overlay">
-          <div className="summary-overlay-backdrop" onClick={closeDoctorSummary} />
-          <div className="summary-overlay-panel">
-            <DoctorSummary variant="full" onClose={closeDoctorSummary} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

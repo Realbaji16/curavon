@@ -3,10 +3,15 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 
 import { AppProvider, useApp } from './context/AppContext';
+import { HealthProvider, useHealth } from './context/HealthContext';
+import { DoctorSummaryProvider } from './context/DoctorSummaryContext';
+import { CuravonAuthProvider } from './lib/auth/authProvider';
 
 import { TabBar } from './components/TabBar';
+import { DoctorSummaryOverlay } from './components/DoctorSummaryOverlay';
 
 import { Toast } from './components/ScreenHeader';
+import { PhoneChrome } from './components/PhoneChrome';
 
 import { CloudBackground, moodForTab, type CloudMood } from './components/CloudBackground';
 
@@ -16,11 +21,10 @@ import { HomeScreen } from './screens/Home';
 
 import { AskCuravonScreen } from './screens/AskCuravon';
 
-import { FullFlowScreen } from './screens/FullFlow';
-
 import { CareCircleScreen } from './screens/CareCircle';
 
 import { SettingsScreen } from './screens/Settings';
+import { AuthFlow } from './screens/AuthFlow';
 
 import { softPageTransition } from './motion/variants';
 
@@ -86,7 +90,10 @@ function PhoneFrameShell({
 
       <div className="phone-ui-layer">{children}</div>
 
+      <DoctorSummaryOverlay />
 
+      <PhoneChrome />
+      <Toast />
 
       <div className="phone-home-indicator" aria-hidden="true" />
 
@@ -100,7 +107,17 @@ function PhoneFrameShell({
 
 function PhoneShell() {
 
-  const { onboardingComplete, activeTab, sensitiveMode, showSafetyEscalation, theme } = useApp();
+  const {
+    onboardingComplete,
+    authDemoUser,
+    setupComplete,
+    activeTab,
+    showSafetyEscalation,
+    theme,
+  } = useApp();
+
+  const { healthProfile } = useHealth();
+  const sensitiveMode = healthProfile.sensitiveMode;
 
 
 
@@ -130,6 +147,14 @@ function PhoneShell() {
 
   }
 
+  if (!authDemoUser || !setupComplete) {
+    return (
+      <PhoneFrameShell cloudMood="onboarding" theme={theme}>
+        <AuthFlow />
+      </PhoneFrameShell>
+    );
+  }
+
 
 
   const screens: Record<string, ReactNode> = {
@@ -138,7 +163,7 @@ function PhoneShell() {
 
     ask: <AskCuravonScreen />,
 
-    flow: <FullFlowScreen />,
+    flow: <CareCircleScreen />,
 
     circle: <CareCircleScreen />,
 
@@ -208,8 +233,6 @@ function PhoneShell() {
 
       <TabBar />
 
-      <Toast />
-
     </PhoneFrameShell>
 
   );
@@ -223,25 +246,21 @@ function App() {
   return (
 
     <MotionConfig reducedMotion="user">
-
-      <AppProvider>
-
-        <div className="app-root">
-
-          <div className="phone-scaler">
-
-            <div className="phone-device">
-
-              <PhoneShell />
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </AppProvider>
-
+      <CuravonAuthProvider mode="local_demo">
+        <AppProvider>
+          <HealthProvider>
+            <DoctorSummaryProvider>
+              <div className="app-root">
+                <div className="phone-scaler">
+                  <div className="phone-device">
+                    <PhoneShell />
+                  </div>
+                </div>
+              </div>
+            </DoctorSummaryProvider>
+          </HealthProvider>
+        </AppProvider>
+      </CuravonAuthProvider>
     </MotionConfig>
 
   );

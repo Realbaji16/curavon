@@ -1,13 +1,43 @@
 /** Deterministic star positions for night sky — no random flicker on re-render. */
-const STARS = Array.from({ length: 72 }, (_, i) => ({
-  id: i,
-  left: ((i * 137.508 + 11) % 96) + 2,
-  top: ((i * 89.317 + 5) % 78) + 4,
-  size: i % 7 === 0 ? 2.2 : i % 3 === 0 ? 1.6 : 1.1,
-  opacity: 0.35 + (i % 5) * 0.12,
-  delay: (i * 0.37) % 5,
-  twinkle: i % 4 !== 0,
-}));
+type StarSpec = {
+  id: number;
+  left: number;
+  top: number;
+  size: number;
+  opacity: number;
+  delay: number;
+  twinkle: boolean;
+};
+
+function createSeededRandom(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+const rand = createSeededRandom(20260618);
+const STAR_COUNT = 74;
+
+const STARS: StarSpec[] = Array.from({ length: STAR_COUNT }, (_, i) => {
+  // Slightly bias stars toward upper sky while keeping broad spread.
+  const left = 2 + rand() * 96;
+  const top = 3 + Math.pow(rand(), 1.25) * 79;
+
+  const sizeRoll = rand();
+  const size = sizeRoll > 0.92 ? 2.35 : sizeRoll > 0.68 ? 1.75 : 1.15;
+
+  return {
+    id: i,
+    left,
+    top,
+    size,
+    opacity: 0.28 + rand() * 0.66,
+    delay: rand() * 5.2,
+    twinkle: rand() > 0.22,
+  };
+});
 
 export function StarField() {
   return (
@@ -26,7 +56,10 @@ export function StarField() {
           }}
         />
       ))}
-      <div className="star-moon-glow" />
+      <div className="star-moon-wrap">
+        <div className="star-moon-glow" />
+        <div className="star-moon" />
+      </div>
     </div>
   );
 }

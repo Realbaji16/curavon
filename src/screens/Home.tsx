@@ -1,59 +1,31 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2,
   Ban,
   SlidersHorizontal,
-  ChevronDown,
-  Clock,
-  GitBranch,
-  BellOff,
+  BookOpen,
   FileText,
-  ChevronRight,
-  Droplets,
+  Sparkles,
+  ClipboardCheck,
+  CalendarDays,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import type { BlockedReason } from '../context/AppContext';
+import { useHealth } from '../context/HealthContext';
 import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
-import { BlockedReasonSheet } from '../components/BottomSheets';
-import { DoctorSummary } from '../components/DoctorSummary';
-import { StreakCard } from '../components/StreakCard';
+import { TodayCheckIn } from '../components/TodayCheckIn';
+import { HealthActionSheets } from '../components/HealthActionSheets';
 import { staggerContainer, fadeUp, tapScale, cardEntrance } from '../motion/variants';
+import { buildNextBestActionPlan } from '../utils/nextBestActionEngine';
+import { readCuravonMemorySnapshot } from '../utils/nextBestActionMemory';
+import type { SupportingInsightCard } from '../types/nextBestAction';
+import type { FollowUpOutcome } from '../lib/followUp/followUpTypes';
 
-const ACTIONS = {
-  default: {
-    title: "Today's Next Best Action",
-    task: 'Drink a glass of water and log your energy tonight.',
-    timeframe: '2 minutes',
-    why: 'This helps Curavon understand whether your energy pattern is improving.',
-    icon: Droplets,
-  },
-  adjusted: {
-    title: 'Gentler alternative',
-    task: 'Take three slow sips of water and note how you feel.',
-    timeframe: '1 minute',
-    why: 'When energy is low, micro-actions still count. Small wins build momentum.',
-    icon: Droplets,
-  },
-};
-
-const BLOCKED_MESSAGES: Record<NonNullable<BlockedReason>, string> = {
-  time: 'Set a 2-minute timer — stand up and take five slow breaths.',
-  forgot: 'Leave a glass of water where you\'ll see it tonight.',
-  hard: 'Just one sip of water counts. That\'s enough for today.',
-  confusing: 'Skip logging tonight — we\'ll keep it simpler next time.',
-  worse: 'Rest first. When you\'re ready, a brief note about how you feel helps.',
-  cost: 'Drink tap water and take a free 3-minute walk indoors.',
-  work: 'Do ten desk stretches while something brews — no extra time needed.',
-  other: 'Try the smallest version: one sip, one breath, one minute.',
-};
-
-const FLOW_PREVIEW = {
-  title: 'Energy & Sleep Flow',
-  stage: 'Tracking patterns',
-  progress: 2,
-  total: 4,
-};
+function formatFocusArea(area: string): string {
+  return area.replace(/_/g, ' ');
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -62,56 +34,89 @@ function getGreeting() {
   return 'Good evening';
 }
 
-const RECENT_CONCERNS = [
-  { label: 'Afternoon energy dips', updated: '2 days ago' },
-  { label: 'Sleep routine', updated: 'This week' },
-];
+function formatTodayLabel() {
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function categoryLabel(category: string | undefined): string {
+  if (!category) return 'stabilize';
+  switch (category) {
+    case 'stabilize':
+      return 'stabilize';
+    case 'track':
+      return 'track';
+    case 'prepare':
+      return 'prepare';
+    case 'reduce_friction':
+      return 'reduce friction';
+    case 'escalate':
+      return 'escalate';
+    default:
+      return 'stabilize';
+  }
+}
 
 export function HomeScreen() {
   const {
-    onboardingData,
-    actionDone,
-    actionAdjusted,
-    blockedReason,
-    markActionDone,
-    adjustAction,
-    openBlockedSheet,
-    whyExpanded,
-    toggleWhyExpanded,
-    streak,
-    smartSilence,
     setActiveTab,
     openDoctorSummary,
-    showDoctorSummary,
-    closeDoctorSummary,
+    openGuidesWithFlow,
+    showToast,
   } = useApp();
+  const {
+    healthProfile,
+    dailyCheckins,
+    todayCheckIn,
+    nextActionState,
+    healthSnapshot,
+    openCheckIn,
+    markActionDone,
+    openHealthBlockedSheet,
+    openHealthAdjustSheet,
+    saveCurrentActionToSummary,
+    dueFollowUp,
+    submitFollowUpOutcome,
+  } = useHealth();
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
+  const [followUpNote, setFollowUpNote] = useState('');
+  const [followUpResult, setFollowUpResult] = useState('');
 
-  let action: {
-    title: string;
-    task: string;
-    timeframe?: string;
-    why: string;
-    icon: typeof Droplets;
-  } = { ...ACTIONS.default };
+  const name = healthProfile.preferredName.trim();
+  const greetingLine = name ? `${getGreeting()}, ${name}` : 'Welcome back';
+  const sensitiveMode = healthProfile.sensitiveMode;
+  const hasCheckInToday = Boolean(todayCheckIn);
+  const actionStatus = nextActionState?.status ?? 'pending';
+  const isDone = actionStatus === 'done';
+  const actionText = nextActionState?.currentAction ?? '';
 
-  if (actionAdjusted && !blockedReason) {
-    action = { ...ACTIONS.adjusted, icon: ACTIONS.default.icon };
-  }
-  if (blockedReason) {
-    action = {
-      ...ACTIONS.default,
-      task: BLOCKED_MESSAGES[blockedReason],
-      title: 'Adjusted for today',
-      why: 'When something gets in the way, a smaller step still keeps you moving forward.',
+  const personalizationPlan = useMemo(() => {
+    const snapshot = readCuravonMemorySnapshot();
+    const merged = {
+      ...snapshot,
+      healthProfile,
+      dailyCheckins,
+      nextActionState,
     };
-  }
+    // Legacy next-action path. Supporting insights only — hero action reads persisted nextActionState.
+    return buildNextBestActionPlan(merged);
+  }, [healthProfile, dailyCheckins, nextActionState]);
 
-  const heroKey = `${actionAdjusted}-${blockedReason}-${action.title}`;
+  const noCheckInSignal = !hasCheckInToday;
+  const canRespondToAction = Boolean(nextActionState) && !noCheckInSignal;
+
+  const safetyNote =
+    nextActionState?.safetyLevel && nextActionState.safetyLevel !== 'normal'
+      ? 'If symptoms are severe, sudden, or unsafe, seek local urgent or emergency support.'
+      : null;
+  const sourceChips = (nextActionState?.sourceSignals ?? []).slice(0, 3);
 
   const handleDone = () => {
-    if (actionDone) return;
+    if (isDone || !canRespondToAction) return;
     setDonePressed(true);
     markActionDone();
     setShowDoneMessage(true);
@@ -119,265 +124,304 @@ export function HomeScreen() {
     setTimeout(() => setDonePressed(false), 280);
   };
 
-  const handleAdjust = () => {
-    adjustAction();
+  const handleRelatedGuide = () => {
+    if (nextActionState?.relatedGuideFlowId) {
+      openGuidesWithFlow(nextActionState.relatedGuideFlowId);
+      return;
+    }
+    setActiveTab('circle');
+    const guideName = nextActionState?.relatedGuide;
+    if (guideName) {
+      showToast(`Recommended guide: ${guideName}`);
+    }
   };
 
-  const ActionIcon = action.icon;
+  const handleInsightAction = (card: SupportingInsightCard) => {
+    if (card.actionTarget === 'checkin') {
+      openCheckIn();
+      return;
+    }
+    if (card.actionTarget === 'summary') {
+      openDoctorSummary();
+      return;
+    }
+    if (card.actionTarget === 'profile') {
+      setActiveTab('settings');
+      return;
+    }
+    if (card.actionTarget === 'guides') {
+      setActiveTab('circle');
+    }
+  };
+
+  const handleFollowUpOutcome = (outcome: FollowUpOutcome) => {
+    submitFollowUpOutcome(outcome, followUpNote);
+    if (outcome === 'worse') {
+      setFollowUpResult('Safety noted. Curavon will prioritize a safer next step.');
+    } else if (outcome === 'blocked' || outcome === 'partly_helped' || outcome === 'not_done') {
+      setFollowUpResult('Got it. Curavon will adjust the next step.');
+    } else {
+      setFollowUpResult('Saved. This may help your doctor summary.');
+    }
+    setFollowUpNote('');
+  };
 
   return (
-    <div className="screen home-screen">
+    <div className="screen home-screen home-screen--today">
       <ScreenHeader showThemeToggle />
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible">
-        <motion.div className="home-greeting" variants={fadeUp}>
-          <p className="greeting-time">{getGreeting()}, Alex</p>
-          <h2 className="greeting-name">Today&apos;s next best action</h2>
-          <p className="greeting-status">
-            {actionDone
-              ? 'You completed today\'s action — well done.'
-              : 'One clear, safe step is ready when you are.'}
+      <motion.div className="home-today-stack" variants={staggerContainer} initial="hidden" animate="visible">
+        <motion.header className="home-greeting home-greeting--today" variants={fadeUp}>
+          <span className="home-date-pill">
+            <CalendarDays size={14} aria-hidden="true" />
+            {formatTodayLabel()}
+          </span>
+          <h1 className="home-greeting-title">{greetingLine}</h1>
+          <p className="home-greeting-lede">One safer next step based on what you&apos;ve shared.</p>
+        </motion.header>
+
+        <motion.section className="home-pattern-card warm-card glass-card-inner" variants={fadeUp}>
+          <p className="home-pattern-label">Your current pattern</p>
+          <p className="home-pattern-summary">{healthSnapshot.trendSummary}</p>
+          <p className="home-pattern-focus">
+            Focus area: <strong>{formatFocusArea(healthSnapshot.recommendedFocusArea)}</strong>
           </p>
-          {onboardingData.goals.length > 0 && (
-            <p className="greeting-goals">
-              Focus:{' '}
-              <SensitiveBlur sensitive>{onboardingData.goals.join(' · ')}</SensitiveBlur>
-            </p>
-          )}
-        </motion.div>
+        </motion.section>
+
+        {dueFollowUp ? (
+          <motion.section className="home-pattern-card warm-card glass-card-inner" variants={fadeUp}>
+            <p className="home-pattern-label">Quick follow-up</p>
+            <p className="home-pattern-summary">{dueFollowUp.prompt}</p>
+            <input
+              type="text"
+              className="field-input"
+              value={followUpNote}
+              onChange={(event) => setFollowUpNote(event.target.value)}
+              placeholder="Optional short note"
+            />
+            <div className="action-buttons action-buttons--today">
+              <button type="button" className="action-btn btn-health-done done-btn" onClick={() => handleFollowUpOutcome('helped')}>
+                Helped
+              </button>
+              <button type="button" className="action-btn btn-health-adjust adjust-btn" onClick={() => handleFollowUpOutcome('partly_helped')}>
+                Partly
+              </button>
+              <button type="button" className="action-btn btn-health-blocked blocked-btn" onClick={() => handleFollowUpOutcome('blocked')}>
+                Blocked
+              </button>
+              <button type="button" className="action-btn btn-health-adjust adjust-btn" onClick={() => handleFollowUpOutcome('not_done')}>
+                Not done
+              </button>
+              <button type="button" className="action-btn btn-health-blocked blocked-btn" onClick={() => handleFollowUpOutcome('worse')}>
+                Worse
+              </button>
+            </div>
+            {followUpResult ? <p className="home-hero-note">{followUpResult}</p> : null}
+          </motion.section>
+        ) : null}
 
         <AnimatePresence mode="wait">
-          <motion.div
-            key={heroKey}
-            className="hero-action-card hero-card hero-action-card--premium"
+          <motion.section
+            key={nextActionState?.actionId ?? 'hero-action'}
+            className="home-hero-card hero-action-card hero-card hero-action-card--premium"
             variants={cardEntrance}
             initial="hidden"
             animate="visible"
             exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2 } }}
+            aria-label="Today's next best action"
           >
             <div className="hero-card-glow" aria-hidden="true" />
-            <div className="hero-card-header">
-              <ActionIcon size={22} className="hero-card-icon" />
-              <span className="hero-label">{action.title}</span>
+            <div className="home-hero-top">
+              <div className="hero-card-header">
+                <span className="home-hero-icon-wrap" aria-hidden="true">
+                  <Sparkles size={20} />
+                </span>
+                <div>
+                  <span className="hero-label">{nextActionState?.title ?? "Today's next step"}</span>
+                  <p className="home-hero-sub">One clear step — calm and safe.</p>
+                </div>
+              </div>
+              <span
+                className={`home-status-pill ${hasCheckInToday ? 'home-status-pill--ready' : ''}`}
+                title="Primary action category"
+              >
+                {categoryLabel(nextActionState?.category)}
+              </span>
             </div>
 
-            <AnimatePresence mode="wait">
-              {actionAdjusted && !blockedReason && (
-                <motion.div
-                  key="adjust-hint"
-                  className="adjust-hint"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.22 }}
+            {noCheckInSignal ? (
+              <div className="home-hero-empty">
+                <div className="home-hero-empty-icon" aria-hidden="true">
+                  <ClipboardCheck size={28} strokeWidth={1.5} />
+                </div>
+                <p className="hero-task hero-task--prompt">
+                  Complete today&apos;s check-in to get your next safe step.
+                </p>
+                <motion.button
+                  type="button"
+                  className="btn btn-primary checkin-start-btn"
+                  {...tapScale}
+                  onClick={openCheckIn}
                 >
-                  <p className="adjust-hint-title">Let&apos;s make this smaller.</p>
-                  <p className="adjust-hint-sub">A smaller step still counts.</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  Start check-in
+                </motion.button>
+              </div>
+            ) : (
+              <div className="home-hero-body">
+                {actionStatus === 'adjusted' && (
+                  <p className="home-hero-note">A smaller version of your step.</p>
+                )}
+                {actionStatus === 'blocked' && (
+                  <p className="home-hero-note">We&apos;ll keep this gentle for today.</p>
+                )}
+                <p className="home-hero-why-label">Why this step</p>
+                <p className="home-hero-why-text">{nextActionState?.reason ?? 'Based on your latest check-in and notes.'}</p>
+                <p className="hero-task hero-task--action">
+                  <SensitiveBlur sensitive={sensitiveMode}>
+                    {nextActionState?.currentAction || actionText}
+                  </SensitiveBlur>
+                </p>
+                {sourceChips.length ? (
+                  <div className="hero-source-chips">
+                    {sourceChips.map((chip) => (
+                      <span key={chip} className="hero-source-chip">
+                        {chip.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {nextActionState?.watchFor ? (
+                  <p className="home-hero-note">Watch for: {nextActionState.watchFor}</p>
+                ) : null}
 
-            <p className="hero-task">
-              <SensitiveBlur sensitive>{action.task}</SensitiveBlur>
-            </p>
-            <div className="hero-timeframe">
-              <Clock size={14} />
-              <span>{action.timeframe ?? '2 minutes'}</span>
-            </div>
+                {safetyNote ? (
+                  <p className="hero-safety-note">
+                    <AlertTriangle size={14} />
+                    {safetyNote}
+                  </p>
+                ) : null}
 
-            <button
-              type="button"
-              className="hero-why-toggle"
-              onClick={toggleWhyExpanded}
-            >
-              <span>Why this matters</span>
-              <motion.span animate={{ rotate: whyExpanded ? 180 : 0 }} transition={{ duration: 0.22 }}>
-                <ChevronDown size={16} />
-              </motion.span>
-            </button>
-            <AnimatePresence initial={false}>
-              {whyExpanded && (
-                <motion.p
-                  className="hero-why-body"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 0.92 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.22 }}
-                >
-                  <SensitiveBlur sensitive>{action.why}</SensitiveBlur>
-                </motion.p>
-              )}
-            </AnimatePresence>
+                <AnimatePresence>
+                  {isDone && (
+                    <motion.div
+                      className="done-badge done-badge--today"
+                      initial={{ scale: 0.85, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+                    >
+                      <CheckCircle2 size={20} />
+                      Completed
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            <AnimatePresence>
-              {actionDone && (
-                <motion.div
-                  className="done-badge"
-                  initial={{ scale: 0.85, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 22 }}
-                >
-                  <motion.span
-                    initial={{ scale: 0, rotate: -20 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ delay: 0.08, type: 'spring', stiffness: 420, damping: 18 }}
+                <AnimatePresence>
+                  {showDoneMessage && isDone && (
+                    <motion.p
+                      className="done-success-message done-success-message--today"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      Nice. Curavon will remember this as completed.
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+
+                <div className="action-buttons action-buttons--today">
+                  {(nextActionState?.relatedGuide) ? (
+                    <motion.button
+                      type="button"
+                      className="action-btn btn-health-adjust adjust-btn"
+                      {...tapScale}
+                      onClick={handleRelatedGuide}
+                    >
+                      <BookOpen size={18} />
+                      Related guide
+                    </motion.button>
+                  ) : null}
+                  <motion.button
+                    type="button"
+                    className="action-btn btn-health-blocked blocked-btn"
+                    {...tapScale}
+                    onClick={saveCurrentActionToSummary}
                   >
-                    <CheckCircle2 size={20} />
-                  </motion.span>
-                  Completed
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {showDoneMessage && actionDone && (
-                <motion.p
-                  className="done-success-message"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.28, delay: 0.12 }}
-                >
-                  Nice. We&apos;ll use this to shape your next step.
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <div className="action-buttons">
-              <motion.button
-                type="button"
-                className={`action-btn btn-health-done done-btn ${actionDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
-                whileTap={actionDone ? undefined : { scale: 0.94 }}
-                onClick={handleDone}
-                disabled={actionDone}
-              >
-                <CheckCircle2 size={18} />
-                Done
-              </motion.button>
-              <motion.button
-                type="button"
-                className="action-btn btn-health-blocked blocked-btn"
-                {...tapScale}
-                onClick={openBlockedSheet}
-              >
-                <Ban size={18} />
-                Blocked
-              </motion.button>
-              <motion.button
-                type="button"
-                className="action-btn btn-health-adjust adjust-btn"
-                {...tapScale}
-                onClick={handleAdjust}
-              >
-                <SlidersHorizontal size={18} />
-                Adjust
-              </motion.button>
-            </div>
-          </motion.div>
+                    <FileText size={18} />
+                    Add to summary
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    className={`action-btn btn-health-done done-btn ${isDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
+                    whileTap={isDone ? undefined : { scale: 0.94 }}
+                    onClick={handleDone}
+                    disabled={isDone || !canRespondToAction}
+                  >
+                    <CheckCircle2 size={18} />
+                    Done
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    className="action-btn btn-health-blocked blocked-btn"
+                    {...tapScale}
+                    onClick={openHealthBlockedSheet}
+                    disabled={isDone || !canRespondToAction}
+                  >
+                    <Ban size={18} />
+                    Blocked
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    className="action-btn btn-health-adjust adjust-btn"
+                    {...tapScale}
+                    onClick={openHealthAdjustSheet}
+                    disabled={isDone || !canRespondToAction}
+                  >
+                    <SlidersHorizontal size={18} />
+                    Adjust
+                  </motion.button>
+                </div>
+              </div>
+            )}
+          </motion.section>
         </AnimatePresence>
 
-        <motion.button
-          type="button"
-          className="flow-preview-card warm-card glass-card-inner"
-          variants={fadeUp}
-          {...tapScale}
-          onClick={() => setActiveTab('flow')}
-        >
-          <div className="flow-preview-head">
-            <GitBranch size={20} className="icon-teal" />
-            <div>
-              <p className="flow-preview-label">Active health flow</p>
-              <p className="flow-preview-title">{FLOW_PREVIEW.title}</p>
-            </div>
-            <ChevronRight size={18} className="icon-muted" />
-          </div>
-          <div className="flow-preview-bar">
-            <motion.div
-              className="flow-preview-fill"
-              initial={{ width: 0 }}
-              animate={{ width: `${(FLOW_PREVIEW.progress / FLOW_PREVIEW.total) * 100}%` }}
-              transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1], delay: 0.25 }}
-            />
-          </div>
-          <p className="flow-preview-stage">
-            Stage {FLOW_PREVIEW.progress} of {FLOW_PREVIEW.total} · {FLOW_PREVIEW.stage}
-          </p>
-        </motion.button>
+        <motion.p className="home-section-label" variants={fadeUp}>
+          Supporting insights
+        </motion.p>
 
-        <motion.div
-          className="recent-concerns-card warm-card glass-card-inner"
-          variants={fadeUp}
-        >
-          <div className="section-header">
-            <h3>Recent concerns</h3>
-          </div>
-          <ul className="recent-concerns-list">
-            {RECENT_CONCERNS.map((concern) => (
-              <li key={concern.label} className="recent-concern-item">
-                <span className="recent-concern-label">
-                  <SensitiveBlur sensitive>{concern.label}</SensitiveBlur>
+        <motion.div className="home-glance-grid" variants={fadeUp}>
+          {personalizationPlan.supportingInsights.map((card) => (
+            <section key={card.id} className="home-support-card warm-card glass-card-inner">
+              <div className="home-card-head">
+                <span className="home-card-icon home-card-icon--teal" aria-hidden="true">
+                  <Info size={18} />
                 </span>
-                <span className="recent-concern-meta">{concern.updated}</span>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
+                <div>
+                  <h3>{card.title}</h3>
+                  <p className="home-card-sub">Based on your latest check-ins and notes.</p>
+                </div>
+              </div>
+              <ul className="home-insight-list">
+                {card.lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              {card.actionLabel ? (
+                <button
+                  type="button"
+                  className="home-text-link"
+                  onClick={() => handleInsightAction(card)}
+                >
+                  {card.actionLabel}
+                </button>
+              ) : null}
+            </section>
+          ))}
 
-        <motion.div variants={fadeUp}>
-          <StreakCard streakCount={streak} todayDone={actionDone} />
         </motion.div>
-
-        <motion.div
-          className="smart-silence-card warm-card glass-card-inner"
-          variants={fadeUp}
-        >
-          <div className="section-header">
-            <BellOff size={20} className="icon-accent" />
-            <h3>Smart Silence</h3>
-          </div>
-          <ul className="silence-bullets">
-            <li>No random reminders — only useful nudges.</li>
-            <li>Sensitive details stay hidden when you need privacy.</li>
-            <li>
-              {smartSilence.dailyDigest ? 'Daily digest on' : 'Daily digest off'} — calm, not noisy.
-            </li>
-          </ul>
-          <button
-            type="button"
-            className="btn btn-secondary btn-glass ghost-button text-link-warm"
-            onClick={() => setActiveTab('settings')}
-          >
-            Manage in Profile
-          </button>
-        </motion.div>
-
-        <motion.button
-          type="button"
-          className="doctor-shortcut-card warm-card glass-card-inner"
-          variants={fadeUp}
-          {...tapScale}
-          onClick={openDoctorSummary}
-        >
-          <FileText size={20} className="icon-warm" />
-          <div className="doctor-shortcut-text">
-            <span>Doctor Summary</span>
-            <span>
-              Prepare for your next visit
-            </span>
-          </div>
-          <ChevronRight size={18} className="icon-muted" />
-        </motion.button>
       </motion.div>
 
-      {showDoctorSummary && (
-        <div className="summary-overlay">
-          <div className="summary-overlay-backdrop" onClick={closeDoctorSummary} />
-          <div className="summary-overlay-panel">
-            <DoctorSummary variant="full" onClose={closeDoctorSummary} />
-          </div>
-        </div>
-      )}
-
-      <BlockedReasonSheet />
+      <TodayCheckIn />
+      <HealthActionSheets />
     </div>
   );
 }

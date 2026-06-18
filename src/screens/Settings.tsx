@@ -1,179 +1,456 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Shield, Bell, Trash2, EyeOff, FileText, Lock } from 'lucide-react';
+import { useRef, useState, type ChangeEvent } from 'react';
+import { Shield, Lock, Heart, User, FileText } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { themes } from '../theme/themes';
+import { useHealth } from '../context/HealthContext';
+import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { DoctorSummary } from '../components/DoctorSummary';
+import { HealthListEditor } from '../components/HealthListEditor';
+import type { SmartSilencePreference } from '../types/health';
+import { clearAskHistory } from '../utils/askIntakeStorage';
+import { useCuravonAuth } from '../lib/auth/authProvider';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { safeRead } from '../utils/healthStorage';
+import {
+  downloadLocalBackup,
+  type CuravonLocalBackup,
+} from '../lib/data/dataBackup';
+import { restoreLocalBackup, validateBackupFile } from '../lib/data/dataRestore';
+import { runLocalDataHealthCheck } from '../lib/data/dataHealthCheck';
+import { deleteLocalAccountData } from '../lib/data/dataDeletion';
+import { DELETION_CONFIRMATION_COPY } from '../lib/data/dataDeletionConfirm';
+
+const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
+  { id: 'gentle-reminders', label: 'Gentle reminders' },
+  { id: 'daily-digest-only', label: 'Daily digest only' },
+  { id: 'minimal-notifications', label: 'Minimal notifications' },
+];
 
 export function SettingsScreen() {
   const {
-    theme,
-    sensitiveMode,
-    setSensitiveMode,
-    smartSilence,
-    toggleSmartSilence,
-    clearAllData,
+    authDemoUser,
+    resetChat,
+    showToast,
+    signOutDemo,
     openDoctorSummary,
-    showDoctorSummary,
-    closeDoctorSummary,
   } = useApp();
-  const tokens = themes[theme];
+  const {
+    healthProfile,
+    updateHealthProfile,
+    addListItem,
+    removeListItem,
+    clearHealthData,
+    exportHealthData,
+    smartSilenceLabel,
+  } = useHealth();
+  const { includedCount, latestDraftDate, clearAllDoctorSummaryData } = useDoctorSummary();
+  const { session, signOut, deleteLocalAccount } = useCuravonAuth();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [restoreDraft, setRestoreDraft] = useState<CuravonLocalBackup | null>(null);
+  const [restorePreview, setRestorePreview] = useState<{
+    appName: string;
+    backupVersion: string;
+    exportedAt: string;
+    collectionCounts: Record<string, number>;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const silenceOptions = [
-    {
-      key: 'criticalOnly' as const,
-      label: 'Critical alerts only',
-      desc: 'No random reminders — only when something needs attention.',
-    },
-    {
-      key: 'dailyDigest' as const,
-      label: 'Daily digest',
-      desc: 'One calm recap instead of noisy alerts throughout the day.',
-    },
-    {
-      key: 'goalCoaching' as const,
-      label: 'Goal coaching nudges',
-      desc: 'Gentle encouragement tied to your chosen goals.',
-    },
-  ];
+  const primaryGoalsLabel =
+    healthProfile.primaryGoals.length > 0 ? healthProfile.primaryGoals.join(' · ') : 'Not set';
+  const localUserId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
 
-  const handleClear = () => {
+  const handleDeleteHealthData = () => {
     if (!confirmClear) {
       setConfirmClear(true);
       return;
     }
-    clearAllData();
+    clearHealthData();
+    clearAllDoctorSummaryData();
+    showToast('All health data cleared');
     setConfirmClear(false);
+  };
+
+  const handleBackupDownload = () => {
+    downloadLocalBackup(localUserId);
+    showToast('Local backup downloaded');
+  };
+
+  const handleOpenRestore = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleRestoreFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as CuravonLocalBackup;
+      const validation = validateBackupFile(parsed);
+      if (!validation.valid) {
+        showToast('Invalid backup file');
+        setRestoreDraft(null);
+        setRestorePreview(null);
+        return;
+      }
+      setRestoreDraft(parsed);
+      setRestorePreview({
+        appName: parsed.appName,
+        backupVersion: parsed.backupVersion,
+        exportedAt: parsed.exportedAt,
+        collectionCounts: {
+          dailyCheckins: parsed.collections.dailyCheckins.length,
+          askHistory: parsed.collections.askHistory.length,
+          doctorSummaryItems: parsed.collections.doctorSummaryItems.length,
+          followUps: parsed.collections.followUps.length,
+          guideResults: parsed.collections.guideResults.length,
+        },
+      });
+      showToast('Backup file ready to restore');
+    } catch {
+      showToast('Could not read backup file');
+      setRestoreDraft(null);
+      setRestorePreview(null);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const runRestore = (mode: 'merge' | 'replace') => {
+    if (!restoreDraft) return;
+    const result = restoreLocalBackup(restoreDraft, {
+      mode,
+      confirmReplace: mode === 'replace',
+    });
+    if (!result.ok) {
+      showToast('Restore failed');
+      return;
+    }
+    showToast(mode === 'replace' ? 'Backup restored (replace)' : 'Backup restored (merge)');
+    setRestoreDraft(null);
+    setRestorePreview(null);
+  };
+
+  const handleCheckDataHealth = () => {
+    const result = runLocalDataHealthCheck();
+    if (result.status === 'healthy') {
+      showToast('Your local data looks okay.');
+      return;
+    }
+    if (result.status === 'repaired') {
+      showToast('Curavon repaired one local storage issue.');
+      return;
+    }
+    showToast('Curavon found a local data issue. Export a backup before continuing.');
+  };
+
+  const handleDeleteLocalAccount = async () => {
+    if (!confirmDeleteAccount) {
+      setConfirmDeleteAccount(true);
+      return;
+    }
+    await deleteLocalAccount();
+    deleteLocalAccountData(localUserId, { deleteHealthData: false });
+    signOutDemo();
+    showToast('Local account deleted');
+    setConfirmDeleteAccount(false);
+  };
+
+  const handleDeleteAccountAndData = async () => {
+    if (!confirmDeleteAll) {
+      setConfirmDeleteAll(true);
+      return;
+    }
+    await deleteLocalAccount();
+    deleteLocalAccountData(localUserId, { deleteHealthData: true });
+    clearHealthData();
+    clearAllDoctorSummaryData();
+    signOutDemo();
+    showToast('Local account and health data deleted');
+    setConfirmDeleteAll(false);
   };
 
   return (
     <div className="screen settings-screen">
-      <ScreenHeader title="Profile" subtitle="Trust, privacy & control" />
+      <ScreenHeader title="Profile" subtitle="Your health memory & privacy" />
 
-      <section className="settings-section warm-card glass-card-inner">
+      <section className="settings-section warm-card glass-card-inner profile-header-card">
         <div className="section-header">
-          <EyeOff size={20} className="icon-warm" />
-          <h3>Sensitive Mode</h3>
+          <User size={20} className="icon-teal" />
+          <h3>{healthProfile.preferredName || authDemoUser?.fullName || 'Curavon member'}</h3>
         </div>
-        <p className="section-desc">
-          Sensitive details stay hidden on screen when you need privacy.
-        </p>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Enable Sensitive Mode</p>
-            <p className="toggle-desc">
-              Blurs symptoms, goals, and personal health text
-            </p>
-          </div>
+        <div className="settings-account-grid">
+          <p className="settings-account-row">
+            <span>Account status</span>
+            <strong>Local demo account</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Signed in as</span>
+            <strong>{authDemoUser?.email || session.user?.email || 'Guest'}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Primary goal</span>
+            <strong>{primaryGoalsLabel}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Sensitive Mode</span>
+            <strong>{healthProfile.sensitiveMode ? 'On' : 'Off'}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Smart Silence</span>
+            <strong>{smartSilenceLabel}</strong>
+          </p>
+        </div>
+        <div className="settings-actions-list" style={{ marginTop: 12 }}>
           <button
             type="button"
-            className={`native-switch ${sensitiveMode ? 'on' : ''}`}
-            onClick={() => setSensitiveMode(!sensitiveMode)}
-            aria-pressed={sensitiveMode}
+            className="btn btn-secondary btn-glass"
+            onClick={async () => {
+              await signOut();
+              signOutDemo();
+              showToast('Signed out');
+            }}
           >
-            <span className="switch-thumb" />
+            Sign out
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteLocalAccount}>
+            {confirmDeleteAccount
+              ? DELETION_CONFIRMATION_COPY.local_account_only.confirmLabel
+              : 'Delete local account'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteAccountAndData}>
+            {confirmDeleteAll
+              ? DELETION_CONFIRMATION_COPY.account_and_health_data.confirmLabel
+              : 'Delete account and health data'}
           </button>
         </div>
-        {sensitiveMode && (
-          <motion.div
-            className="sensitive-demo"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ background: tokens.surfaceElevated, border: `1px solid ${tokens.border}` }}
-          >
-            <p className="sensitive-blur" style={{ color: tokens.text, margin: 0 }}>
-              Example: evening energy patterns and sleep notes
-            </p>
-          </motion.div>
-        )}
       </section>
 
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <Bell size={20} className="icon-accent" />
-          <h3>Smart Silence</h3>
+          <Heart size={20} className="icon-teal" />
+          <h3>Health Profile</h3>
         </div>
         <p className="section-desc">
-          Only useful nudges. No spam. You stay in control.
+          Keep the details Curavon uses to organize your support.
         </p>
-        {silenceOptions.map(({ key, label, desc }) => (
-          <div key={key} className="toggle-row">
-            <div>
-              <p className="toggle-label">{label}</p>
-              <p className="toggle-desc">{desc}</p>
-            </div>
-            <button
-              type="button"
-              className={`native-switch ${smartSilence[key] ? 'on' : ''}`}
-              onClick={() => toggleSmartSilence(key)}
-              aria-pressed={smartSilence[key]}
-            >
-              <span className="switch-thumb" />
-            </button>
-          </div>
-        ))}
+        <HealthListEditor
+          label="Conditions"
+          items={healthProfile.conditions}
+          onAdd={(v) => addListItem('conditions', v)}
+          onRemove={(i) => removeListItem('conditions', i)}
+          placeholder="Add a condition"
+          hideSensitiveValues={healthProfile.sensitiveMode}
+        />
+        <HealthListEditor
+          label="Medications"
+          items={healthProfile.medications}
+          onAdd={(v) => addListItem('medications', v)}
+          onRemove={(i) => removeListItem('medications', i)}
+          placeholder="Add a medication"
+          hideSensitiveValues={healthProfile.sensitiveMode}
+        />
+        <HealthListEditor
+          label="Allergies"
+          items={healthProfile.allergies}
+          onAdd={(v) => addListItem('allergies', v)}
+          onRemove={(i) => removeListItem('allergies', i)}
+          placeholder="Add an allergy"
+          hideSensitiveValues={healthProfile.sensitiveMode}
+        />
+        <HealthListEditor
+          label="Health notes"
+          items={healthProfile.healthNotes}
+          onAdd={(v) => addListItem('healthNotes', v)}
+          onRemove={(i) => removeListItem('healthNotes', i)}
+          placeholder="Add a note"
+          hideSensitiveValues={healthProfile.sensitiveMode}
+        />
+        <HealthListEditor
+          label="Doctor questions"
+          items={healthProfile.doctorQuestions}
+          onAdd={(v) => addListItem('doctorQuestions', v)}
+          onRemove={(i) => removeListItem('doctorQuestions', i)}
+          placeholder="Add a question for your clinician"
+          hideSensitiveValues={healthProfile.sensitiveMode}
+        />
+        <p className="health-safety-note">
+          These notes help organize your next steps. They are not used to diagnose.
+        </p>
       </section>
 
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
           <FileText size={20} className="icon-teal" />
-          <h3>Doctor Summary</h3>
+          <h3>Doctor-ready summaries</h3>
         </div>
         <p className="section-desc">
-          Prepare a visit-ready summary — not a diagnosis.
+          Organize check-ins, Guides, Ask notes, and action responses before a visit.
         </p>
+        <div className="settings-account-grid">
+          <p className="settings-account-row">
+            <span>Included items</span>
+            <strong>{includedCount}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Latest draft</span>
+            <strong>
+              {latestDraftDate
+                ? new Date(latestDraftDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                : 'None yet'}
+            </strong>
+          </p>
+        </div>
         <button
           type="button"
-          className="btn btn-secondary btn-glass"
+          className="btn btn-primary btn-pill"
+          style={{ width: '100%', marginTop: 12 }}
           onClick={openDoctorSummary}
-          style={{ width: '100%', marginTop: 8 }}
         >
-          View Doctor Summary
+          Open summaries
         </button>
       </section>
 
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <Lock size={20} className="icon-teal" />
-          <h3>Privacy</h3>
+          <Shield size={20} className="icon-warm" />
+          <h3>Privacy &amp; Safety</h3>
         </div>
-        <p className="section-desc">
-          All data stays on your device. Nothing is sold or shared without your consent.
+        <div className="toggle-row">
+          <div>
+            <p className="toggle-label">Sensitive Mode</p>
+            <p className="toggle-desc">Blur symptoms and personal health text on screen.</p>
+          </div>
+          <button
+            type="button"
+            className={`native-switch ${healthProfile.sensitiveMode ? 'on' : ''}`}
+            onClick={() => updateHealthProfile({ sensitiveMode: !healthProfile.sensitiveMode })}
+            aria-pressed={healthProfile.sensitiveMode}
+          >
+            <span className="switch-thumb" />
+          </button>
+        </div>
+
+        <p className="toggle-label" style={{ marginTop: 16 }}>Smart Silence preference</p>
+        <div className="smart-silence-options">
+          {SMART_SILENCE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`smart-silence-option ${healthProfile.smartSilencePreference === opt.id ? 'smart-silence-option--selected' : ''}`}
+              onClick={() => updateHealthProfile({ smartSilencePreference: opt.id })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <p className="settings-data-note">
+          Curavon is for organization, reflection, and next-step support. It does not diagnose or
+          prescribe. It does not replace professional medical care. If symptoms are severe, sudden,
+          or unsafe, seek urgent care or local emergency support. AI may help organize safe next
+          steps, but safety rules limit what it can do.
         </p>
+
+        <div className="emergency-contact-fields">
+          <label className="field-label">
+            Emergency contact name
+            <input
+              type="text"
+              className="field-input"
+              value={healthProfile.emergencyContactName}
+              onChange={(e) => updateHealthProfile({ emergencyContactName: e.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+          <label className="field-label">
+            Emergency contact phone
+            <input
+              type="tel"
+              className="field-input"
+              value={healthProfile.emergencyContactPhone}
+              onChange={(e) => updateHealthProfile({ emergencyContactPhone: e.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-section warm-card glass-card-inner">
+        <div className="section-header">
+          <Lock size={20} className="icon-teal" />
+          <h3>Data &amp; Privacy</h3>
+        </div>
+        <p className="section-desc">Your data is stored on this device in this version.</p>
+        <p className="settings-data-note">
+          Sign out keeps your saved health notes on this device. Delete all health data removes them from this version.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          style={{ display: 'none' }}
+          onChange={handleRestoreFileSelected}
+        />
+        <div className="settings-actions-list">
+          <button type="button" className="btn btn-secondary btn-glass" onClick={() => { exportHealthData(); showToast('Health data exported'); }}>
+            Export my data
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleBackupDownload}>
+            Download local backup
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleOpenRestore}>
+            Restore from backup
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleCheckDataHealth}>
+            Check local data health
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            onClick={() => {
+              resetChat();
+              clearAskHistory();
+              showToast('Ask history cleared');
+            }}
+          >
+            Clear Ask history
+          </button>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteHealthData}>
+            {confirmClear ? 'Tap again to delete all health data' : 'Delete all health data'}
+          </button>
+        </div>
+        {restorePreview ? (
+          <div className="settings-data-note" style={{ marginTop: 12 }}>
+            <p>
+              Backup: {restorePreview.appName} v{restorePreview.backupVersion} -{' '}
+              {new Date(restorePreview.exportedAt).toLocaleDateString()}
+            </p>
+            <p>
+              Items: check-ins {restorePreview.collectionCounts.dailyCheckins}, Ask {restorePreview.collectionCounts.askHistory}, summary {restorePreview.collectionCounts.doctorSummaryItems}
+            </p>
+            <div className="settings-actions-list" style={{ marginTop: 8 }}>
+              <button type="button" className="btn btn-secondary btn-glass" onClick={() => runRestore('merge')}>
+                Merge restore
+              </button>
+              <button type="button" className="btn btn-secondary btn-glass" onClick={() => runRestore('replace')}>
+                Replace restore
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <div className="disclaimer-box safety-card">
         <Shield size={18} />
         <span>
-          Curavon is not a doctor. It does not diagnose, prescribe, or replace emergency care.
+          Curavon is not a doctor or emergency service. It does not diagnose, prescribe, or replace
+          clinical care. Terms and privacy policy are placeholders in this test build.
         </span>
       </div>
-
-      <motion.button
-        type="button"
-        className="clear-data-btn"
-        whileTap={{ scale: 0.97 }}
-        onClick={handleClear}
-        style={{
-          background: confirmClear ? tokens.danger : 'transparent',
-          color: confirmClear ? '#fff' : tokens.danger,
-          border: `2px solid ${tokens.danger}`,
-        }}
-      >
-        <Trash2 size={18} />
-        {confirmClear ? 'Tap again to delete all local data' : 'Clear all local data'}
-      </motion.button>
-
-      {showDoctorSummary && (
-        <div className="summary-overlay">
-          <div className="summary-overlay-backdrop" onClick={closeDoctorSummary} />
-          <div className="summary-overlay-panel">
-            <DoctorSummary variant="full" onClose={closeDoctorSummary} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

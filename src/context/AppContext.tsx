@@ -3,9 +3,14 @@ import {
   useContext,
   useState,
   useCallback,
+  useRef,
+  useEffect,
   type ReactNode,
 } from 'react';
 import type { ThemePreset } from '../theme/themes';
+import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { useCuravonAuth } from '../lib/auth/authProvider';
+import { detectUrgentConcern } from '../utils/healthSafety';
 
 export type TabId = 'home' | 'ask' | 'flow' | 'circle' | 'settings';
 
@@ -34,10 +39,58 @@ export interface ChatMessage {
   text: string;
 }
 
+export interface DemoAuthUser {
+  fullName: string;
+  email: string;
+}
+
+export interface ProfileSetupData {
+  preferredName: string;
+  primaryGoals: string[];
+  smartSilencePreference: 'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications';
+  sensitiveMode?: boolean;
+}
+
+function normalizeProfileSetup(
+  data:
+    | ProfileSetupData
+    | {
+        preferredName: string;
+        primaryGoal?: string;
+        primaryGoals?: string[];
+        smartSilencePreference: ProfileSetupData['smartSilencePreference'];
+        sensitiveMode?: boolean;
+      }
+    | null,
+): ProfileSetupData | null {
+  if (!data) return null;
+  if (Array.isArray(data.primaryGoals)) {
+    return {
+      preferredName: data.preferredName,
+      primaryGoals: data.primaryGoals,
+      smartSilencePreference: data.smartSilencePreference,
+      sensitiveMode: data.sensitiveMode ?? false,
+    };
+  }
+  const legacyGoal = 'primaryGoal' in data && typeof data.primaryGoal === 'string' ? data.primaryGoal : '';
+  return {
+    preferredName: data.preferredName,
+    primaryGoals: legacyGoal ? [legacyGoal] : [],
+    smartSilencePreference: data.smartSilencePreference,
+    sensitiveMode: false,
+  };
+}
+
 interface AppState {
   onboardingComplete: boolean;
+  /** Legacy auth compatibility. Canonical auth source is CuravonAuthProvider. */
+  authDemoUser: DemoAuthUser | null;
+  consentComplete: boolean;
+  setupComplete: boolean;
+  profileSetup: ProfileSetupData | null;
   theme: ThemePreset;
   activeTab: TabId;
+  /** Legacy mirror. Sensitive Mode canonical source: Health Profile. */
   sensitiveMode: boolean;
   onboardingData: OnboardingData;
   actionDone: boolean;
@@ -59,6 +112,7 @@ interface AppState {
   healthPoints: number;
   whyExpanded: boolean;
   showDoctorSummary: boolean;
+  pendingGuideFlowId: string | null;
 }
 
 interface AppContextValue extends AppState {
@@ -84,6 +138,16 @@ interface AppContextValue extends AppState {
   sendNudge: (memberId: string) => void;
   openDoctorSummary: () => void;
   closeDoctorSummary: () => void;
+  openGuidesWithFlow: (flowId: string) => void;
+  clearPendingGuideFlow: () => void;
+  setAuthDemoUser: (user: DemoAuthUser) => void;
+  completeAuthConsent: () => void;
+  completeProfileSetup: (setup: ProfileSetupData & { sensitiveMode: boolean }) => void;
+  signOutDemo: () => void;
+  resetToOnboarding: () => void;
+  screenBackVisible: boolean;
+  setScreenBack: (handler: (() => void) | null, visible?: boolean) => void;
+  triggerScreenBack: () => void;
 }
 
 const defaultOnboarding: OnboardingData = {
@@ -93,16 +157,46 @@ const defaultOnboarding: OnboardingData = {
   sensitiveMode: false,
 };
 
+const STORAGE_KEYS = {
+  onboardingSeen: APP_STORAGE_KEYS.onboardingSeen,
+  authDemoUser: APP_STORAGE_KEYS.authDemoUser,
+  consentComplete: APP_STORAGE_KEYS.consentComplete,
+  setupComplete: APP_STORAGE_KEYS.setupComplete,
+  profileSetup: APP_STORAGE_KEYS.profileSetup,
+} as const;
+
+function safeRead<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeWrite(key: string, value: unknown) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function safeRemove(key: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(key);
+}
+
+function clearSessionForOnboarding() {
+  safeRemove(STORAGE_KEYS.onboardingSeen);
+  safeRemove(STORAGE_KEYS.authDemoUser);
+  safeRemove(STORAGE_KEYS.consentComplete);
+  safeRemove(STORAGE_KEYS.setupComplete);
+  safeRemove(STORAGE_KEYS.profileSetup);
+}
+
 const AppContext = createContext<AppContextValue | null>(null);
 
-const HIGH_RISK_KEYWORDS = [
-  'severe pain',
-  'chest pressure',
-  'chest pain',
-  'can\'t breathe',
-  'difficulty breathing',
-];
-
+// Legacy chat compatibility path. Active safety uses src/utils/healthSafety.ts.
 const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
   0: [
     { response: 'Thanks for sharing that. When did you first notice this change?' },
@@ -116,8 +210,23 @@ const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useCuravonAuth();
+  const onboardingSeen = safeRead<boolean>(STORAGE_KEYS.onboardingSeen, false);
+  const authDemoUser = safeRead<DemoAuthUser | null>(STORAGE_KEYS.authDemoUser, null);
+  const consentComplete = safeRead<boolean>(STORAGE_KEYS.consentComplete, false);
+  const setupComplete = safeRead<boolean>(STORAGE_KEYS.setupComplete, false);
+  const profileSetup = normalizeProfileSetup(
+    safeRead<ProfileSetupData | null>(STORAGE_KEYS.profileSetup, null),
+  );
+  const screenBackHandlerRef = useRef<(() => void) | null>(null);
+  const [screenBackVisible, setScreenBackVisible] = useState(false);
+
   const [state, setState] = useState<AppState>({
-    onboardingComplete: false,
+    onboardingComplete: onboardingSeen,
+    authDemoUser,
+    consentComplete,
+    setupComplete,
+    profileSetup,
     theme: 'sky',
     activeTab: 'home',
     sensitiveMode: false,
@@ -147,7 +256,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     healthPoints: 340,
     whyExpanded: false,
     showDoctorSummary: false,
+    pendingGuideFlowId: null,
   });
+
+  useEffect(() => {
+    if (authLoading) return;
+    setState((s) => ({
+      ...s,
+      authDemoUser: user
+        ? { fullName: user.displayName, email: user.email }
+        : null,
+    }));
+  }, [user, authLoading]);
+
+  const setScreenBack = useCallback((handler: (() => void) | null, visible = true) => {
+    const active = Boolean(visible && handler);
+    screenBackHandlerRef.current = active ? handler : null;
+    setScreenBackVisible(active);
+  }, []);
+
+  const triggerScreenBack = useCallback(() => {
+    if (screenBackHandlerRef.current) {
+      screenBackHandlerRef.current();
+      return;
+    }
+    setState((s) => (s.activeTab === 'home' ? s : { ...s, activeTab: 'home' }));
+  }, []);
 
   const setTheme = useCallback((theme: ThemePreset) => {
     setState((s) => ({ ...s, theme }));
@@ -158,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOnboarding = useCallback((data: OnboardingData) => {
+    safeWrite(STORAGE_KEYS.onboardingSeen, true);
     setState((s) => ({
       ...s,
       onboardingComplete: true,
@@ -166,7 +301,119 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const setAuthDemoUser = useCallback((user: DemoAuthUser) => {
+    safeWrite(STORAGE_KEYS.authDemoUser, user);
+    setState((s) => ({ ...s, authDemoUser: user }));
+  }, []);
+
+  const completeAuthConsent = useCallback(() => {
+    safeWrite(STORAGE_KEYS.consentComplete, true);
+    setState((s) => ({ ...s, consentComplete: true }));
+  }, []);
+
+  const completeProfileSetup = useCallback(
+    (setup: ProfileSetupData & { sensitiveMode: boolean }) => {
+      const nextSmartSilence =
+        setup.smartSilencePreference === 'daily-digest-only'
+          ? { criticalOnly: false, dailyDigest: true, goalCoaching: false }
+          : setup.smartSilencePreference === 'minimal-notifications'
+            ? { criticalOnly: true, dailyDigest: false, goalCoaching: false }
+            : { criticalOnly: false, dailyDigest: true, goalCoaching: true };
+      const persistedProfile: ProfileSetupData = {
+        preferredName: setup.preferredName,
+        primaryGoals: setup.primaryGoals,
+        smartSilencePreference: setup.smartSilencePreference,
+        sensitiveMode: setup.sensitiveMode,
+      };
+      safeWrite(STORAGE_KEYS.profileSetup, persistedProfile);
+      safeWrite(STORAGE_KEYS.setupComplete, true);
+      safeWrite(APP_STORAGE_KEYS.healthProfile, {
+        preferredName: setup.preferredName,
+        primaryGoals: setup.primaryGoals,
+        sensitiveMode: setup.sensitiveMode,
+        smartSilencePreference: setup.smartSilencePreference,
+        conditions: [],
+        medications: [],
+        allergies: [],
+        healthNotes: [],
+        doctorQuestions: [],
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+      });
+      setState((s) => ({
+        ...s,
+        setupComplete: true,
+        profileSetup: persistedProfile,
+        sensitiveMode: setup.sensitiveMode,
+        smartSilence: nextSmartSilence,
+      }));
+    },
+    [],
+  );
+
+  const signOutDemo = useCallback(() => {
+    safeRemove(STORAGE_KEYS.authDemoUser);
+    safeRemove(STORAGE_KEYS.consentComplete);
+    safeRemove(STORAGE_KEYS.setupComplete);
+    safeRemove(STORAGE_KEYS.profileSetup);
+    setState((s) => ({
+      ...s,
+      authDemoUser: null,
+      consentComplete: false,
+      setupComplete: false,
+      profileSetup: null,
+      activeTab: 'home',
+      showDoctorSummary: false,
+      showShareSheet: false,
+      toast: null,
+    }));
+  }, []);
+
+  const resetToOnboarding = useCallback(() => {
+    clearSessionForOnboarding();
+    screenBackHandlerRef.current = null;
+    setScreenBackVisible(false);
+    setState({
+      onboardingComplete: false,
+      authDemoUser: null,
+      consentComplete: false,
+      setupComplete: false,
+      profileSetup: null,
+      theme: 'sky',
+      activeTab: 'home',
+      sensitiveMode: false,
+      onboardingData: defaultOnboarding,
+      actionDone: false,
+      actionAdjusted: false,
+      blockedReason: null,
+      showBlockedSheet: false,
+      showSafetyEscalation: false,
+      chatMessages: [
+        {
+          id: 'welcome',
+          role: 'assistant',
+          text: 'Hi — I\'m here to help you organize what\'s going on and find one safe next step. I don\'t diagnose or prescribe. What would you like to focus on today?',
+        },
+      ],
+      chatStep: 0,
+      toast: null,
+      showShareSheet: false,
+      flowView: 'timeline',
+      smartSilence: {
+        criticalOnly: false,
+        dailyDigest: true,
+        goalCoaching: true,
+      },
+      streak: 5,
+      healthPoints: 340,
+      whyExpanded: false,
+      showDoctorSummary: false,
+      pendingGuideFlowId: null,
+    });
+  }, []);
+
   const setSensitiveMode = useCallback((sensitiveMode: boolean) => {
+    // Legacy mirror only. Writes should go through Health Profile (HealthContext).
     setState((s) => ({ ...s, sensitiveMode }));
   }, []);
 
@@ -202,8 +449,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addChatMessage = useCallback((text: string) => {
     setState((s) => {
-      const lower = text.toLowerCase();
-      const isHighRisk = HIGH_RISK_KEYWORDS.some((k) => lower.includes(k));
+      const urgent = detectUrgentConcern(text);
 
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
@@ -211,7 +457,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         text,
       };
 
-      if (isHighRisk) {
+      if (urgent.hasUrgent) {
         return {
           ...s,
           chatMessages: [...s.chatMessages, userMsg],
@@ -293,9 +539,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, showDoctorSummary: false }));
   }, []);
 
+  const openGuidesWithFlow = useCallback((flowId: string) => {
+    setState((s) => ({ ...s, pendingGuideFlowId: flowId, activeTab: 'circle' }));
+  }, []);
+
+  const clearPendingGuideFlow = useCallback(() => {
+    setState((s) => ({ ...s, pendingGuideFlowId: null }));
+  }, []);
+
   const clearAllData = useCallback(() => {
+    safeRemove(STORAGE_KEYS.onboardingSeen);
+    safeRemove(STORAGE_KEYS.authDemoUser);
+    safeRemove(STORAGE_KEYS.consentComplete);
+    safeRemove(STORAGE_KEYS.setupComplete);
+    safeRemove(STORAGE_KEYS.profileSetup);
     setState({
       onboardingComplete: false,
+      authDemoUser: null,
+      consentComplete: false,
+      setupComplete: false,
+      profileSetup: null,
       theme: 'sky',
       activeTab: 'home',
       sensitiveMode: false,
@@ -325,6 +588,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       healthPoints: 0,
       whyExpanded: false,
       showDoctorSummary: false,
+      pendingGuideFlowId: null,
     });
   }, []);
 
@@ -361,6 +625,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sendNudge,
         openDoctorSummary,
         closeDoctorSummary,
+        openGuidesWithFlow,
+        clearPendingGuideFlow,
+        setAuthDemoUser,
+        completeAuthConsent,
+        completeProfileSetup,
+        signOutDemo,
+        resetToOnboarding,
+        screenBackVisible,
+        setScreenBack,
+        triggerScreenBack,
       }}
     >
       {children}

@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../context/AppContext';
+import { useHealth } from '../context/HealthContext';
 import { themes } from '../theme/themes';
 import { ThemeToggle } from './ThemeToggle';
 import { CuravonBrandLockup } from './CuravonBrand';
@@ -8,11 +9,12 @@ interface ScreenHeaderProps {
   title?: string;
   showThemeToggle?: boolean;
   subtitle?: string;
+  compact?: boolean;
 }
 
-export function ScreenHeader({ title, showThemeToggle = true, subtitle }: ScreenHeaderProps) {
+export function ScreenHeader({ title, showThemeToggle = true, subtitle, compact = false }: ScreenHeaderProps) {
   return (
-    <header className="screen-header">
+    <header className={`screen-header ${compact ? 'screen-header--compact' : ''}`}>
       <div className="header-content">
         {title ? (
           <div>
@@ -57,7 +59,9 @@ export function Toast() {
 }
 
 export function SensitiveBlur({ children, sensitive = false }: { children: React.ReactNode; sensitive?: boolean }) {
-  const { sensitiveMode } = useApp();
+  const { healthProfile } = useHealth();
+  const { sensitiveMode: legacySensitiveMode } = useApp();
+  const sensitiveMode = healthProfile.sensitiveMode ?? legacySensitiveMode;
   const shouldBlur = sensitiveMode && sensitive;
 
   return (
