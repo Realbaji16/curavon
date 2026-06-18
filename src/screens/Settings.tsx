@@ -1,174 +1,220 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Shield, Bell, EyeOff, FileText, Lock } from 'lucide-react';
+import { Shield, Lock, Heart, User, FileText } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { themes } from '../theme/themes';
+import { useHealth } from '../context/HealthContext';
+import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { DoctorSummary } from '../components/DoctorSummary';
+import { HealthListEditor } from '../components/HealthListEditor';
+import type { SmartSilencePreference } from '../types/health';
+
+const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
+  { id: 'gentle-reminders', label: 'Gentle reminders' },
+  { id: 'daily-digest-only', label: 'Daily digest only' },
+  { id: 'minimal-notifications', label: 'Minimal notifications' },
+];
 
 export function SettingsScreen() {
   const {
-    theme,
-    sensitiveMode,
-    setSensitiveMode,
-    smartSilence,
-    toggleSmartSilence,
-    profileSetup,
     authDemoUser,
     resetChat,
     showToast,
     signOutDemo,
-    clearAllData,
     openDoctorSummary,
-    showDoctorSummary,
-    closeDoctorSummary,
   } = useApp();
-  const tokens = themes[theme];
+  const {
+    healthProfile,
+    updateHealthProfile,
+    addListItem,
+    removeListItem,
+    clearHealthData,
+    exportHealthData,
+    smartSilenceLabel,
+  } = useHealth();
+  const { includedCount, latestDraftDate, clearAllDoctorSummaryData } = useDoctorSummary();
   const [confirmClear, setConfirmClear] = useState(false);
 
-  const silenceOptions = [
-    {
-      key: 'criticalOnly' as const,
-      label: 'Critical alerts only',
-      desc: 'No random reminders — only when something needs attention.',
-    },
-    {
-      key: 'dailyDigest' as const,
-      label: 'Daily digest',
-      desc: 'One calm recap instead of noisy alerts throughout the day.',
-    },
-    {
-      key: 'goalCoaching' as const,
-      label: 'Goal coaching nudges',
-      desc: 'Gentle encouragement tied to your chosen goals.',
-    },
-  ];
+  const primaryGoalsLabel =
+    healthProfile.primaryGoals.length > 0 ? healthProfile.primaryGoals.join(' · ') : 'Not set';
 
-  const handleClear = () => {
+  const handleDeleteHealthData = () => {
     if (!confirmClear) {
       setConfirmClear(true);
       return;
     }
-    clearAllData();
+    clearHealthData();
+    clearAllDoctorSummaryData();
+    showToast('All health data cleared');
     setConfirmClear(false);
   };
 
-  const silenceLabel =
-    profileSetup?.smartSilencePreference === 'minimal-notifications'
-      ? 'Minimal notifications'
-      : profileSetup?.smartSilencePreference === 'daily-digest-only'
-        ? 'Daily digest only'
-        : 'Gentle reminders';
-
   return (
     <div className="screen settings-screen">
-      <ScreenHeader title="Profile" subtitle="Trust, privacy & control" />
+      <ScreenHeader title="Profile" subtitle="Your health memory & privacy" />
 
-      <section className="settings-section warm-card glass-card-inner">
+      <section className="settings-section warm-card glass-card-inner profile-header-card">
         <div className="section-header">
-          <Shield size={20} className="icon-teal" />
-          <h3>Account</h3>
+          <User size={20} className="icon-teal" />
+          <h3>{healthProfile.preferredName || authDemoUser?.fullName || 'Curavon member'}</h3>
         </div>
         <div className="settings-account-grid">
-          <p className="settings-account-row">
-            <span>Preferred name</span>
-            <strong>{profileSetup?.preferredName || authDemoUser?.fullName || 'Curavon member'}</strong>
-          </p>
           <p className="settings-account-row">
             <span>Account status</span>
             <strong>Prototype account</strong>
           </p>
           <p className="settings-account-row">
+            <span>Primary goal</span>
+            <strong>{primaryGoalsLabel}</strong>
+          </p>
+          <p className="settings-account-row">
             <span>Sensitive Mode</span>
-            <strong>{sensitiveMode ? 'On' : 'Off'}</strong>
+            <strong>{healthProfile.sensitiveMode ? 'On' : 'Off'}</strong>
           </p>
           <p className="settings-account-row">
             <span>Smart Silence</span>
-            <strong>{silenceLabel}</strong>
+            <strong>{smartSilenceLabel}</strong>
           </p>
         </div>
       </section>
 
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
-          <EyeOff size={20} className="icon-warm" />
-          <h3>Sensitive Mode</h3>
+          <Heart size={20} className="icon-teal" />
+          <h3>Health Profile</h3>
         </div>
         <p className="section-desc">
-          Sensitive details stay hidden on screen when you need privacy.
+          Keep the details Curavon uses to organize your support.
         </p>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Enable Sensitive Mode</p>
-            <p className="toggle-desc">
-              Blurs symptoms, goals, and personal health text
-            </p>
-          </div>
-          <button
-            type="button"
-            className={`native-switch ${sensitiveMode ? 'on' : ''}`}
-            onClick={() => setSensitiveMode(!sensitiveMode)}
-            aria-pressed={sensitiveMode}
-          >
-            <span className="switch-thumb" />
-          </button>
-        </div>
-        {sensitiveMode && (
-          <motion.div
-            className="sensitive-demo"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ background: tokens.surfaceElevated, border: `1px solid ${tokens.border}` }}
-          >
-            <p className="sensitive-blur" style={{ color: tokens.text, margin: 0 }}>
-              Example: evening energy patterns and sleep notes
-            </p>
-          </motion.div>
-        )}
-      </section>
-
-      <section className="settings-section warm-card glass-card-inner">
-        <div className="section-header">
-          <Bell size={20} className="icon-accent" />
-          <h3>Smart Silence</h3>
-        </div>
-        <p className="section-desc">
-          Only useful nudges. No spam. You stay in control.
+        <HealthListEditor
+          label="Conditions"
+          items={healthProfile.conditions}
+          onAdd={(v) => addListItem('conditions', v)}
+          onRemove={(i) => removeListItem('conditions', i)}
+          placeholder="Add a condition"
+        />
+        <HealthListEditor
+          label="Medications"
+          items={healthProfile.medications}
+          onAdd={(v) => addListItem('medications', v)}
+          onRemove={(i) => removeListItem('medications', i)}
+          placeholder="Add a medication"
+        />
+        <HealthListEditor
+          label="Allergies"
+          items={healthProfile.allergies}
+          onAdd={(v) => addListItem('allergies', v)}
+          onRemove={(i) => removeListItem('allergies', i)}
+          placeholder="Add an allergy"
+        />
+        <HealthListEditor
+          label="Health notes"
+          items={healthProfile.healthNotes}
+          onAdd={(v) => addListItem('healthNotes', v)}
+          onRemove={(i) => removeListItem('healthNotes', i)}
+          placeholder="Add a note"
+        />
+        <HealthListEditor
+          label="Doctor questions"
+          items={healthProfile.doctorQuestions}
+          onAdd={(v) => addListItem('doctorQuestions', v)}
+          onRemove={(i) => removeListItem('doctorQuestions', i)}
+          placeholder="Add a question for your clinician"
+        />
+        <p className="health-safety-note">
+          These notes help organize your next steps. They are not used to diagnose.
         </p>
-        {silenceOptions.map(({ key, label, desc }) => (
-          <div key={key} className="toggle-row">
-            <div>
-              <p className="toggle-label">{label}</p>
-              <p className="toggle-desc">{desc}</p>
-            </div>
-            <button
-              type="button"
-              className={`native-switch ${smartSilence[key] ? 'on' : ''}`}
-              onClick={() => toggleSmartSilence(key)}
-              aria-pressed={smartSilence[key]}
-            >
-              <span className="switch-thumb" />
-            </button>
-          </div>
-        ))}
       </section>
 
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
           <FileText size={20} className="icon-teal" />
-          <h3>Doctor Summary</h3>
+          <h3>Doctor-ready summaries</h3>
         </div>
         <p className="section-desc">
-          Prepare a visit-ready summary — not a diagnosis.
+          Organize check-ins, Guides, Ask notes, and action responses before a visit.
         </p>
+        <div className="settings-account-grid">
+          <p className="settings-account-row">
+            <span>Included items</span>
+            <strong>{includedCount}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Latest draft</span>
+            <strong>
+              {latestDraftDate
+                ? new Date(latestDraftDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                : 'None yet'}
+            </strong>
+          </p>
+        </div>
         <button
           type="button"
-          className="btn btn-secondary btn-glass"
+          className="btn btn-primary btn-pill"
+          style={{ width: '100%', marginTop: 12 }}
           onClick={openDoctorSummary}
-          style={{ width: '100%', marginTop: 8 }}
         >
-          View Doctor Summary
+          Open summaries
         </button>
+      </section>
+
+      <section className="settings-section warm-card glass-card-inner">
+        <div className="section-header">
+          <Shield size={20} className="icon-warm" />
+          <h3>Privacy &amp; Safety</h3>
+        </div>
+        <div className="toggle-row">
+          <div>
+            <p className="toggle-label">Sensitive Mode</p>
+            <p className="toggle-desc">Blur symptoms and personal health text on screen.</p>
+          </div>
+          <button
+            type="button"
+            className={`native-switch ${healthProfile.sensitiveMode ? 'on' : ''}`}
+            onClick={() => updateHealthProfile({ sensitiveMode: !healthProfile.sensitiveMode })}
+            aria-pressed={healthProfile.sensitiveMode}
+          >
+            <span className="switch-thumb" />
+          </button>
+        </div>
+
+        <p className="toggle-label" style={{ marginTop: 16 }}>Smart Silence preference</p>
+        <div className="smart-silence-options">
+          {SMART_SILENCE_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              className={`smart-silence-option ${healthProfile.smartSilencePreference === opt.id ? 'smart-silence-option--selected' : ''}`}
+              onClick={() => updateHealthProfile({ smartSilencePreference: opt.id })}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="emergency-contact-fields">
+          <label className="field-label">
+            Emergency contact name
+            <input
+              type="text"
+              className="field-input"
+              value={healthProfile.emergencyContactName}
+              onChange={(e) => updateHealthProfile({ emergencyContactName: e.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+          <label className="field-label">
+            Emergency contact phone
+            <input
+              type="tel"
+              className="field-input"
+              value={healthProfile.emergencyContactPhone}
+              onChange={(e) => updateHealthProfile({ emergencyContactPhone: e.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+        </div>
       </section>
 
       <section className="settings-section warm-card glass-card-inner">
@@ -178,16 +224,27 @@ export function SettingsScreen() {
         </div>
         <p className="section-desc">All data stays on your device for this prototype.</p>
         <div className="settings-actions-list">
-          <button type="button" className="btn btn-secondary btn-glass" onClick={() => showToast('Export coming soon')}>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={() => { exportHealthData(); showToast('Health data exported'); }}>
             Export my data
           </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={() => { resetChat(); showToast('Chat history cleared'); }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            onClick={() => { resetChat(); showToast('Chat history cleared'); }}
+          >
             Clear chat history
           </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={handleClear}>
+          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteHealthData}>
             {confirmClear ? 'Tap again to delete all health data' : 'Delete all health data'}
           </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={signOutDemo}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            onClick={() => {
+              signOutDemo();
+              showToast('Signed out');
+            }}
+          >
             Sign out
           </button>
         </div>
@@ -199,15 +256,6 @@ export function SettingsScreen() {
           Curavon is not a doctor. It does not diagnose, prescribe, or replace emergency care.
         </span>
       </div>
-
-      {showDoctorSummary && (
-        <div className="summary-overlay">
-          <div className="summary-overlay-backdrop" onClick={closeDoctorSummary} />
-          <div className="summary-overlay-panel">
-            <DoctorSummary variant="full" onClose={closeDoctorSummary} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

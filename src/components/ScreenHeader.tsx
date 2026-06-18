@@ -8,11 +8,12 @@ interface ScreenHeaderProps {
   title?: string;
   showThemeToggle?: boolean;
   subtitle?: string;
+  compact?: boolean;
 }
 
-export function ScreenHeader({ title, showThemeToggle = true, subtitle }: ScreenHeaderProps) {
+export function ScreenHeader({ title, showThemeToggle = true, subtitle, compact = false }: ScreenHeaderProps) {
   return (
-    <header className="screen-header">
+    <header className={`screen-header ${compact ? 'screen-header--compact' : ''}`}>
       <div className="header-content">
         {title ? (
           <div>

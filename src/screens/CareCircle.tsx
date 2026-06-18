@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ChevronLeft,
   ChevronRight,
   FileText,
   GitBranch,
@@ -12,7 +11,9 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useDoctorSummary } from '../context/DoctorSummaryContext';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { useScreenBack } from '../hooks/useScreenBack';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
 
 type FlowId =
@@ -484,7 +485,8 @@ function isAnswered(question: FlowQuestion, value: unknown): boolean {
 }
 
 export function CareCircleScreen() {
-  const { setActiveTab, showToast } = useApp();
+  const { setActiveTab, showToast, openDoctorSummary, pendingGuideFlowId, clearPendingGuideFlow } = useApp();
+  const { addFromFlow } = useDoctorSummary();
   const [viewMode, setViewMode] = useState<ViewMode>('browse');
   const [selectedFlowId, setSelectedFlowId] = useState<FlowId | null>(null);
   const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null);
@@ -494,6 +496,7 @@ export function CareCircleScreen() {
   const [runnerAnswers, setRunnerAnswers] = useState<Record<string, unknown>>({});
   const [resultSaved, setResultSaved] = useState(false);
   const [doctorDraftSaved, setDoctorDraftSaved] = useState(false);
+  const flowSummarySavedRef = useRef<string | null>(null);
   const [savedGuides, setSavedGuides] = useState<Record<string, boolean>>({});
 
   const selectedFlow = useMemo(
@@ -546,6 +549,16 @@ export function CareCircleScreen() {
     setViewMode('flowDetail');
   };
 
+  useEffect(() => {
+    if (!pendingGuideFlowId) return;
+    const flow = FLOW_CARDS.find((f) => f.id === pendingGuideFlowId);
+    if (flow) {
+      openFlowDetail(pendingGuideFlowId as FlowId);
+      showToast(`Recommended guide: ${flow.title}`);
+    }
+    clearPendingGuideFlow();
+  }, [pendingGuideFlowId, clearPendingGuideFlow, showToast]);
+
   const openGuideDetail = (guideId: string) => {
     setSelectedGuideId(guideId);
     setViewMode('guideDetail');
@@ -562,6 +575,7 @@ export function CareCircleScreen() {
     const runner = FLOW_RUNNERS[selectedFlowId];
     setResultSaved(false);
     setDoctorDraftSaved(false);
+    flowSummarySavedRef.current = null;
     if (runner.questions && runner.questions.length > 0) {
       setRunnerStep(0);
       setRunnerAnswers({});
@@ -632,9 +646,42 @@ export function CareCircleScreen() {
     showToast('Result saved');
   };
 
-  const saveDoctorDraft = () => {
+  const saveFlowToDoctorSummary = useCallback(() => {
+    if (!selectedFlow || !selectedFlowRunner) return;
+    const answerMap: Record<string, unknown> = {};
+    selectedFlowRunner.questions?.forEach((question) => {
+      answerMap[question.prompt] = runnerAnswers[question.id];
+    });
+    const redFlags = Object.values(runnerAnswers)
+      .flatMap((v) => (Array.isArray(v) ? v : [v]))
+      .filter((v) =>
+        ['Yes', "I'm not sure", 'Chest pain', 'Trouble breathing', 'Severe sudden pain'].includes(
+          String(v),
+        ),
+      )
+      .map(String);
+
+    addFromFlow({
+      title: selectedFlow.title,
+      answers: answerMap,
+      watch: selectedFlowRunner.watch.join('; '),
+      nextStep: selectedFlowRunner.nextStep,
+      redFlags,
+      category: selectedFlow.tag,
+    });
     setDoctorDraftSaved(true);
-    showToast('Saved to your doctor summary draft.');
+  }, [selectedFlow, selectedFlowRunner, runnerAnswers, addFromFlow]);
+
+  useEffect(() => {
+    if (viewMode !== 'flowResult' || !selectedFlow || !selectedFlowRunner) return;
+    if (flowSummarySavedRef.current === selectedFlow.id) return;
+    flowSummarySavedRef.current = selectedFlow.id;
+    saveFlowToDoctorSummary();
+  }, [viewMode, selectedFlow, selectedFlowRunner, saveFlowToDoctorSummary]);
+
+  const saveDoctorDraft = () => {
+    saveFlowToDoctorSummary();
+    showToast('Saved to Doctor Summary');
   };
 
   const showMoodSafetyMessage =
@@ -642,6 +689,18 @@ export function CareCircleScreen() {
     viewMode === 'flowRunner' &&
     typeof runnerAnswers.safety === 'string' &&
     ['Yes', "I'm not sure"].includes(runnerAnswers.safety);
+
+  const handleGuidesBack = useCallback(() => {
+    if (viewMode === 'flowRunner') {
+      goRunnerBack();
+      return;
+    }
+    if (viewMode !== 'browse') {
+      backToBrowse();
+    }
+  }, [viewMode, goRunnerBack, backToBrowse]);
+
+  useScreenBack(handleGuidesBack, viewMode !== 'browse');
 
   return (
     <div className="screen learn-screen guides-screen">
@@ -818,10 +877,6 @@ export function CareCircleScreen() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <button type="button" className="guides-back-btn" onClick={backToBrowse}>
-            <ChevronLeft size={16} />
-            Back
-          </button>
           <h3>{selectedFlow.title}</h3>
           <p className="guides-detail-time">{selectedFlow.estimatedTime}</p>
           <p className="guides-detail-description">{selectedFlow.description}</p>
@@ -840,9 +895,6 @@ export function CareCircleScreen() {
           </div>
 
           <div className="guides-detail-actions">
-            <button type="button" className="btn btn-secondary btn-glass" onClick={backToBrowse}>
-              Back
-            </button>
             <button type="button" className="btn btn-primary btn-pill" onClick={startSelectedFlow}>
               Start Flow
               <ChevronRight size={16} />
@@ -858,10 +910,6 @@ export function CareCircleScreen() {
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="guides-runner-head">
-            <button type="button" className="guides-back-btn" onClick={goRunnerBack}>
-              <ChevronLeft size={16} />
-              Back
-            </button>
             <span className="guides-runner-step">
               Step {runnerStep + 1} of {selectedFlowRunner.questions.length}
             </span>
@@ -1018,14 +1066,19 @@ export function CareCircleScreen() {
               Save to Doctor Summary
               <FileText size={16} />
             </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-glass"
+              onClick={openDoctorSummary}
+            >
+              View Doctor Summary
+            </button>
           </div>
 
           {resultSaved ? <p className="guides-result-note">Result saved.</p> : null}
-          {doctorDraftSaved ? <p className="guides-result-note">Saved to your doctor summary draft.</p> : null}
-
-          <button type="button" className="guides-back-link" onClick={backToBrowse}>
-            Back to Guides
-          </button>
+          {doctorDraftSaved ? (
+            <p className="guides-result-note">Saved to Doctor Summary.</p>
+          ) : null}
         </motion.section>
       ) : null}
 
@@ -1035,10 +1088,6 @@ export function CareCircleScreen() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <button type="button" className="guides-back-btn" onClick={backToBrowse}>
-            <ChevronLeft size={16} />
-            Back
-          </button>
           <h3>{selectedGuide.title}</h3>
           <p className="guides-detail-description">{selectedGuide.intro}</p>
 

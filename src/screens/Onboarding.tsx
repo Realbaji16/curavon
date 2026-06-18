@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { CuravonIcon, CuravonWordmark } from '../components/CuravonBrand';
+import { useScreenBack } from '../hooks/useScreenBack';
 
 const SLIDE_TRANSITION = { duration: 0.4, ease: [0.4, 0, 0.2, 1] as const };
 
@@ -42,6 +43,9 @@ const STEPS = [
   {
     id: 'signin',
     variant: 'signin' as const,
+    title: 'One last step',
+    body: 'Next, set up a private account so your notes, goals, and preferences stay with you.',
+    safetyNote: 'Account setup comes right after this — it only takes a minute.',
   },
 ];
 
@@ -80,6 +84,12 @@ export function Onboarding() {
   const isWelcome = current.variant === 'welcome';
   const isSignin = current.variant === 'signin';
 
+  const goBack = useCallback(() => {
+    setStep((currentStep) => Math.max(0, currentStep - 1));
+  }, []);
+
+  useScreenBack(goBack, step > 0);
+
   return (
     <div className={`onboarding onboarding--flo ${isWelcome ? 'onboarding--welcome' : ''}`}>
       <header className="onboarding-header">
@@ -106,22 +116,20 @@ export function Onboarding() {
                   <CuravonIcon size={88} className="onboarding-hero-brand-icon" />
                 </div>
                 <h1 className="onboarding-title onboarding-title--flo onboarding-title--centered">
-                  Ready when you are
+                  {current.title}
                 </h1>
-                <p className="onboarding-body onboarding-body--flo">
-                  Create your calm health companion in a few taps.
-                </p>
-                <p className="onboarding-trust-line">
-                  <Shield size={15} aria-hidden="true" />
-                  <span>Private by design. Not a diagnosis tool.</span>
-                </p>
-                <button
-                  type="button"
-                  className="onboarding-secondary-btn"
-                  onClick={finish}
-                >
-                  I already have an account
-                </button>
+                {current.body ? (
+                  <p className="onboarding-body onboarding-body--flo">{current.body}</p>
+                ) : null}
+                {current.safetyNote ? (
+                  <>
+                    <div className="onboarding-card-divider" role="presentation" />
+                    <p className="onboarding-disclaimer">
+                      <Shield size={15} aria-hidden="true" />
+                      <span>{current.safetyNote}</span>
+                    </p>
+                  </>
+                ) : null}
               </div>
             ) : (
               <div className="onboarding-card onboarding-card--flo">
@@ -242,7 +250,7 @@ export function Onboarding() {
             onClick={next}
             whileTap={{ scale: 0.98 }}
           >
-            <span className="button-label">{isSignin ? 'Get started' : 'Continue'}</span>
+            <span className="button-label">Continue</span>
             <ChevronRight size={20} strokeWidth={2.4} />
           </motion.button>
         ) : (

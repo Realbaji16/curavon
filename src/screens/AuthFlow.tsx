@@ -1,11 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, Shield } from 'lucide-react';
-import { CuravonIcon } from '../components/CuravonBrand';
+import { CheckCircle2, ChevronRight, Lock, Shield } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fadeUp } from '../motion/variants';
+import { useScreenBack } from '../hooks/useScreenBack';
 
 type AuthStage = 'start' | 'create' | 'signin' | 'consent' | 'profile';
+
+function resolveAuthStage(
+  authDemoUser: { fullName: string; email: string } | null,
+  setupComplete: boolean,
+  consentComplete: boolean,
+): AuthStage {
+  if (!authDemoUser) return 'start';
+  if (setupComplete) return 'start';
+  return consentComplete ? 'profile' : 'consent';
+}
 
 type CreateForm = {
   fullName: string;
@@ -40,8 +50,19 @@ function isValidEmail(value: string): boolean {
 }
 
 export function AuthFlow() {
-  const { authDemoUser, setupComplete, setAuthDemoUser, completeProfileSetup, showToast } = useApp();
-  const [stage, setStage] = useState<AuthStage>(authDemoUser && !setupComplete ? 'consent' : 'start');
+  const {
+    authDemoUser,
+    setupComplete,
+    consentComplete,
+    setAuthDemoUser,
+    completeAuthConsent,
+    completeProfileSetup,
+    showToast,
+    resetToOnboarding,
+  } = useApp();
+  const [stage, setStage] = useState<AuthStage>(() =>
+    resolveAuthStage(authDemoUser, setupComplete, consentComplete),
+  );
   const [createForm, setCreateForm] = useState<CreateForm>({
     fullName: '',
     email: '',
@@ -52,11 +73,11 @@ export function AuthFlow() {
   });
   const [signInForm, setSignInForm] = useState<SignInForm>({ email: '', password: '' });
   const [profileName, setProfileName] = useState(authDemoUser?.fullName ?? '');
-  const [primaryGoal, setPrimaryGoal] = useState<(typeof PRIMARY_GOALS)[number]>('Reduce health overwhelm');
+  const [primaryGoals, setPrimaryGoals] = useState<string[]>([]);
   const [sensitiveMode, setSensitiveMode] = useState(false);
   const [smartSilencePreference, setSmartSilencePreference] = useState<
-    'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications'
-  >('gentle-reminders');
+    'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications' | null
+  >(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const trustCards = useMemo(
@@ -65,16 +86,19 @@ export function AuthFlow() {
         id: 'scope',
         title: 'Not a diagnosis',
         copy: 'Curavon helps organize concerns and next steps. It does not diagnose or replace a clinician.',
+        icon: 'shield' as const,
       },
       {
         id: 'urgent',
         title: 'Urgent symptoms',
         copy: 'If symptoms feel severe, sudden, or unsafe, seek urgent medical help or local emergency support.',
+        icon: 'check' as const,
       },
       {
         id: 'privacy',
         title: 'Privacy controls',
         copy: 'You can use Sensitive Mode, export data, and delete health notes from your profile.',
+        icon: 'shield' as const,
       },
     ],
     [],
@@ -130,38 +154,74 @@ export function AuthFlow() {
     goToConsent();
   };
 
+  const togglePrimaryGoal = (goal: (typeof PRIMARY_GOALS)[number]) => {
+    setPrimaryGoals((prev) =>
+      prev.includes(goal) ? prev.filter((g) => g !== goal) : [...prev, goal],
+    );
+  };
+
   const submitProfile = () => {
     const nextErrors: Record<string, string> = {};
     if (!profileName.trim()) nextErrors.profileName = 'Preferred name is required.';
-    if (!primaryGoal) nextErrors.primaryGoal = 'Choose a primary goal.';
+    if (primaryGoals.length === 0) nextErrors.primaryGoals = 'Choose at least one goal.';
+    if (!smartSilencePreference) nextErrors.smartSilencePreference = 'Choose a Smart Silence preference.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     completeProfileSetup({
       preferredName: profileName.trim(),
-      primaryGoal,
+      primaryGoals,
       sensitiveMode,
-      smartSilencePreference,
+      smartSilencePreference: smartSilencePreference as NonNullable<typeof smartSilencePreference>,
     });
   };
 
+  const goBack = useCallback(() => {
+    setErrors({});
+    if (stage === 'start') {
+      resetToOnboarding();
+      return;
+    }
+    if (stage === 'create' || stage === 'signin') {
+      setStage('start');
+      return;
+    }
+    if (stage === 'consent') {
+      setStage('start');
+      return;
+    }
+    if (stage === 'profile') {
+      setStage('consent');
+    }
+  }, [stage, resetToOnboarding]);
+
+  useScreenBack(goBack, true);
+
   return (
-    <div className="auth-shell">
-      <motion.section className="auth-card warm-card glass-card-inner" variants={fadeUp} initial="hidden" animate="visible">
+    <div className="auth-shell onboarding onboarding--flo">
+      <header className="onboarding-header auth-header">
+        <span className="onboarding-status-pill auth-status-pill">
+          <Lock size={15} aria-hidden="true" />
+          Account setup
+        </span>
+      </header>
+
+      <div className="auth-step">
+        <motion.div className="auth-main onboarding-main" variants={fadeUp} initial="hidden" animate="visible">
+          <section className="auth-card onboarding-card onboarding-card--flo warm-card glass-card-inner">
         {stage === 'start' ? (
           <>
-            <div className="auth-brand-wrap">
-              <div className="auth-brand-halo" aria-hidden="true" />
-              <CuravonIcon size={88} className="auth-brand-icon" />
+            <div className="auth-start-icon" aria-hidden="true">
+              <Lock size={28} strokeWidth={1.5} />
             </div>
-            <h1 className="auth-title">Welcome to Curavon</h1>
+            <h1 className="auth-title">Create your account</h1>
             <p className="auth-subtitle">
-              Private next-best-action health support, built to help you move from confusion to one clear
-              step.
+              Sign up or sign in to keep your health notes private, synced to you, and ready whenever
+              you return.
             </p>
             <p className="auth-trust-line">
               <Shield size={15} aria-hidden="true" />
-              <span>Private by design. Not a diagnosis tool.</span>
+              <span>Prototype account — private by design, not a diagnosis tool.</span>
             </p>
             <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={() => setStage('create')}>
               Create account
@@ -291,7 +351,7 @@ export function AuthFlow() {
             <div className="auth-trust-cards">
               {trustCards.map((card) => (
                 <div key={card.id} className="auth-trust-card">
-                  <CheckCircle2 size={16} />
+                  {card.icon === 'shield' ? <Shield size={16} /> : <CheckCircle2 size={16} />}
                   <div>
                     <h3>{card.title}</h3>
                     <p>{card.copy}</p>
@@ -299,7 +359,14 @@ export function AuthFlow() {
                 </div>
               ))}
             </div>
-            <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={() => setStage('profile')}>
+            <button
+              type="button"
+              className="btn btn-primary btn-pill auth-primary"
+              onClick={() => {
+                completeAuthConsent();
+                setStage('profile');
+              }}
+            >
               I understand
             </button>
           </>
@@ -315,20 +382,21 @@ export function AuthFlow() {
                 {errors.profileName ? <span className="auth-error">{errors.profileName}</span> : null}
               </label>
               <div className="auth-label">
-                Primary goal
+                Your goals
                 <div className="auth-choice-grid">
                   {PRIMARY_GOALS.map((goal) => (
                     <button
                       key={goal}
                       type="button"
-                      className={`auth-choice-chip ${primaryGoal === goal ? 'auth-choice-chip--active' : ''}`}
-                      onClick={() => setPrimaryGoal(goal)}
+                      className={`auth-choice-chip ${primaryGoals.includes(goal) ? 'auth-choice-chip--active' : ''}`}
+                      onClick={() => togglePrimaryGoal(goal)}
+                      aria-pressed={primaryGoals.includes(goal)}
                     >
                       {goal}
                     </button>
                   ))}
                 </div>
-                {errors.primaryGoal ? <span className="auth-error">{errors.primaryGoal}</span> : null}
+                {errors.primaryGoals ? <span className="auth-error">{errors.primaryGoals}</span> : null}
               </div>
               <div className="auth-setting-row">
                 <div>
@@ -346,6 +414,7 @@ export function AuthFlow() {
               </div>
               <div className="auth-label">
                 Smart Silence
+                <span className="auth-helper">Pick the notification style that feels right.</span>
                 <div className="auth-choice-grid auth-choice-grid--stacked">
                   {SMART_SILENCE_OPTIONS.map((option) => (
                     <button
@@ -353,11 +422,15 @@ export function AuthFlow() {
                       type="button"
                       className={`auth-choice-chip ${smartSilencePreference === option.id ? 'auth-choice-chip--active' : ''}`}
                       onClick={() => setSmartSilencePreference(option.id)}
+                      aria-pressed={smartSilencePreference === option.id}
                     >
                       {option.label}
                     </button>
                   ))}
                 </div>
+                {errors.smartSilencePreference ? (
+                  <span className="auth-error">{errors.smartSilencePreference}</span>
+                ) : null}
               </div>
             </div>
             <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={submitProfile}>
@@ -365,7 +438,9 @@ export function AuthFlow() {
             </button>
           </>
         ) : null}
-      </motion.section>
+          </section>
+        </motion.div>
+      </div>
     </div>
   );
 }

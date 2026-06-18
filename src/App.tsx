@@ -3,10 +3,14 @@ import type { ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 
 import { AppProvider, useApp } from './context/AppContext';
+import { HealthProvider } from './context/HealthContext';
+import { DoctorSummaryProvider } from './context/DoctorSummaryContext';
 
 import { TabBar } from './components/TabBar';
+import { DoctorSummaryOverlay } from './components/DoctorSummaryOverlay';
 
 import { Toast } from './components/ScreenHeader';
+import { PhoneChrome } from './components/PhoneChrome';
 
 import { CloudBackground, moodForTab, type CloudMood } from './components/CloudBackground';
 
@@ -87,7 +91,10 @@ function PhoneFrameShell({
 
       <div className="phone-ui-layer">{children}</div>
 
+      <DoctorSummaryOverlay />
 
+      <PhoneChrome />
+      <Toast />
 
       <div className="phone-home-indicator" aria-hidden="true" />
 
@@ -225,8 +232,6 @@ function PhoneShell() {
 
       <TabBar />
 
-      <Toast />
-
     </PhoneFrameShell>
 
   );
@@ -242,7 +247,8 @@ function App() {
     <MotionConfig reducedMotion="user">
 
       <AppProvider>
-
+        <HealthProvider>
+        <DoctorSummaryProvider>
         <div className="app-root">
 
           <div className="phone-scaler">
@@ -256,7 +262,8 @@ function App() {
           </div>
 
         </div>
-
+        </DoctorSummaryProvider>
+        </HealthProvider>
       </AppProvider>
 
     </MotionConfig>
