@@ -1,20 +1,6 @@
-import type { TabId } from '../context/AppContext';
 import type { ThemePreset } from '../theme/themes';
+import type { CloudMood } from '../utils/cloudMood';
 import { StarField } from './StarField';
-
-export type CloudMood = 'onboarding' | 'today' | 'ask' | 'flow' | 'learn' | 'profile' | 'safety';
-
-const TAB_MOOD: Record<TabId, CloudMood> = {
-  home: 'today',
-  ask: 'ask',
-  flow: 'flow',
-  circle: 'learn',
-  settings: 'profile',
-};
-
-export function moodForTab(tab: TabId): CloudMood {
-  return TAB_MOOD[tab];
-}
 
 interface CloudBackgroundProps {
   mood?: CloudMood;

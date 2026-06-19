@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { FileText } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useHealth } from '../context/HealthContext';
+import { useApp } from '../context/useApp';
+import { useHealth } from '../context/useHealth';
 import { themes } from '../theme/themes';
 import { SensitiveBlur } from './ScreenHeader';
 import { buildDoctorSummaryData } from '../utils/doctorSummaryBuilder';
@@ -29,7 +29,7 @@ function SummaryList({ items, color }: { items: string[]; color: string }) {
   );
 }
 
-export function DoctorSummary({ variant = 'card', onClose: _onClose, concern, loading }: DoctorSummaryProps) {
+export function DoctorSummary({ variant = 'card', concern, loading }: DoctorSummaryProps) {
   const { theme } = useApp();
   const { healthProfile, dailyCheckins, nextActionState } = useHealth();
   const tokens = themes[theme];

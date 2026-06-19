@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { CheckCircle2, Circle, AlertCircle, FileText, ChevronRight } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/useApp';
 import { themes } from '../theme/themes';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { staggerContainer, fadeUp, tapScale } from '../motion/variants';
@@ -44,9 +44,9 @@ const SECTIONS = [
   },
 ];
 
-/** @deprecated Legacy placeholder screen. Flow tab now routes to CareCircleScreen. */
+/** @deprecated Placeholder screen. Real guided flows live in CareCircleScreen / Guides. Not linked from navigation. */
 export function FullFlowScreen() {
-  const { theme, blockedReason, openDoctorSummary } = useApp();
+  const { theme, openDoctorSummary } = useApp();
   const tokens = themes[theme];
   const progressPct = (FLOW.progress / FLOW.total) * 100;
 
@@ -108,7 +108,6 @@ export function FullFlowScreen() {
               </li>
             ))}
           </ul>
-          <AnimatePresenceBlocker blockedReason={blockedReason} />
         </motion.div>
 
         {SECTIONS.map((section) => (
@@ -153,36 +152,5 @@ export function FullFlowScreen() {
         </motion.button>
       </motion.div>
     </div>
-  );
-}
-
-function AnimatePresenceBlocker({
-  blockedReason,
-}: {
-  blockedReason: import('../context/AppContext').BlockedReason;
-}) {
-  if (!blockedReason) return null;
-
-  const labels: Record<NonNullable<typeof blockedReason>, string> = {
-    time: 'No time',
-    forgot: 'Forgot',
-    hard: 'Too hard',
-    confusing: 'Confusing',
-    worse: 'Felt worse',
-    cost: 'Cost',
-    work: 'Work / school',
-    other: 'Other',
-  };
-
-  return (
-    <motion.p
-      className="flow-blocker-note"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28 }}
-      style={{ fontSize: 13, marginTop: 10 }}
-    >
-      Latest blocker: {labels[blockedReason]}
-    </motion.p>
   );
 }

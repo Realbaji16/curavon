@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useApp } from '../context/AppContext';
-import { useHealth } from '../context/HealthContext';
+import { useApp } from '../context/useApp';
+import { useHealth } from '../context/useHealth';
 import { themes } from '../theme/themes';
 import { ThemeToggle } from './ThemeToggle';
 import { CuravonBrandLockup } from './CuravonBrand';
@@ -60,9 +60,7 @@ export function Toast() {
 
 export function SensitiveBlur({ children, sensitive = false }: { children: React.ReactNode; sensitive?: boolean }) {
   const { healthProfile } = useHealth();
-  const { sensitiveMode: legacySensitiveMode } = useApp();
-  const sensitiveMode = healthProfile.sensitiveMode ?? legacySensitiveMode;
-  const shouldBlur = sensitiveMode && sensitive;
+  const shouldBlur = healthProfile.sensitiveMode && sensitive;
 
   return (
     <span className={shouldBlur ? 'sensitive-blur' : ''}>{children}</span>

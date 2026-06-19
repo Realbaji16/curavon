@@ -1,6 +1,5 @@
 import {
   createContext,
-  useContext,
   useState,
   useCallback,
   useMemo,
@@ -32,8 +31,8 @@ import {
   createRedFlagSummaryItem,
 } from '../utils/doctorSummaryItems';
 import { findUrgentMatches, URGENT_SAFETY_MESSAGE } from '../utils/healthSafety';
-import { useHealth } from './HealthContext';
-import { useApp } from './AppContext';
+import { useHealth } from './useHealth';
+import { useApp } from './useApp';
 import {
   formatDoctorSummaryAsPlainText,
   generateDoctorSummaryAI,
@@ -77,6 +76,8 @@ interface DoctorSummaryContextValue {
 }
 
 const DoctorSummaryContext = createContext<DoctorSummaryContextValue | null>(null);
+
+export { DoctorSummaryContext };
 
 export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
   const { healthProfile } = useHealth();
@@ -307,10 +308,4 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
       {children}
     </DoctorSummaryContext.Provider>
   );
-}
-
-export function useDoctorSummary() {
-  const ctx = useContext(DoctorSummaryContext);
-  if (!ctx) throw new Error('useDoctorSummary must be used within DoctorSummaryProvider');
-  return ctx;
 }

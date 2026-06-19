@@ -9,9 +9,9 @@ import {
   EyeOff,
   MessageCircle,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
-import { useHealth } from '../context/HealthContext';
+import { useApp } from '../context/useApp';
+import { useDoctorSummary } from '../context/useDoctorSummary';
+import { useHealth } from '../context/useHealth';
 import { useScreenBack } from '../hooks/useScreenBack';
 import {
   CALM_URGENT_BODY,

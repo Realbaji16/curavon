@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, Copy, Download, Trash2, Plus, Sparkles, RefreshCw, Save } from 'lucide-react';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
+import { useDoctorSummary } from '../context/useDoctorSummary';
 import { SensitiveBlur } from './ScreenHeader';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
 

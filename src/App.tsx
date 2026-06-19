@@ -1,250 +1,64 @@
-import type { ReactNode } from 'react';
-
-import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
-
-import { AppProvider, useApp } from './context/AppContext';
-import { HealthProvider, useHealth } from './context/HealthContext';
+import { lazy, Suspense, useEffect } from 'react';
+import { MotionConfig } from 'framer-motion';
+import { AppProvider } from './context/AppContext';
+import { useApp } from './context/useApp';
+import type { TabId } from './context/AppContext';
+import { HealthProvider } from './context/HealthContext';
 import { DoctorSummaryProvider } from './context/DoctorSummaryContext';
 import { CuravonAuthProvider } from './lib/auth/authProvider';
-
-import { TabBar } from './components/TabBar';
-import { DoctorSummaryOverlay } from './components/DoctorSummaryOverlay';
-
-import { Toast } from './components/ScreenHeader';
-import { PhoneChrome } from './components/PhoneChrome';
-
-import { CloudBackground, moodForTab, type CloudMood } from './components/CloudBackground';
-
-import { Onboarding } from './screens/Onboarding';
-
+import { AppAuthGate } from './components/AppAuthGate';
+import { RouteLoadingFallback } from './components/RouteLoadingFallback';
 import { HomeScreen } from './screens/Home';
-
-import { AskCuravonScreen } from './screens/AskCuravon';
-
-import { CareCircleScreen } from './screens/CareCircle';
-
-import { SettingsScreen } from './screens/Settings';
-import { AuthFlow } from './screens/AuthFlow';
-
-import { softPageTransition } from './motion/variants';
-
-import type { ThemePreset } from './theme/themes';
-
-import { getThemeCssVars } from './theme/themeStyles';
-
 import './App.css';
 
+const AskCuravonScreen = lazy(() =>
+  import('./screens/AskCuravon').then((module) => ({ default: module.AskCuravonScreen })),
+);
+const CareCircleScreen = lazy(() =>
+  import('./screens/CareCircle').then((module) => ({ default: module.CareCircleScreen })),
+);
+const SettingsScreen = lazy(() =>
+  import('./screens/Settings').then((module) => ({ default: module.SettingsScreen })),
+);
 
+const TAB_LOADING_MESSAGE: Record<TabId, string> = {
+  home: 'Loading Curavon…',
+  ask: 'Loading Ask…',
+  circle: 'Loading Guides…',
+  flow: 'Loading Guides…',
+  settings: 'Loading Profile…',
+};
 
-function PhoneFrameShell({
+function MainAppTabs() {
+  const { activeTab, setActiveTab } = useApp();
 
-  cloudMood,
+  useEffect(() => {
+    if (activeTab === 'flow') {
+      setActiveTab('circle');
+    }
+  }, [activeTab, setActiveTab]);
 
-  theme,
+  const resolvedTab = activeTab === 'flow' ? 'circle' : activeTab;
+  const loadingMessage = TAB_LOADING_MESSAGE[resolvedTab] ?? 'Loading Curavon…';
 
-  className = '',
-
-  children,
-
-}: {
-
-  cloudMood: CloudMood;
-
-  theme: ThemePreset;
-
-  className?: string;
-
-  children: ReactNode;
-
-}) {
-
-  const themeStyle = getThemeCssVars(theme);
-
-
-
-  return (
-
-    <div
-
-      className={`phone-frame phone-frame--device phone-frame--${theme} ${className}`}
-
-      data-theme={theme}
-
-      style={themeStyle}
-
-    >
-
-      <div className="phone-bezel" aria-hidden="true" />
-
-      <div className="phone-dynamic-island" aria-hidden="true" />
-
-
-
-      <div className="phone-sky-layer" aria-hidden="true">
-
-        <CloudBackground mood={cloudMood} theme={theme} />
-
-      </div>
-
-
-
-      <div className="phone-ui-layer">{children}</div>
-
-      <DoctorSummaryOverlay />
-
-      <PhoneChrome />
-      <Toast />
-
-      <div className="phone-home-indicator" aria-hidden="true" />
-
-    </div>
-
-  );
-
-}
-
-
-
-function PhoneShell() {
-
-  const {
-    onboardingComplete,
-    authDemoUser,
-    setupComplete,
-    activeTab,
-    showSafetyEscalation,
-    theme,
-  } = useApp();
-
-  const { healthProfile } = useHealth();
-  const sensitiveMode = healthProfile.sensitiveMode;
-
-
-
-  const cloudMood = showSafetyEscalation
-
-    ? 'safety'
-
-    : onboardingComplete
-
-      ? moodForTab(activeTab)
-
-      : 'onboarding';
-
-
-
-  if (!onboardingComplete) {
-
-    return (
-
-      <PhoneFrameShell cloudMood="onboarding" theme={theme}>
-
-        <Onboarding />
-
-      </PhoneFrameShell>
-
-    );
-
+  let screen = <HomeScreen />;
+  if (resolvedTab === 'ask') {
+    screen = <AskCuravonScreen />;
+  } else if (resolvedTab === 'circle') {
+    screen = <CareCircleScreen />;
+  } else if (resolvedTab === 'settings') {
+    screen = <SettingsScreen />;
   }
 
-  if (!authDemoUser || !setupComplete) {
-    return (
-      <PhoneFrameShell cloudMood="onboarding" theme={theme}>
-        <AuthFlow />
-      </PhoneFrameShell>
-    );
-  }
-
-
-
-  const screens: Record<string, ReactNode> = {
-
-    home: <HomeScreen />,
-
-    ask: <AskCuravonScreen />,
-
-    flow: <CareCircleScreen />,
-
-    circle: <CareCircleScreen />,
-
-    settings: <SettingsScreen />,
-
-  };
-
-
-
   return (
-
-    <PhoneFrameShell
-
-      cloudMood={cloudMood}
-
-      theme={theme}
-
-      className={sensitiveMode ? 'sensitive-mode-active' : ''}
-
-    >
-
-      <div className="phone-status-bar">
-
-        <span className="status-time">9:41</span>
-
-        <div className="status-icons">
-
-          <span>●●●</span>
-
-          <span>WiFi</span>
-
-          <span>🔋</span>
-
-        </div>
-
-      </div>
-
-
-
-      <main className="phone-content">
-
-        <AnimatePresence mode="sync" initial={false}>
-
-          <motion.div
-
-            key={activeTab}
-
-            className="screen-wrapper"
-
-            initial={softPageTransition.initial}
-
-            animate={softPageTransition.animate}
-
-            exit={softPageTransition.exit}
-
-          >
-
-            {screens[activeTab]}
-
-          </motion.div>
-
-        </AnimatePresence>
-
-      </main>
-
-
-
-      <TabBar />
-
-    </PhoneFrameShell>
-
+    <Suspense fallback={<RouteLoadingFallback message={loadingMessage} />}>
+      {screen}
+    </Suspense>
   );
-
 }
-
-
 
 function App() {
-
   return (
-
     <MotionConfig reducedMotion="user">
       <CuravonAuthProvider mode="local_demo">
         <AppProvider>
@@ -253,7 +67,9 @@ function App() {
               <div className="app-root">
                 <div className="phone-scaler">
                   <div className="phone-device">
-                    <PhoneShell />
+                    <AppAuthGate>
+                      <MainAppTabs />
+                    </AppAuthGate>
                   </div>
                 </div>
               </div>
@@ -262,12 +78,7 @@ function App() {
         </AppProvider>
       </CuravonAuthProvider>
     </MotionConfig>
-
   );
-
 }
 
-
-
 export default App;
-

@@ -2572,6 +2572,26 @@ body {
   display: none;
 }
 
+.route-loading-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 2rem 1.5rem 6rem;
+}
+
+.route-loading-text {
+  margin: 0;
+  color: var(--text-muted, rgba(255, 255, 255, 0.72));
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.auth-loading-shell {
+  min-height: 40vh;
+}
+
 .safe-area-top {
   height: var(--phone-safe-top);
 }
@@ -5748,6 +5768,98 @@ body {
     rgba(255, 255, 255, 0.35) 0%,
     rgba(255, 255, 255, 0.12) 100%
   );
+}
+
+/* ─── Full Flow overlay (Today next-action pathway) ─── */
+.fullflow-overlay {
+  z-index: 124;
+}
+
+.fullflow-header {
+  margin-bottom: 16px;
+}
+
+.fullflow-title {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-title);
+  line-height: 1.25;
+}
+
+.fullflow-subtitle {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.fullflow-disclaimer {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--glass-border);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.fullflow-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.fullflow-section-card {
+  padding: 14px 16px;
+}
+
+.fullflow-section-card--urgent {
+  border-color: rgba(180, 90, 70, 0.35);
+  background: rgba(255, 248, 245, 0.72);
+}
+
+.fullflow-section-card--caution {
+  border-color: rgba(180, 140, 60, 0.3);
+}
+
+.fullflow-section-card--supportive {
+  border-color: rgba(72, 140, 130, 0.25);
+}
+
+.fullflow-section-title {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-title);
+}
+
+.fullflow-section-body {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-body);
+  white-space: pre-line;
+}
+
+.fullflow-section-action {
+  margin-top: 4px;
+  font-size: 0.84rem;
+}
+
+.home-fullflow-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.86rem;
+  opacity: 0.92;
+}
+
+.home-hero-empty .home-fullflow-link {
+  margin-top: 14px;
 }
 
 .timeline-row {

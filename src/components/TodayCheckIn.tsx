@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
-import { useHealth } from '../context/HealthContext';
-import { useApp } from '../context/AppContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
+import type { DailyStepsState } from '../types/health';
+import { useHealth } from '../context/useHealth';
+import { useApp } from '../context/useApp';
+import { useDoctorSummary } from '../context/useDoctorSummary';
 import { useScreenBack } from '../hooks/useScreenBack';
 import {
   CALM_URGENT_TITLE,
@@ -41,40 +42,49 @@ const INITIAL_DRAFT: CheckInDraft = {
   stepsBand: '',
 };
 
-export function TodayCheckIn() {
-  const { showCheckIn, closeCheckIn, saveCheckIn, dailySteps, openUrgentSafety, showUrgentSafety, closeUrgentSafety } = useHealth();
-  const { openDoctorSummary } = useApp();
-  const { logRedFlag } = useDoctorSummary();
+function createInitialDraft(dailySteps: DailyStepsState): CheckInDraft {
+  return {
+    ...INITIAL_DRAFT,
+    steps: dailySteps.steps > 0 ? dailySteps.steps : 0,
+  };
+}
+
+interface CheckInWizardProps {
+  dailySteps: DailyStepsState;
+  onClose: () => void;
+  saveCheckIn: ReturnType<typeof useHealth>['saveCheckIn'];
+  openUrgentSafety: () => void;
+  showUrgentSafety: boolean;
+  closeUrgentSafety: () => void;
+  openDoctorSummary: () => void;
+  logRedFlag: ReturnType<typeof useDoctorSummary>['logRedFlag'];
+}
+
+function CheckInWizard({
+  dailySteps,
+  onClose,
+  saveCheckIn,
+  openUrgentSafety,
+  showUrgentSafety,
+  closeUrgentSafety,
+  openDoctorSummary,
+  logRedFlag,
+}: CheckInWizardProps) {
   const [step, setStep] = useState(0);
-  const [draft, setDraft] = useState<CheckInDraft>(INITIAL_DRAFT);
+  const [draft, setDraft] = useState<CheckInDraft>(() => createInitialDraft(dailySteps));
   const [textInput, setTextInput] = useState('');
   const [urgentSafetyContext, setUrgentSafetyContext] = useState<{
     title: string;
     body: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (!showCheckIn) {
-      setStep(0);
-      setDraft(INITIAL_DRAFT);
-      setTextInput('');
-      setUrgentSafetyContext(null);
-      return;
-    }
-    if (dailySteps.steps > 0) {
-      setDraft((d) => ({ ...d, steps: dailySteps.steps }));
-    }
-  }, [showCheckIn, dailySteps.steps]);
-
   useScreenBack(
     () => {
       if (step > 0) setStep((s) => s - 1);
-      else closeCheckIn();
+      else onClose();
     },
-    showCheckIn,
+    true,
   );
-
-  if (!showCheckIn) return null;
 
   const current = STEPS[step];
   const progress = ((step + 1) / STEPS.length) * 100;
@@ -146,7 +156,7 @@ export function TodayCheckIn() {
 
   return (
     <div className="checkin-overlay">
-      <div className="checkin-overlay-backdrop" onClick={closeCheckIn} aria-hidden="true" />
+      <div className="checkin-overlay-backdrop" onClick={onClose} aria-hidden="true" />
       <motion.div
         className="checkin-panel warm-card glass-card-inner"
         initial={{ opacity: 0, y: 24 }}
@@ -239,7 +249,7 @@ export function TodayCheckIn() {
           <button
             type="button"
             className="checkin-nav-btn checkin-nav-btn--back"
-            onClick={() => (step > 0 ? setStep((s) => s - 1) : closeCheckIn())}
+            onClick={() => (step > 0 ? setStep((s) => s - 1) : onClose())}
           >
             <ChevronLeft size={18} />
             Back
@@ -324,5 +334,35 @@ export function TodayCheckIn() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export function TodayCheckIn() {
+  const {
+    showCheckIn,
+    closeCheckIn,
+    saveCheckIn,
+    dailySteps,
+    openUrgentSafety,
+    showUrgentSafety,
+    closeUrgentSafety,
+  } = useHealth();
+  const { openDoctorSummary } = useApp();
+  const { logRedFlag } = useDoctorSummary();
+
+  if (!showCheckIn) return null;
+
+  return (
+    <CheckInWizard
+      key="today-check-in"
+      dailySteps={dailySteps}
+      onClose={closeCheckIn}
+      saveCheckIn={saveCheckIn}
+      openUrgentSafety={openUrgentSafety}
+      showUrgentSafety={showUrgentSafety}
+      closeUrgentSafety={closeUrgentSafety}
+      openDoctorSummary={openDoctorSummary}
+      logRedFlag={logRedFlag}
+    />
   );
 }

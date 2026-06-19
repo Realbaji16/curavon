@@ -1,7 +1,9 @@
 import { APP_STORAGE_KEYS, DELETE_HEALTH_DATA_KEYS } from './storageKeys';
 import { safeRemove } from '../../utils/healthStorage';
 
-export function deleteAllHealthData(_userId: string) {
+export function deleteAllHealthData(userId: string) {
+  // Keys are device-local today; userId reserved for future per-user scoping.
+  void userId;
   DELETE_HEALTH_DATA_KEYS.forEach((key) => {
     safeRemove(key);
   });

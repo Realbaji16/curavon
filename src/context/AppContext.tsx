@@ -1,19 +1,17 @@
 import {
   createContext,
-  useContext,
   useState,
   useCallback,
   useRef,
-  useEffect,
   type ReactNode,
 } from 'react';
 import type { ThemePreset } from '../theme/themes';
 import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
-import { useCuravonAuth } from '../lib/auth/authProvider';
-import { detectUrgentConcern } from '../utils/healthSafety';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 
-export type TabId = 'home' | 'ask' | 'flow' | 'circle' | 'settings';
+export type TabId = 'home' | 'ask' | 'circle' | 'settings' | 'flow';
 
+/** @deprecated Legacy blocker labels for unused BottomSheets.tsx compatibility. */
 export type BlockedReason =
   | 'time'
   | 'forgot'
@@ -31,12 +29,6 @@ export interface OnboardingData {
   goals: string[];
   goalNotes?: string;
   sensitiveMode: boolean;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  text: string;
 }
 
 export interface DemoAuthUser {
@@ -83,34 +75,15 @@ function normalizeProfileSetup(
 
 interface AppState {
   onboardingComplete: boolean;
-  /** Legacy auth compatibility. Canonical auth source is CuravonAuthProvider. */
+  /** Legacy auth display mirror only. Canonical auth source is CuravonAuthProvider. */
   authDemoUser: DemoAuthUser | null;
   consentComplete: boolean;
   setupComplete: boolean;
   profileSetup: ProfileSetupData | null;
   theme: ThemePreset;
   activeTab: TabId;
-  /** Legacy mirror. Sensitive Mode canonical source: Health Profile. */
-  sensitiveMode: boolean;
   onboardingData: OnboardingData;
-  actionDone: boolean;
-  actionAdjusted: boolean;
-  blockedReason: BlockedReason;
-  showBlockedSheet: boolean;
-  showSafetyEscalation: boolean;
-  chatMessages: ChatMessage[];
-  chatStep: number;
   toast: string | null;
-  showShareSheet: boolean;
-  flowView: 'timeline' | 'daily';
-  smartSilence: {
-    criticalOnly: boolean;
-    dailyDigest: boolean;
-    goalCoaching: boolean;
-  };
-  streak: number;
-  healthPoints: number;
-  whyExpanded: boolean;
   showDoctorSummary: boolean;
   pendingGuideFlowId: string | null;
 }
@@ -119,30 +92,19 @@ interface AppContextValue extends AppState {
   setTheme: (t: ThemePreset) => void;
   setActiveTab: (tab: TabId) => void;
   completeOnboarding: (data: OnboardingData) => void;
-  setSensitiveMode: (v: boolean) => void;
-  markActionDone: () => void;
-  adjustAction: () => void;
-  openBlockedSheet: () => void;
-  closeBlockedSheet: () => void;
-  selectBlockedReason: (reason: BlockedReason) => void;
-  addChatMessage: (text: string) => void;
-  resetChat: () => void;
   showToast: (msg: string) => void;
   dismissToast: () => void;
-  openShareSheet: () => void;
-  closeShareSheet: () => void;
-  setFlowView: (v: 'timeline' | 'daily') => void;
-  toggleSmartSilence: (key: keyof AppState['smartSilence']) => void;
-  toggleWhyExpanded: () => void;
-  clearAllData: () => void;
-  sendNudge: (memberId: string) => void;
   openDoctorSummary: () => void;
   closeDoctorSummary: () => void;
   openGuidesWithFlow: (flowId: string) => void;
   clearPendingGuideFlow: () => void;
+  /** @deprecated Use CuravonAuthProvider signUp/signIn. Mirror syncs automatically. */
   setAuthDemoUser: (user: DemoAuthUser) => void;
   completeAuthConsent: () => void;
   completeProfileSetup: (setup: ProfileSetupData & { sensitiveMode: boolean }) => void;
+  /** Clears consent/setup shell state after canonical signOut. Does not write auth credentials. */
+  clearAuthShellState: () => void;
+  /** @deprecated Use signOut() from useCuravonAuth plus clearAuthShellState(). */
   signOutDemo: () => void;
   resetToOnboarding: () => void;
   screenBackVisible: boolean;
@@ -194,25 +156,30 @@ function clearSessionForOnboarding() {
   safeRemove(STORAGE_KEYS.profileSetup);
 }
 
+function createShellState(overrides: Partial<AppState> = {}): AppState {
+  return {
+    onboardingComplete: false,
+    authDemoUser: null,
+    consentComplete: false,
+    setupComplete: false,
+    profileSetup: null,
+    theme: 'sky',
+    activeTab: 'home',
+    onboardingData: defaultOnboarding,
+    toast: null,
+    showDoctorSummary: false,
+    pendingGuideFlowId: null,
+    ...overrides,
+  };
+}
+
 const AppContext = createContext<AppContextValue | null>(null);
 
-// Legacy chat compatibility path. Active safety uses src/utils/healthSafety.ts.
-const CHAT_FLOWS: Record<number, { trigger?: string; response: string }[]> = {
-  0: [
-    { response: 'Thanks for sharing that. When did you first notice this change?' },
-  ],
-  1: [
-    { response: 'Got it. Have you started any new skincare products, medications, or changed your diet recently?' },
-  ],
-  2: [
-    { response: 'One more thing — is there any itching, burning, or pain associated with the breakouts?' },
-  ],
-};
+export { AppContext };
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useCuravonAuth();
   const onboardingSeen = safeRead<boolean>(STORAGE_KEYS.onboardingSeen, false);
-  const authDemoUser = safeRead<DemoAuthUser | null>(STORAGE_KEYS.authDemoUser, null);
   const consentComplete = safeRead<boolean>(STORAGE_KEYS.consentComplete, false);
   const setupComplete = safeRead<boolean>(STORAGE_KEYS.setupComplete, false);
   const profileSetup = normalizeProfileSetup(
@@ -221,53 +188,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const screenBackHandlerRef = useRef<(() => void) | null>(null);
   const [screenBackVisible, setScreenBackVisible] = useState(false);
 
-  const [state, setState] = useState<AppState>({
-    onboardingComplete: onboardingSeen,
-    authDemoUser,
-    consentComplete,
-    setupComplete,
-    profileSetup,
-    theme: 'sky',
-    activeTab: 'home',
-    sensitiveMode: false,
-    onboardingData: defaultOnboarding,
-    actionDone: false,
-    actionAdjusted: false,
-    blockedReason: null,
-    showBlockedSheet: false,
-    showSafetyEscalation: false,
-    chatMessages: [
-      {
-        id: 'welcome',
-        role: 'assistant',
-        text: 'Hi — I\'m here to help you organize what\'s going on and find one safe next step. I don\'t diagnose or prescribe. What would you like to focus on today?',
-      },
-    ],
-    chatStep: 0,
-    toast: null,
-    showShareSheet: false,
-    flowView: 'timeline',
-    smartSilence: {
-      criticalOnly: false,
-      dailyDigest: true,
-      goalCoaching: true,
-    },
-    streak: 5,
-    healthPoints: 340,
-    whyExpanded: false,
-    showDoctorSummary: false,
-    pendingGuideFlowId: null,
-  });
+  const [state, setState] = useState<AppState>(() =>
+    createShellState({
+      onboardingComplete: onboardingSeen,
+      consentComplete,
+      setupComplete,
+      profileSetup,
+    }),
+  );
 
-  useEffect(() => {
-    if (authLoading) return;
-    setState((s) => ({
-      ...s,
-      authDemoUser: user
-        ? { fullName: user.displayName, email: user.email }
-        : null,
-    }));
-  }, [user, authLoading]);
+  const authDemoUser =
+    !authLoading && user ? { fullName: user.displayName, email: user.email } : null;
 
   const setScreenBack = useCallback((handler: (() => void) | null, visible = true) => {
     const active = Boolean(visible && handler);
@@ -288,7 +219,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setActiveTab = useCallback((activeTab: TabId) => {
-    setState((s) => ({ ...s, activeTab }));
+    const normalizedTab = activeTab === 'flow' ? 'circle' : activeTab;
+    setState((s) => ({ ...s, activeTab: normalizedTab }));
   }, []);
 
   const completeOnboarding = useCallback((data: OnboardingData) => {
@@ -297,14 +229,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...s,
       onboardingComplete: true,
       onboardingData: data,
-      sensitiveMode: data.sensitiveMode,
     }));
   }, []);
 
   const setAuthDemoUser = useCallback((user: DemoAuthUser) => {
-    safeWrite(STORAGE_KEYS.authDemoUser, user);
-    setState((s) => ({ ...s, authDemoUser: user }));
+    // Legacy auth display mirror only. Canonical auth source is CuravonAuthProvider.
+    void user;
   }, []);
+
+  const clearAuthShellState = useCallback(() => {
+    safeRemove(STORAGE_KEYS.consentComplete);
+    safeRemove(STORAGE_KEYS.setupComplete);
+    safeRemove(STORAGE_KEYS.profileSetup);
+    setState((s) => ({
+      ...s,
+      authDemoUser: null,
+      consentComplete: false,
+      setupComplete: false,
+      profileSetup: null,
+      activeTab: 'home',
+      showDoctorSummary: false,
+      toast: null,
+    }));
+  }, []);
+
+  const signOutDemo = clearAuthShellState;
 
   const completeAuthConsent = useCallback(() => {
     safeWrite(STORAGE_KEYS.consentComplete, true);
@@ -313,12 +262,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const completeProfileSetup = useCallback(
     (setup: ProfileSetupData & { sensitiveMode: boolean }) => {
-      const nextSmartSilence =
-        setup.smartSilencePreference === 'daily-digest-only'
-          ? { criticalOnly: false, dailyDigest: true, goalCoaching: false }
-          : setup.smartSilencePreference === 'minimal-notifications'
-            ? { criticalOnly: true, dailyDigest: false, goalCoaching: false }
-            : { criticalOnly: false, dailyDigest: true, goalCoaching: true };
       const persistedProfile: ProfileSetupData = {
         preferredName: setup.preferredName,
         primaryGoals: setup.primaryGoals,
@@ -344,161 +287,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...s,
         setupComplete: true,
         profileSetup: persistedProfile,
-        sensitiveMode: setup.sensitiveMode,
-        smartSilence: nextSmartSilence,
       }));
     },
     [],
   );
 
-  const signOutDemo = useCallback(() => {
-    safeRemove(STORAGE_KEYS.authDemoUser);
-    safeRemove(STORAGE_KEYS.consentComplete);
-    safeRemove(STORAGE_KEYS.setupComplete);
-    safeRemove(STORAGE_KEYS.profileSetup);
-    setState((s) => ({
-      ...s,
-      authDemoUser: null,
-      consentComplete: false,
-      setupComplete: false,
-      profileSetup: null,
-      activeTab: 'home',
-      showDoctorSummary: false,
-      showShareSheet: false,
-      toast: null,
-    }));
-  }, []);
-
   const resetToOnboarding = useCallback(() => {
     clearSessionForOnboarding();
     screenBackHandlerRef.current = null;
     setScreenBackVisible(false);
-    setState({
-      onboardingComplete: false,
-      authDemoUser: null,
-      consentComplete: false,
-      setupComplete: false,
-      profileSetup: null,
-      theme: 'sky',
-      activeTab: 'home',
-      sensitiveMode: false,
-      onboardingData: defaultOnboarding,
-      actionDone: false,
-      actionAdjusted: false,
-      blockedReason: null,
-      showBlockedSheet: false,
-      showSafetyEscalation: false,
-      chatMessages: [
-        {
-          id: 'welcome',
-          role: 'assistant',
-          text: 'Hi — I\'m here to help you organize what\'s going on and find one safe next step. I don\'t diagnose or prescribe. What would you like to focus on today?',
-        },
-      ],
-      chatStep: 0,
-      toast: null,
-      showShareSheet: false,
-      flowView: 'timeline',
-      smartSilence: {
-        criticalOnly: false,
-        dailyDigest: true,
-        goalCoaching: true,
-      },
-      streak: 5,
-      healthPoints: 340,
-      whyExpanded: false,
-      showDoctorSummary: false,
-      pendingGuideFlowId: null,
-    });
-  }, []);
-
-  const setSensitiveMode = useCallback((sensitiveMode: boolean) => {
-    // Legacy mirror only. Writes should go through Health Profile (HealthContext).
-    setState((s) => ({ ...s, sensitiveMode }));
-  }, []);
-
-  const markActionDone = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      actionDone: true,
-      streak: s.streak + 1,
-      healthPoints: s.healthPoints + 25,
-    }));
-  }, []);
-
-  const adjustAction = useCallback(() => {
-    setState((s) => ({ ...s, actionAdjusted: !s.actionAdjusted }));
-  }, []);
-
-  const openBlockedSheet = useCallback(() => {
-    setState((s) => ({ ...s, showBlockedSheet: true }));
-  }, []);
-
-  const closeBlockedSheet = useCallback(() => {
-    setState((s) => ({ ...s, showBlockedSheet: false }));
-  }, []);
-
-  const selectBlockedReason = useCallback((reason: BlockedReason) => {
-    setState((s) => ({
-      ...s,
-      blockedReason: reason,
-      showBlockedSheet: false,
-      actionAdjusted: true,
-    }));
-  }, []);
-
-  const addChatMessage = useCallback((text: string) => {
-    setState((s) => {
-      const urgent = detectUrgentConcern(text);
-
-      const userMsg: ChatMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        text,
-      };
-
-      if (urgent.hasUrgent) {
-        return {
-          ...s,
-          chatMessages: [...s.chatMessages, userMsg],
-          showSafetyEscalation: true,
-        };
-      }
-
-      const flow = CHAT_FLOWS[s.chatStep];
-      const newMessages = [...s.chatMessages, userMsg];
-
-      if (flow) {
-        flow.forEach((step, i) => {
-          newMessages.push({
-            id: `assistant-${Date.now()}-${i}`,
-            role: 'assistant',
-            text: step.response,
-          });
-        });
-      }
-
-      return {
-        ...s,
-        chatMessages: newMessages,
-        chatStep: s.chatStep + 1,
-      };
-    });
-  }, []);
-
-  const resetChat = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      chatMessages: [
-        {
-          id: 'welcome',
-          role: 'assistant',
-          text: 'Hi there! I\'m Curavon — your action companion. Tell me what\'s going on and I\'ll help you figure out a gentle next step.',
-        },
-      ],
-      chatStep: 0,
-      showSafetyEscalation: false,
-    }));
+    setState(createShellState());
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -506,29 +304,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => {
       setState((s) => (s.toast === msg ? { ...s, toast: null } : s));
     }, 2500);
-  }, []);
-
-  const openShareSheet = useCallback(() => {
-    setState((s) => ({ ...s, showShareSheet: true }));
-  }, []);
-
-  const closeShareSheet = useCallback(() => {
-    setState((s) => ({ ...s, showShareSheet: false }));
-  }, []);
-
-  const setFlowView = useCallback((flowView: 'timeline' | 'daily') => {
-    setState((s) => ({ ...s, flowView }));
-  }, []);
-
-  const toggleSmartSilence = useCallback((key: keyof AppState['smartSilence']) => {
-    setState((s) => ({
-      ...s,
-      smartSilence: { ...s.smartSilence, [key]: !s.smartSilence[key] },
-    }));
-  }, []);
-
-  const toggleWhyExpanded = useCallback(() => {
-    setState((s) => ({ ...s, whyExpanded: !s.whyExpanded }));
   }, []);
 
   const openDoctorSummary = useCallback(() => {
@@ -547,82 +322,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, pendingGuideFlowId: null }));
   }, []);
 
-  const clearAllData = useCallback(() => {
-    safeRemove(STORAGE_KEYS.onboardingSeen);
-    safeRemove(STORAGE_KEYS.authDemoUser);
-    safeRemove(STORAGE_KEYS.consentComplete);
-    safeRemove(STORAGE_KEYS.setupComplete);
-    safeRemove(STORAGE_KEYS.profileSetup);
-    setState({
-      onboardingComplete: false,
-      authDemoUser: null,
-      consentComplete: false,
-      setupComplete: false,
-      profileSetup: null,
-      theme: 'sky',
-      activeTab: 'home',
-      sensitiveMode: false,
-      onboardingData: defaultOnboarding,
-      actionDone: false,
-      actionAdjusted: false,
-      blockedReason: null,
-      showBlockedSheet: false,
-      showSafetyEscalation: false,
-      chatMessages: [
-        {
-          id: 'welcome',
-          role: 'assistant',
-          text: 'Hi — I\'m here to help you organize what\'s going on and find one safe next step.',
-        },
-      ],
-      chatStep: 0,
-      toast: null,
-      showShareSheet: false,
-      flowView: 'timeline',
-      smartSilence: {
-        criticalOnly: false,
-        dailyDigest: true,
-        goalCoaching: true,
-      },
-      streak: 0,
-      healthPoints: 0,
-      whyExpanded: false,
-      showDoctorSummary: false,
-      pendingGuideFlowId: null,
-    });
-  }, []);
-
-  const sendNudge = useCallback(
-    (_memberId: string) => {
-      showToast('Nudge Sent!');
-    },
-    [showToast],
-  );
-
   return (
     <AppContext.Provider
       value={{
         ...state,
+        authDemoUser,
         setTheme,
         setActiveTab,
         completeOnboarding,
-        setSensitiveMode,
-        markActionDone,
-        adjustAction,
-        openBlockedSheet,
-        closeBlockedSheet,
-        selectBlockedReason,
-        addChatMessage,
-        resetChat,
         showToast,
         dismissToast: () => setState((s) => ({ ...s, toast: null })),
-        openShareSheet,
-        closeShareSheet,
-        setFlowView,
-        toggleSmartSilence,
-        toggleWhyExpanded,
-        clearAllData,
-        sendNudge,
         openDoctorSummary,
         closeDoctorSummary,
         openGuidesWithFlow,
@@ -630,6 +339,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAuthDemoUser,
         completeAuthConsent,
         completeProfileSetup,
+        clearAuthShellState,
         signOutDemo,
         resetToOnboarding,
         screenBackVisible,
@@ -640,10 +350,4 @@ export function AppProvider({ children }: { children: ReactNode }) {
       {children}
     </AppContext.Provider>
   );
-}
-
-export function useApp() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
-  return ctx;
 }

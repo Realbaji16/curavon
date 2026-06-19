@@ -1,13 +1,13 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Shield, Lock, Heart, User, FileText } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useHealth } from '../context/HealthContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
+import { useApp } from '../context/useApp';
+import { useHealth } from '../context/useHealth';
+import { useDoctorSummary } from '../context/useDoctorSummary';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HealthListEditor } from '../components/HealthListEditor';
 import type { SmartSilencePreference } from '../types/health';
 import { clearAskHistory } from '../utils/askIntakeStorage';
-import { useCuravonAuth } from '../lib/auth/authProvider';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
 import { safeRead } from '../utils/healthStorage';
 import {
@@ -28,9 +28,8 @@ const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
 export function SettingsScreen() {
   const {
     authDemoUser,
-    resetChat,
     showToast,
-    signOutDemo,
+    clearAuthShellState,
     openDoctorSummary,
   } = useApp();
   const {
@@ -43,7 +42,7 @@ export function SettingsScreen() {
     smartSilenceLabel,
   } = useHealth();
   const { includedCount, latestDraftDate, clearAllDoctorSummaryData } = useDoctorSummary();
-  const { session, signOut, deleteLocalAccount } = useCuravonAuth();
+  const { session, user, signOut, deleteLocalAccount } = useCuravonAuth();
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -151,7 +150,7 @@ export function SettingsScreen() {
     }
     await deleteLocalAccount();
     deleteLocalAccountData(localUserId, { deleteHealthData: false });
-    signOutDemo();
+    clearAuthShellState();
     showToast('Local account deleted');
     setConfirmDeleteAccount(false);
   };
@@ -165,7 +164,7 @@ export function SettingsScreen() {
     deleteLocalAccountData(localUserId, { deleteHealthData: true });
     clearHealthData();
     clearAllDoctorSummaryData();
-    signOutDemo();
+    clearAuthShellState();
     showToast('Local account and health data deleted');
     setConfirmDeleteAll(false);
   };
@@ -177,7 +176,7 @@ export function SettingsScreen() {
       <section className="settings-section warm-card glass-card-inner profile-header-card">
         <div className="section-header">
           <User size={20} className="icon-teal" />
-          <h3>{healthProfile.preferredName || authDemoUser?.fullName || 'Curavon member'}</h3>
+          <h3>{healthProfile.preferredName || user?.displayName || authDemoUser?.fullName || 'Curavon member'}</h3>
         </div>
         <div className="settings-account-grid">
           <p className="settings-account-row">
@@ -186,7 +185,7 @@ export function SettingsScreen() {
           </p>
           <p className="settings-account-row">
             <span>Signed in as</span>
-            <strong>{authDemoUser?.email || session.user?.email || 'Guest'}</strong>
+            <strong>{user?.email || session.user?.email || authDemoUser?.email || 'Guest'}</strong>
           </p>
           <p className="settings-account-row">
             <span>Primary goal</span>
@@ -207,7 +206,7 @@ export function SettingsScreen() {
             className="btn btn-secondary btn-glass"
             onClick={async () => {
               await signOut();
-              signOutDemo();
+              clearAuthShellState();
               showToast('Signed out');
             }}
           >
@@ -412,7 +411,6 @@ export function SettingsScreen() {
             type="button"
             className="btn btn-secondary btn-glass"
             onClick={() => {
-              resetChat();
               clearAskHistory();
               showToast('Ask history cleared');
             }}

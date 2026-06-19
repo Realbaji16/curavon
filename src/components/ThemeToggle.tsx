@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/useApp';
 import { themes } from '../theme/themes';
 import type { ThemePreset } from '../theme/themes';
 

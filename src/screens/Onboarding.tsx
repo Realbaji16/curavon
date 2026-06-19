@@ -10,7 +10,7 @@ import {
   Ban,
   SlidersHorizontal,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/useApp';
 import { CuravonIcon, CuravonWordmark } from '../components/CuravonBrand';
 import { useScreenBack } from '../hooks/useScreenBack';
 
