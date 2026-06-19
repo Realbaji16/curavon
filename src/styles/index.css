@@ -1,0 +1,15 @@
+/* Curavon stylesheet entry — Phase 1 architecture */
+
+@import './tokens.css';
+@import './base.css';
+@import './layout.css';
+@import './components.css';
+@import './overlays.css';
+
+@import './screens/auth.css';
+@import './screens/doctor-summary.css';
+@import './screens/full-flow.css';
+@import './screens/activity-insights.css';
+
+/* Legacy unmigrated styles — remove sections as they move into src/styles/ */
+@import '../App.css';

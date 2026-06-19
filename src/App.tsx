@@ -9,7 +9,7 @@ import { CuravonAuthProvider } from './lib/auth/authProvider';
 import { AppAuthGate } from './components/AppAuthGate';
 import { RouteLoadingFallback } from './components/RouteLoadingFallback';
 import { HomeScreen } from './screens/Home';
-import './App.css';
+import './styles/index.css';
 
 const AskCuravonScreen = lazy(() =>
   import('./screens/AskCuravon').then((module) => ({ default: module.AskCuravonScreen })),

@@ -1,0 +1,60 @@
+/* Curavon styles — migrated from App.css (Phase 1) */
+
+.activity-insights-section .activity-insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 4px;
+}
+
+.activity-insights-empty {
+  font-size: 13px;
+  color: var(--text-body);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.activity-insight-card {
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.activity-insight-card h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--text-title);
+}
+
+.activity-insight-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-body);
+}
+
+.activity-insight-card--encouraging {
+  border-left: 3px solid var(--accent-teal);
+}
+
+.activity-insight-card--caution {
+  border-left: 3px solid var(--accent-warm);
+}
+
+.activity-insight-evidence {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text-body));
+}
+
+.activity-insight-evidence li {
+  margin-bottom: 4px;
+}
+
+.activity-insight-source {
+  margin-top: 10px !important;
+  font-size: 11px !important;
+  opacity: 0.75;
+}

@@ -1,5 +1,6 @@
 import type { AskHistoryEntry } from '../types/askIntake';
 import type { RedFlagLog } from '../types/doctorSummary';
+import { syncRuleInsightsAfterMetaCycle } from '../lib/activityInsights/activityInsightEngine';
 import type { DailyCheckIn } from '../types/health';
 import type {
   MetaActionOutcome,
@@ -367,24 +368,42 @@ export function runMetaSystemCycle(): MetaInsightsBundle {
   };
   safeWrite(META_STORAGE_KEYS.insights, bundle);
   safeWrite(META_STORAGE_KEYS.improvementQueue, proposals);
+  syncRuleInsightsAfterMetaCycle();
   return bundle;
 }
 
-export function collectSafetyFromRedFlag(log: Pick<RedFlagLog, 'source' | 'matchedConcern' | 'createdAt'>) {
+export function collectSafetyFromRedFlag(log: Pick<RedFlagLog, 'id' | 'source' | 'matchedConcern' | 'createdAt'>) {
   const signal = sanitizeSignal(log.matchedConcern);
-  collectSafetyEvent({
-    source: String(log.source || 'unknown'),
-    eventType: 'red_flag_trigger',
-    severity: signal.includes('breathing') || signal.includes('faint') ? 'high' : 'medium',
-    signal,
-  });
-  if (inLastDays(log.createdAt, 2)) {
+  const recent = loadMetaSafetyEvents().some(
+    (event) =>
+      event.eventType === 'red_flag_trigger' &&
+      event.source === String(log.source || 'unknown') &&
+      event.signal === signal &&
+      inLastDays(event.createdAt, 1),
+  );
+  if (!recent) {
     collectSafetyEvent({
       source: String(log.source || 'unknown'),
-      eventType: 'escalation',
-      severity: 'high',
-      signal: 'recent-red-flag-escalation',
+      eventType: 'red_flag_trigger',
+      severity: signal.includes('breathing') || signal.includes('faint') ? 'high' : 'medium',
+      signal,
     });
+  }
+  if (inLastDays(log.createdAt, 2)) {
+    const recentEscalation = loadMetaSafetyEvents().some(
+      (event) =>
+        event.eventType === 'escalation' &&
+        event.source === String(log.source || 'unknown') &&
+        inLastDays(event.createdAt, 1),
+    );
+    if (!recentEscalation) {
+      collectSafetyEvent({
+        source: String(log.source || 'unknown'),
+        eventType: 'escalation',
+        severity: 'high',
+        signal: 'recent-red-flag-escalation',
+      });
+    }
   }
   runMetaSystemCycle();
 }

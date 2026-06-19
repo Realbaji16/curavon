@@ -920,7 +920,7 @@ export function CareCircleScreen() {
     });
     refreshHealthSnapshot();
     scheduleFollowUpForAction({
-      source: 'guides',
+      acceptanceSource: 'guide_completed',
       action: plan,
       context: { guideId: selectedFlow.id },
     });

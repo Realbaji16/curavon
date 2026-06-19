@@ -1,0 +1,283 @@
+/* Curavon styles — migrated from App.css (Phase 1) */
+
+.summary-section {
+  margin-bottom: 16px;
+}
+
+.summary-section h4 {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.summary-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.doctor-summary {
+  padding: clamp(14px, 3.5vw, 20px);
+  border-radius: 22px;
+  position: relative;
+}
+
+.doctor-summary--full {
+  margin: 0;
+  padding-top: 4px;
+  padding-bottom: clamp(12px, 3vw, 20px);
+}
+
+.doctor-summary--full .summary-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-right: 0;
+  margin-bottom: 4px;
+}
+
+.doctor-summary--full .summary-header h3 {
+  font-size: clamp(1.02rem, 4.2vw, 1.2rem);
+  line-height: 1.25;
+}
+
+.doctor-summary--full .summary-sub {
+  font-size: clamp(0.76rem, 3.2vw, 0.84rem);
+  line-height: 1.45;
+}
+
+.summary-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.summary-sub {
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
+.summary-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: clamp(0.82rem, 3.4vw, 0.92rem);
+  line-height: 1.55;
+}
+
+.disclaimer-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 12px;
+  color: var(--text-safety);
+  font-weight: 500;
+  background: var(--pill-warm-bg);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+/* Doctor Summary Hub */
+.doctor-summary-hub {
+  padding: clamp(12px, 3vw, 18px);
+  margin-bottom: 24px;
+}
+
+.summary-hub-intro {
+  margin-bottom: 16px;
+}
+
+.summary-hub-safety {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-safety);
+  background: rgba(255, 236, 179, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.summary-hub-section {
+  margin-top: 18px;
+}
+
+.summary-hub-section h4 {
+  margin: 0 0 10px;
+  font-size: clamp(0.88rem, 3.6vw, 0.98rem);
+  font-weight: 600;
+}
+
+.summary-hub-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.summary-item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-item-card {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--glass-border);
+}
+
+.summary-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-item-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.summary-item-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.summary-include-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.summary-include-toggle input {
+  accent-color: var(--primary);
+}
+
+.summary-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.summary-tag-chip {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+}
+
+.summary-tag-chip--attention {
+  background: rgba(255, 236, 179, 0.45);
+  color: var(--text-safety);
+}
+
+.summary-built-preview {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--glass-border);
+}
+
+.summary-built-block {
+  margin-bottom: 14px;
+}
+
+.summary-built-block h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.summary-built-block p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.summary-built-footer {
+  margin: 8px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.summary-question-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.summary-question-add .field-input {
+  flex: 1;
+}
+
+.summary-question-add-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.summary-question-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.summary-hub-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.ask-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
+.ask-summary-actions .btn {
+  width: 100%;
+  justify-content: center;
+}

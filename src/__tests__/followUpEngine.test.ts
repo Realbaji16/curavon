@@ -61,7 +61,7 @@ describe('followUpScheduler scheduleFollowUpForAction', () => {
 
   it('skips casual follow-up for urgent/escalate actions', () => {
     const urgent = scheduleFollowUpForAction({
-      source: 'today',
+      acceptanceSource: 'today',
       action: {
         actionId: 'urgent-action',
         title: 'Urgent review',
@@ -75,7 +75,7 @@ describe('followUpScheduler scheduleFollowUpForAction', () => {
 
   it('does not create duplicate pending follow-up for same actionId on same day', () => {
     const input = {
-      source: 'today' as const,
+      acceptanceSource: 'today' as const,
       action: {
         actionId: 'dup-action-id',
         title: 'Hydrate',

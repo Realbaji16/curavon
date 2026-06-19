@@ -4,7 +4,8 @@ export type AIAllowedTask =
   | 'next_action_synthesis'
   | 'doctor_summary'
   | 'memory_compression'
-  | 'followup_note_summary';
+  | 'followup_note_summary'
+  | 'activity_insight';
 
 export type AIDisallowedTask =
   | 'diagnosis'

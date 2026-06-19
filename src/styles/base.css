@@ -1,0 +1,29 @@
+/* Curavon styles — migrated from App.css (Phase 1) */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text-muted);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(82% 68% at 50% 34%, rgba(255, 248, 238, 0.34) 0%, transparent 64%),
+    radial-gradient(70% 52% at 18% 8%, rgba(206, 218, 240, 0.28) 0%, transparent 62%),
+    radial-gradient(66% 48% at 86% 12%, rgba(206, 196, 228, 0.2) 0%, transparent 58%),
+    linear-gradient(180deg, #d5deea 0%, #d6d1e2 46%, #d8d0c6 100%);
+}

@@ -18,6 +18,8 @@ import type {
 } from '../types/health';
 import type { HealthSnapshot } from '../types/healthSnapshot';
 import type { FollowUpOutcome, FollowUpRecord } from '../lib/followUp/followUpTypes';
+import type { AcceptedActionSource } from '../types/actionLifecycle';
+import { acceptanceSourceFromPlanTrigger } from '../types/actionLifecycle';
 import {
   createDefaultHealthProfile,
   getTodayCheckIn,
@@ -87,6 +89,7 @@ interface HealthContextValue {
   markActionDone: () => void;
   markActionBlocked: (reason: HealthBlockedReason) => void;
   markActionAdjusted: (option: AdjustOption) => void;
+  acceptNextAction: (input: AcceptNextActionInput) => NextActionState;
   setNextActionFromSource: (action: string, source: string) => void;
   saveCurrentActionToSummary: () => void;
   refreshPersonalizedAction: () => void;
@@ -104,6 +107,7 @@ interface HealthContextValue {
   smartSilenceLabel: string;
   recentConcerns: string[];
   refreshHealthSnapshot: () => void;
+  refreshHealthStateFromStorage: () => void;
   dueFollowUp: FollowUpRecord | null;
   submitFollowUpOutcome: (outcome: FollowUpOutcome, note?: string) => void;
 }
@@ -208,6 +212,23 @@ type ApplyNextActionFromPlanParams = {
   scheduleFollowUp?: boolean;
 };
 
+export type AcceptNextActionInput = {
+  actionText: string;
+  acceptanceSource: AcceptedActionSource;
+  actionId?: string;
+  title?: string;
+  category?: NextActionState['category'];
+  safetyLevel?: NextActionState['safetyLevel'];
+  reason?: string;
+  sourceLabel?: string;
+  sourceSignals?: string[];
+  scheduleFollowUp?: boolean;
+  followUpContext?: {
+    entryId?: string;
+    guideId?: string;
+  };
+};
+
 export function HealthProvider({ children }: { children: ReactNode }) {
   const [healthProfile, setHealthProfile] = useState<HealthProfile>(() =>
     safeRead(HEALTH_STORAGE_KEYS.healthProfile, createDefaultHealthProfile()),
@@ -259,6 +280,27 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setFollowUps(getFollowUps());
   }, []);
 
+  const refreshHealthStateFromStorage = useCallback(() => {
+    const profile = safeRead(HEALTH_STORAGE_KEYS.healthProfile, createDefaultHealthProfile());
+    const checkins = safeRead<DailyCheckIn[]>(HEALTH_STORAGE_KEYS.dailyCheckins, []).map(normalizeCheckIn);
+    const steps = loadTodaySteps();
+    const action = normalizeNextActionState(
+      safeRead<NextActionState | null>(HEALTH_STORAGE_KEYS.nextActionState, null),
+    );
+
+    setHealthProfile(profile);
+    setDailyCheckins(checkins);
+    setDailySteps(steps);
+    setNextActionState(action);
+
+    healthProfileRef.current = profile;
+    nextActionStateRef.current = action;
+    todayCheckInRef.current = getTodayCheckIn(checkins);
+
+    refreshFollowUps();
+    refreshSnapshotState();
+  }, [refreshFollowUps, refreshSnapshotState]);
+
   const [followUpNowMs, setFollowUpNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -282,10 +324,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, [dailySteps]);
 
   const createFollowUpForAction = useCallback(
-    (state: NextActionState | null) => {
+    (
+      state: NextActionState | null,
+      acceptanceSource: AcceptedActionSource,
+      context?: { entryId?: string; guideId?: string },
+    ) => {
       if (!state?.actionId) return;
       scheduleFollowUpForAction({
-        source: 'today',
+        acceptanceSource,
         action: {
           actionId: state.actionId,
           title: state.title ?? "Today's next best action",
@@ -293,6 +339,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
           safetyLevel: state.safetyLevel ?? 'normal',
           sourceSignals: (state.sourceSignals ?? []).map(String),
         },
+        context,
       });
       refreshFollowUps();
     },
@@ -375,7 +422,11 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
         persistNextAction(next);
         if (params.scheduleFollowUp !== false) {
-          createFollowUpForAction(next);
+          const acceptanceSource = acceptanceSourceFromPlanTrigger(
+            trigger,
+            params.source,
+          );
+          createFollowUpForAction(next, acceptanceSource);
         }
         lastPlanGeneratedAtRef.current = Date.now();
         resultAction = next;
@@ -620,30 +671,54 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setShowHealthAdjustSheet(false);
   }, []);
 
-  const setNextActionFromSource = useCallback((action: string, source: string) => {
-    setNextActionState((prev) => {
-      collectIgnoredPendingAction(prev);
+  const acceptNextAction = useCallback(
+    (input: AcceptNextActionInput): NextActionState => {
+      collectIgnoredPendingAction(nextActionStateRef.current);
+
+      const actionId =
+        input.actionId ??
+        `accepted-${input.acceptanceSource}-${input.actionText.trim().slice(0, 24).replace(/\s+/g, '-')}-${todayDateKey()}`;
+
       const next: NextActionState = {
-        currentAction: action,
-        title: "Today's next best action",
-        reason: 'Based on your latest notes.',
-        source,
-        sourceSignals: [],
-        sourceChips: [source],
+        currentAction: input.actionText,
+        title: input.title ?? "Today's next best action",
+        reason: input.reason ?? 'Based on your latest notes.',
+        source: input.sourceLabel ?? input.acceptanceSource,
+        sourceSignals: input.sourceSignals ?? [],
+        sourceChips: [input.sourceLabel ?? input.acceptanceSource],
         effort: 'low',
-        category: 'general',
-        safetyLevel: 'normal',
-        actionId: `manual-${Date.now()}`,
+        category: input.category ?? 'general',
+        safetyLevel: input.safetyLevel ?? 'normal',
+        actionId,
         status: 'pending',
         updatedAt: new Date().toISOString(),
       };
+
       persistNextAction(next);
-      createFollowUpForAction(next);
+      setNextActionState(next);
+      nextActionStateRef.current = next;
+
+      if (input.scheduleFollowUp !== false) {
+        createFollowUpForAction(next, input.acceptanceSource, input.followUpContext);
+      }
+
+      refreshSnapshotState();
+      runMetaSystemCycle();
       return next;
-    });
-    refreshSnapshotState();
-    runMetaSystemCycle();
-  }, [refreshSnapshotState, collectIgnoredPendingAction, createFollowUpForAction]);
+    },
+    [collectIgnoredPendingAction, createFollowUpForAction, refreshSnapshotState],
+  );
+
+  const setNextActionFromSource = useCallback(
+    (action: string, source: string) => {
+      acceptNextAction({
+        actionText: action,
+        acceptanceSource: 'ask_promoted',
+        sourceLabel: source,
+      });
+    },
+    [acceptNextAction],
+  );
 
   const saveCurrentActionToSummary = useCallback(() => {
     if (!nextActionState) return;
@@ -738,6 +813,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setDailySteps(loadTodaySteps());
     setNextActionState(null);
     persistNextAction(null);
+    refreshFollowUps();
     refreshSnapshotState();
     hasAttemptedInitialPlanRef.current = false;
     void applyNextActionFromPlan({
@@ -748,7 +824,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     }).finally(() => {
       hasAttemptedInitialPlanRef.current = true;
     });
-  }, [refreshSnapshotState, applyNextActionFromPlan]);
+  }, [refreshSnapshotState, refreshFollowUps, applyNextActionFromPlan]);
 
   const exportHealthData = useCallback(() => {
     const userId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
@@ -795,6 +871,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         markActionDone,
         markActionBlocked,
         markActionAdjusted,
+        acceptNextAction,
         setNextActionFromSource,
         saveCurrentActionToSummary,
         refreshPersonalizedAction,
@@ -812,6 +889,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         smartSilenceLabel,
         recentConcerns,
         refreshHealthSnapshot: refreshSnapshotState,
+        refreshHealthStateFromStorage,
         dueFollowUp,
         submitFollowUpOutcome,
       }}

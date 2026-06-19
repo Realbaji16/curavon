@@ -5,6 +5,7 @@ import {
   CORE_HEALTH_DATA_KEYS,
   DELETE_HEALTH_DATA_KEYS,
   EXPORT_HEALTH_DATA_KEYS,
+  HEALTH_DERIVED_DELETE_PREFIXES,
   HEALTH_DERIVED_TELEMETRY_KEYS,
 } from '../lib/data/storageKeys';
 import { exportCuravonData } from '../lib/data/dataExport';
@@ -27,6 +28,7 @@ describe('data export/delete key scope', () => {
     }
     expect(EXPORT_HEALTH_DATA_KEYS).toContain(APP_STORAGE_KEYS.healthProfile);
     expect(EXPORT_HEALTH_DATA_KEYS).toContain(APP_STORAGE_KEYS.askHistory);
+    expect(EXPORT_HEALTH_DATA_KEYS).toContain(APP_STORAGE_KEYS.activityInsights);
   });
 
   it('DELETE_HEALTH_DATA_KEYS includes core health and derived telemetry', () => {
@@ -72,5 +74,9 @@ describe('data export/delete key scope', () => {
       expect(DELETE_HEALTH_DATA_KEYS).toContain(key);
       expect(EXPORT_HEALTH_DATA_KEYS).not.toContain(key);
     }
+  });
+
+  it('defines meta-system prefix deletion for health data reset', () => {
+    expect(HEALTH_DERIVED_DELETE_PREFIXES).toContain('curavon_meta_');
   });
 });

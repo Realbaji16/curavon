@@ -102,13 +102,13 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
 
   const toggleItemIncluded = useCallback(
     (id: string) => {
-      persistItems(
-        items.map((item) =>
-          item.id === id ? { ...item, includedInSummary: !item.includedInSummary } : item,
-        ),
+      const current = loadDoctorSummaryItems();
+      const next = current.map((item) =>
+        item.id === id ? { ...item, includedInSummary: !item.includedInSummary } : item,
       );
+      persistItems(next);
     },
-    [items, persistItems],
+    [persistItems],
   );
 
   const addClinicianQuestion = useCallback((q: string) => {

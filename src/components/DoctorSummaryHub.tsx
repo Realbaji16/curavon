@@ -65,6 +65,9 @@ export function DoctorSummaryHub() {
         <p className="summary-hub-safety">
           Curavon organizes your notes. It does not diagnose.
         </p>
+        <p className="summary-hub-safety">
+          When Curavon notices an urgent red flag, it may save a short safety note here so you can review it later or prepare for a clinician conversation.
+        </p>
       </motion.div>
 
       <motion.section className="summary-hub-section" variants={fadeUp}>

@@ -41,6 +41,7 @@ const ALLOWED_TASKS = new Set<AIAllowedTask>([
   'doctor_summary',
   'memory_compression',
   'followup_note_summary',
+  'activity_insight',
 ]);
 
 export const AI_INTERACTION_RULES = {

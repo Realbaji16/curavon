@@ -18,6 +18,7 @@ import { restoreLocalBackup, validateBackupFile } from '../lib/data/dataRestore'
 import { runLocalDataHealthCheck } from '../lib/data/dataHealthCheck';
 import { deleteLocalAccountData } from '../lib/data/dataDeletion';
 import { DELETION_CONFIRMATION_COPY } from '../lib/data/dataDeletionConfirm';
+import { ActivityInsightsSection } from '../components/ActivityInsightsSection';
 
 const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
   { id: 'gentle-reminders', label: 'Gentle reminders' },
@@ -39,9 +40,11 @@ export function SettingsScreen() {
     removeListItem,
     clearHealthData,
     exportHealthData,
+    refreshHealthStateFromStorage,
     smartSilenceLabel,
+    nextActionState,
   } = useHealth();
-  const { includedCount, latestDraftDate, clearAllDoctorSummaryData } = useDoctorSummary();
+  const { includedCount, latestDraftDate, clearAllDoctorSummaryData, refreshFromStorage } = useDoctorSummary();
   const { session, user, signOut, deleteLocalAccount } = useCuravonAuth();
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
@@ -125,9 +128,21 @@ export function SettingsScreen() {
       showToast('Restore failed');
       return;
     }
-    showToast(mode === 'replace' ? 'Backup restored (replace)' : 'Backup restored (merge)');
+
+    refreshHealthStateFromStorage();
+    refreshFromStorage();
     setRestoreDraft(null);
     setRestorePreview(null);
+
+    if (mode === 'replace') {
+      showToast('Backup restored. Refreshing Curavon…');
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 600);
+      return;
+    }
+
+    showToast('Backup restored (merge)');
   };
 
   const handleCheckDataHealth = () => {
@@ -313,6 +328,12 @@ export function SettingsScreen() {
         </button>
       </section>
 
+      <ActivityInsightsSection
+        safetyLevel={nextActionState?.safetyLevel ?? 'normal'}
+        consentCompleted={Boolean(safeRead(APP_STORAGE_KEYS.consentComplete, false))}
+        onToast={showToast}
+      />
+
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
           <Shield size={20} className="icon-warm" />
@@ -385,7 +406,15 @@ export function SettingsScreen() {
         </div>
         <p className="section-desc">Your data is stored on this device in this version.</p>
         <p className="settings-data-note">
+          Activity Insights use your local Curavon activity, such as completed actions, blocked steps,
+          check-ins, and saved safety notes, to help make future suggestions easier to understand.
+          They are not a diagnosis. You can delete Activity Insights by deleting health data.
+        </p>
+        <p className="settings-data-note">
           Sign out keeps your saved health notes on this device. Delete all health data removes them from this version.
+        </p>
+        <p className="settings-data-note">
+          When Curavon notices an urgent red flag, it may save a short safety note in Doctor Summary so you can review it later or prepare for a clinician conversation. This is not diagnosis or emergency monitoring.
         </p>
         <input
           ref={fileInputRef}

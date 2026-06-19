@@ -10,6 +10,7 @@ export const MAX_TOKENS_NEXT_ACTION = 350;
 export const MAX_TOKENS_DOCTOR_SUMMARY = 700;
 export const MAX_TOKENS_MEMORY = 450;
 export const MAX_TOKENS_FOLLOWUP = 250;
+export const MAX_TOKENS_ACTIVITY_INSIGHT = 350;
 
 type AIBudgetState = {
   dateKey: string;
@@ -45,6 +46,7 @@ export function getTaskTokenLimit(task: AIAllowedTask): number {
   if (task === 'next_action_reasoning' || task === 'next_action_synthesis') return MAX_TOKENS_NEXT_ACTION;
   if (task === 'doctor_summary') return MAX_TOKENS_DOCTOR_SUMMARY;
   if (task === 'memory_compression') return MAX_TOKENS_MEMORY;
+  if (task === 'activity_insight') return MAX_TOKENS_ACTIVITY_INSIGHT;
   return MAX_TOKENS_FOLLOWUP;
 }
 

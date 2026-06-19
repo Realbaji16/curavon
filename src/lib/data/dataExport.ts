@@ -20,6 +20,7 @@ export type CuravonExportPayload = {
   userPreferences: unknown;
   dailySteps: unknown;
   aiUsageLog: unknown[];
+  activityInsights: unknown;
 };
 
 const EXPORT_READERS: Record<string, () => unknown> = {
@@ -36,6 +37,7 @@ const EXPORT_READERS: Record<string, () => unknown> = {
   [APP_STORAGE_KEYS.userPreferences]: () => safeRead(APP_STORAGE_KEYS.userPreferences, {}),
   [APP_STORAGE_KEYS.dailySteps]: () => safeRead(APP_STORAGE_KEYS.dailySteps, null),
   [APP_STORAGE_KEYS.aiUsageLog]: () => safeRead(APP_STORAGE_KEYS.aiUsageLog, []),
+  [APP_STORAGE_KEYS.activityInsights]: () => safeRead(APP_STORAGE_KEYS.activityInsights, { insights: [] }),
 };
 
 export function exportCuravonData(userId: string): CuravonExportPayload {
@@ -62,5 +64,6 @@ export function exportCuravonData(userId: string): CuravonExportPayload {
     userPreferences: values[APP_STORAGE_KEYS.userPreferences],
     dailySteps: values[APP_STORAGE_KEYS.dailySteps],
     aiUsageLog: values[APP_STORAGE_KEYS.aiUsageLog] as unknown[],
+    activityInsights: values[APP_STORAGE_KEYS.activityInsights],
   };
 }
