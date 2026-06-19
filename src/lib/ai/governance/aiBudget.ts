@@ -42,7 +42,7 @@ function writeBudget(state: AIBudgetState) {
 
 export function getTaskTokenLimit(task: AIAllowedTask): number {
   if (task === 'intake_structuring') return MAX_TOKENS_INTAKE;
-  if (task === 'next_action_reasoning') return MAX_TOKENS_NEXT_ACTION;
+  if (task === 'next_action_reasoning' || task === 'next_action_synthesis') return MAX_TOKENS_NEXT_ACTION;
   if (task === 'doctor_summary') return MAX_TOKENS_DOCTOR_SUMMARY;
   if (task === 'memory_compression') return MAX_TOKENS_MEMORY;
   return MAX_TOKENS_FOLLOWUP;

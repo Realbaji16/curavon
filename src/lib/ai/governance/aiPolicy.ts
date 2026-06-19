@@ -37,6 +37,7 @@ const DISALLOWED_TASKS = new Set([
 const ALLOWED_TASKS = new Set<AIAllowedTask>([
   'intake_structuring',
   'next_action_reasoning',
+  'next_action_synthesis',
   'doctor_summary',
   'memory_compression',
   'followup_note_summary',
@@ -45,7 +46,7 @@ const ALLOWED_TASKS = new Set<AIAllowedTask>([
 export const AI_INTERACTION_RULES = {
   memory: 'AI may use only compressed memory snapshots.',
   followup: 'No AI for simple button outcomes; only meaningful note summarization and never during safety issues.',
-  plan: 'AI reasons only over safe candidates and cannot invent actions or change safety level.',
+  plan: 'AI may choose safe candidates or synthesize one guarded custom action within allowed primitives.',
   doctorSummary: 'AI organizes compressed notes only; no diagnosis or interpretation.',
   ask: 'AI structures intake only after safety precheck.',
 } as const;

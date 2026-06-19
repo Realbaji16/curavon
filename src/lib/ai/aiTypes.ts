@@ -1,4 +1,10 @@
-export type AIKernelTask = 'intake' | 'plan_explain' | 'summary' | 'next_action_reasoning' | 'doctor_summary';
+export type AIKernelTask =
+  | 'intake'
+  | 'plan_explain'
+  | 'summary'
+  | 'next_action_reasoning'
+  | 'next_action_synthesis'
+  | 'doctor_summary';
 
 export interface AIKernelRequest {
   task: AIKernelTask;
@@ -21,6 +27,18 @@ export interface AIKernelResponse {
   followUpPrompt?: string;
   watchFor?: string;
   confidence?: 'low' | 'medium' | 'high';
+  selectedMode?: 'use_existing_candidate' | 'synthesize_custom_action';
+  synthesizedAction?: {
+    title?: string;
+    actionText?: string;
+    reason?: string;
+    category?: string;
+    safetyLevel?: string;
+    primitiveUsed?: string;
+    followUpPrompt?: string;
+    watchFor?: string;
+  };
+  safetyNotes?: string;
   summaryTitle?: string;
   mainConcerns?: string[];
   symptomTimeline?: string[];

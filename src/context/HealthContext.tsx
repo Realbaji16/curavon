@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useRef,
   type ReactNode,
 } from 'react';
 import { useApp } from './AppContext';
@@ -44,7 +45,7 @@ import {
   adjustedOptionLabel,
   blockedReasonLabel,
 } from '../utils/nextBestActionEngine';
-import { loadHealthSnapshot, refreshHealthSnapshot as recomputeHealthSnapshot } from '../utils/healthSnapshot';
+import { loadHealthSnapshot, refreshHealthSnapshot as recomputeHealthSnapshot, buildHealthSnapshot } from '../utils/healthSnapshot';
 import {
   generateCuravonNextAction,
   toNextActionStateFromAdapter,
@@ -179,6 +180,17 @@ function normalizeNextActionState(state: NextActionState | null): NextActionStat
   };
 }
 
+function isSamePendingNextAction(prev: NextActionState, next: NextActionState): boolean {
+  return (
+    prev.status === next.status &&
+    prev.actionId === next.actionId &&
+    prev.currentAction === next.currentAction &&
+    prev.title === next.title &&
+    prev.category === next.category &&
+    prev.safetyLevel === next.safetyLevel
+  );
+}
+
 export function HealthProvider({ children }: { children: ReactNode }) {
   const { setSensitiveMode } = useApp();
 
@@ -200,8 +212,13 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   const [showUrgentSafety, setShowUrgentSafety] = useState(false);
   const [healthSnapshot, setHealthSnapshot] = useState<HealthSnapshot>(() => loadHealthSnapshot());
   const [followUps, setFollowUps] = useState<FollowUpRecord[]>(() => getFollowUps());
+  const nextActionStateRef = useRef(nextActionState);
 
   const todayCheckIn = getTodayCheckIn(dailyCheckins);
+
+  useEffect(() => {
+    nextActionStateRef.current = nextActionState;
+  }, [nextActionState]);
 
   const refreshSnapshotState = useCallback(() => {
     setHealthSnapshot(recomputeHealthSnapshot());
@@ -254,13 +271,13 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       followUpResult?: { outcome: FollowUpOutcome; note?: string };
       onlyIfPending?: boolean;
     }) => {
-      const snapshot = recomputeHealthSnapshot();
+      const snapshot = buildHealthSnapshot();
       const output = await generateCuravonNextAction({
         source: params.source,
         snapshot,
         latestCheckIn: params.latestCheckIn ?? todayCheckIn,
         askHistory: loadAskHistory(),
-        nextActionState,
+        nextActionState: nextActionStateRef.current,
         redFlagLogs: loadRedFlagLogs(),
         profile: healthProfile,
         currentConcern: params.concern ?? '',
@@ -272,12 +289,15 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       setNextActionState((prev) => {
         if (params.onlyIfPending !== false && prev && prev.status !== 'pending') return prev;
         const next = toNextActionStateFromAdapter(output, params.source);
+        if (prev && prev.status === 'pending' && isSamePendingNextAction(prev, next)) {
+          return prev;
+        }
         persistNextAction(next);
         createFollowUpForAction(next);
         return next;
       });
     },
-    [nextActionState, healthProfile, todayCheckIn, createFollowUpForAction],
+    [healthProfile, todayCheckIn, createFollowUpForAction],
   );
 
   const refreshNextActionFromToday = useCallback(
@@ -352,9 +372,6 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     if (nextActionState && nextActionState.status !== 'pending') return;
     void applyNextActionFromPlan({ source: 'today', onlyIfPending: true });
   }, [healthProfile, dailyCheckins, nextActionState?.status, applyNextActionFromPlan]);
-
-
-  // Sensitive Mode canonical source: Health Profile. Mirror to AppContext for legacy UI shell.
   useEffect(() => {
     setSensitiveMode(healthProfile.sensitiveMode);
   }, [healthProfile.sensitiveMode, setSensitiveMode]);

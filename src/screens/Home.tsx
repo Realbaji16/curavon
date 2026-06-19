@@ -21,7 +21,6 @@ import { staggerContainer, fadeUp, tapScale, cardEntrance } from '../motion/vari
 import { buildNextBestActionPlan } from '../utils/nextBestActionEngine';
 import { readCuravonMemorySnapshot } from '../utils/nextBestActionMemory';
 import type { SupportingInsightCard } from '../types/nextBestAction';
-import type { FollowUpOutcome } from '../lib/followUp/followUpTypes';
 
 function formatFocusArea(area: string): string {
   return area.replace(/_/g, ' ');
@@ -78,13 +77,9 @@ export function HomeScreen() {
     openHealthBlockedSheet,
     openHealthAdjustSheet,
     saveCurrentActionToSummary,
-    dueFollowUp,
-    submitFollowUpOutcome,
   } = useHealth();
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
-  const [followUpNote, setFollowUpNote] = useState('');
-  const [followUpResult, setFollowUpResult] = useState('');
 
   const name = healthProfile.preferredName.trim();
   const greetingLine = name ? `${getGreeting()}, ${name}` : 'Welcome back';
@@ -154,18 +149,6 @@ export function HomeScreen() {
     }
   };
 
-  const handleFollowUpOutcome = (outcome: FollowUpOutcome) => {
-    submitFollowUpOutcome(outcome, followUpNote);
-    if (outcome === 'worse') {
-      setFollowUpResult('Safety noted. Curavon will prioritize a safer next step.');
-    } else if (outcome === 'blocked' || outcome === 'partly_helped' || outcome === 'not_done') {
-      setFollowUpResult('Got it. Curavon will adjust the next step.');
-    } else {
-      setFollowUpResult('Saved. This may help your doctor summary.');
-    }
-    setFollowUpNote('');
-  };
-
   return (
     <div className="screen home-screen home-screen--today">
       <ScreenHeader showThemeToggle />
@@ -187,38 +170,6 @@ export function HomeScreen() {
             Focus area: <strong>{formatFocusArea(healthSnapshot.recommendedFocusArea)}</strong>
           </p>
         </motion.section>
-
-        {dueFollowUp ? (
-          <motion.section className="home-pattern-card warm-card glass-card-inner" variants={fadeUp}>
-            <p className="home-pattern-label">Quick follow-up</p>
-            <p className="home-pattern-summary">{dueFollowUp.prompt}</p>
-            <input
-              type="text"
-              className="field-input"
-              value={followUpNote}
-              onChange={(event) => setFollowUpNote(event.target.value)}
-              placeholder="Optional short note"
-            />
-            <div className="action-buttons action-buttons--today">
-              <button type="button" className="action-btn btn-health-done done-btn" onClick={() => handleFollowUpOutcome('helped')}>
-                Helped
-              </button>
-              <button type="button" className="action-btn btn-health-adjust adjust-btn" onClick={() => handleFollowUpOutcome('partly_helped')}>
-                Partly
-              </button>
-              <button type="button" className="action-btn btn-health-blocked blocked-btn" onClick={() => handleFollowUpOutcome('blocked')}>
-                Blocked
-              </button>
-              <button type="button" className="action-btn btn-health-adjust adjust-btn" onClick={() => handleFollowUpOutcome('not_done')}>
-                Not done
-              </button>
-              <button type="button" className="action-btn btn-health-blocked blocked-btn" onClick={() => handleFollowUpOutcome('worse')}>
-                Worse
-              </button>
-            </div>
-            {followUpResult ? <p className="home-hero-note">{followUpResult}</p> : null}
-          </motion.section>
-        ) : null}
 
         <AnimatePresence mode="wait">
           <motion.section

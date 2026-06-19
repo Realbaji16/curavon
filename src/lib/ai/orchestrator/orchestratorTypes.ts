@@ -3,6 +3,7 @@ export type AIStage =
   | 'intake'
   | 'plan_generation'
   | 'plan_reasoning'
+  | 'plan_synthesis'
   | 'summary_generation'
   | 'followup_analysis';
 
@@ -10,7 +11,7 @@ export interface AIRequest {
   userInput: string;
   contextSnapshot: Record<string, unknown>;
   safetyLevel: 'normal' | 'caution' | 'urgent';
-  stageHint?: AIStage | 'ask_input' | 'plan_generation' | 'followup' | 'summary' | 'guides';
+  stageHint?: AIStage | 'ask_input' | 'plan_generation' | 'plan_synthesis' | 'followup' | 'summary' | 'guides';
   source: 'ask' | 'today' | 'guides' | 'doctor_summary' | 'followup' | 'memory';
 }
 

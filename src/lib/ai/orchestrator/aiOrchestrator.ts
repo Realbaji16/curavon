@@ -58,6 +58,16 @@ function fallbackResultForStage(stage: AIStage, userInput: string): Record<strin
       fallbackUsed: true,
     };
   }
+  if (stage === 'plan_synthesis') {
+    return {
+      selectedMode: 'use_existing_candidate',
+      selectedCandidateId: '',
+      reasoning: 'Rule-based synthesis fallback used by orchestrator policy.',
+      confidence: 'low',
+      safetyNotes: 'Deterministic fallback.',
+      fallbackUsed: true,
+    };
+  }
   if (stage === 'summary_generation') {
     return {
       summaryTitle: 'Curavon Summary',
@@ -85,6 +95,7 @@ function fallbackResultForStage(stage: AIStage, userInput: string): Record<strin
 function mapStageToKernelTask(stage: AIStage): AIKernelRequest['task'] | null {
   if (stage === 'intake') return 'intake';
   if (stage === 'plan_reasoning') return 'next_action_reasoning';
+  if (stage === 'plan_synthesis') return 'next_action_synthesis';
   if (stage === 'summary_generation') return 'doctor_summary';
   if (stage === 'followup_analysis') return null;
   return null;
@@ -93,6 +104,7 @@ function mapStageToKernelTask(stage: AIStage): AIKernelRequest['task'] | null {
 function mapStageToGovernanceTask(stage: AIStage): AIAllowedTask | null {
   if (stage === 'intake') return 'intake_structuring';
   if (stage === 'plan_reasoning') return 'next_action_reasoning';
+  if (stage === 'plan_synthesis') return 'next_action_synthesis';
   if (stage === 'summary_generation') return 'doctor_summary';
   if (stage === 'followup_analysis') return 'followup_note_summary';
   if (stage === 'plan_generation') return 'memory_compression';

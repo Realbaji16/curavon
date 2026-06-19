@@ -16,6 +16,8 @@ export interface AIDecisionTrace {
   estimatedTokens: number;
   contextType: 'compressed' | 'none';
   reason: string;
+  aiSynthesized?: boolean;
+  boundaryValidated?: boolean;
 }
 
 export interface AIObservabilitySummary {

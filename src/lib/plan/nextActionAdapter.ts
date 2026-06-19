@@ -4,7 +4,8 @@ import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/h
 import type { HealthSnapshot } from '../../types/healthSnapshot';
 import type { FollowUpOutcome } from '../followUp/followUpTypes';
 import type { GuideResultRecord } from '../../utils/guideResultStorage';
-import { generateNextBestPlanAction, generateNextBestPlanActionSync } from './planEngineV2';
+import { generateNextBestActionV3, generateNextBestActionV3Sync } from './planEngineV3';
+import { generateNextBestPlanActionSync } from './planEngineV2';
 import type { PlanCategory, PlanEngineInput, PlanEngineResult, PlanSafetyLevel } from './planTypes';
 
 export type NextActionSource = 'today' | 'ask' | 'guides' | 'followup';
@@ -106,6 +107,7 @@ function toPlanEngineInput(input: CuravonNextActionInput): PlanEngineInput {
 
 function mapPlanResult(result: PlanEngineResult, source: NextActionSource): CuravonNextActionOutput {
   const prefix = source === 'ask' ? 'ask' : source === 'guides' ? 'guide' : source === 'followup' ? 'fup' : 'plan';
+  const engineTag = result.action.aiSynthesized ? 'v3' : 'v2';
   return {
     title: result.action.title,
     actionText: result.action.actionText,
@@ -120,7 +122,7 @@ function mapPlanResult(result: PlanEngineResult, source: NextActionSource): Cura
     selectedBy: result.action.selectedBy,
     aiReasoned: result.action.aiReasoned,
     fallbackUsed: result.action.fallbackUsed,
-    actionId: `${prefix}-v2-${result.action.id}`,
+    actionId: `${prefix}-${engineTag}-${result.action.id}`,
     safetyOverride: result.safetyOverride,
   };
 }
@@ -176,11 +178,11 @@ export async function generateCuravonNextAction(
   input: CuravonNextActionInput,
 ): Promise<CuravonNextActionOutput> {
   try {
-    const result = await generateNextBestPlanAction(toPlanEngineInput(input));
+    const result = await generateNextBestActionV3(toPlanEngineInput(input));
     return mapPlanResult(result, input.source);
   } catch {
     try {
-      const result = generateNextBestPlanActionSync(toPlanEngineInput(input));
+      const result = generateNextBestActionV3Sync(toPlanEngineInput(input));
       return mapPlanResult(result, input.source);
     } catch {
       return fallbackOutput();
@@ -192,9 +194,14 @@ export function generateCuravonNextActionSync(
   input: CuravonNextActionInput,
 ): CuravonNextActionOutput {
   try {
-    const result = generateNextBestPlanActionSync(toPlanEngineInput(input));
+    const result = generateNextBestActionV3Sync(toPlanEngineInput(input));
     return mapPlanResult(result, input.source);
   } catch {
-    return fallbackOutput();
+    try {
+      const result = generateNextBestPlanActionSync(toPlanEngineInput(input));
+      return mapPlanResult(result, input.source);
+    } catch {
+      return fallbackOutput();
+    }
   }
 }
