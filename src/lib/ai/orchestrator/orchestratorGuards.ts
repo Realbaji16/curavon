@@ -53,6 +53,9 @@ export function isRuleBasedEnough(stage: AIStage, request: AIRequest): boolean {
     const candidateCount = Number(request.contextSnapshot?.candidateCount ?? 0);
     return candidateCount <= 1;
   }
+  if (stage === 'plan_synthesis') {
+    return false;
+  }
   if (stage === 'summary_generation') {
     const concernCount = Number(request.contextSnapshot?.mainConcernCount ?? 0);
     return concernCount <= 1;

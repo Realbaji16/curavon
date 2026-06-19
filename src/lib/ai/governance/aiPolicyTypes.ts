@@ -1,6 +1,7 @@
 export type AIAllowedTask =
   | 'intake_structuring'
   | 'next_action_reasoning'
+  | 'next_action_synthesis'
   | 'doctor_summary'
   | 'memory_compression'
   | 'followup_note_summary';

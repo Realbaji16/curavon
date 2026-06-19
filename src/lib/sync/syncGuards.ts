@@ -24,6 +24,18 @@ const VALID_OPERATION_TYPES: SyncOperationType[] = [
   'bulk_import',
 ];
 
+/** High-frequency local updates coalesce to one queued op per entity. */
+const COALESCABLE_ENTITY_TYPES: SyncEntityType[] = [
+  'health_profile',
+  'daily_checkins',
+  'next_action_state',
+  'memory_snapshot',
+  'doctor_summary',
+  'follow_ups',
+  'ask_history',
+  'guide_results',
+];
+
 function isPayloadEmpty(payload: Record<string, unknown>): boolean {
   if (!payload) return true;
   return Object.keys(payload).length === 0;
@@ -53,14 +65,20 @@ export function canRetry(operation: SyncOperation): boolean {
 }
 
 export function isDuplicateSyncOperation(queue: SyncOperation[], operation: SyncOperation): boolean {
-  return queue.some(
-    (item) =>
-      item.userId === operation.userId &&
-      item.entityType === operation.entityType &&
-      item.operationType === operation.operationType &&
-      item.status === 'queued' &&
-      JSON.stringify(item.payload) === JSON.stringify(operation.payload),
-  );
+  return queue.some((item) => {
+    if (
+      item.userId !== operation.userId ||
+      item.entityType !== operation.entityType ||
+      item.operationType !== operation.operationType ||
+      item.status !== 'queued'
+    ) {
+      return false;
+    }
+    if (COALESCABLE_ENTITY_TYPES.includes(operation.entityType)) {
+      return true;
+    }
+    return JSON.stringify(item.payload) === JSON.stringify(operation.payload);
+  });
 }
 
 export function trimQueueToLimit(queue: SyncOperation[]): {

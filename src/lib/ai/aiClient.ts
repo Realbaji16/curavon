@@ -14,6 +14,7 @@ const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions'
 export const KERNEL_MODEL = 'gpt-4o-mini';
 export const MAX_TOKENS = 350;
 export const KERNEL_TEMPERATURE = 0.3;
+export const SYNTHESIS_TEMPERATURE = 0.2;
 
 function kernelFallback(input: string): AIKernelResponse {
   return {
@@ -102,6 +103,41 @@ function parseKernelResponse(text: string, input: string): AIKernelResponse {
         parsed.confidence === 'low' || parsed.confidence === 'medium' || parsed.confidence === 'high'
           ? parsed.confidence
           : undefined,
+      selectedMode:
+        parsed.selectedMode === 'use_existing_candidate' ||
+        parsed.selectedMode === 'synthesize_custom_action'
+          ? parsed.selectedMode
+          : undefined,
+      synthesizedAction:
+        parsed.synthesizedAction && typeof parsed.synthesizedAction === 'object'
+          ? {
+              title: parsed.synthesizedAction.title
+                ? String(parsed.synthesizedAction.title)
+                : undefined,
+              actionText: parsed.synthesizedAction.actionText
+                ? String(parsed.synthesizedAction.actionText)
+                : undefined,
+              reason: parsed.synthesizedAction.reason
+                ? String(parsed.synthesizedAction.reason)
+                : undefined,
+              category: parsed.synthesizedAction.category
+                ? String(parsed.synthesizedAction.category)
+                : undefined,
+              safetyLevel: parsed.synthesizedAction.safetyLevel
+                ? String(parsed.synthesizedAction.safetyLevel)
+                : undefined,
+              primitiveUsed: parsed.synthesizedAction.primitiveUsed
+                ? String(parsed.synthesizedAction.primitiveUsed)
+                : undefined,
+              followUpPrompt: parsed.synthesizedAction.followUpPrompt
+                ? String(parsed.synthesizedAction.followUpPrompt)
+                : undefined,
+              watchFor: parsed.synthesizedAction.watchFor
+                ? String(parsed.synthesizedAction.watchFor)
+                : undefined,
+            }
+          : undefined,
+      safetyNotes: parsed.safetyNotes ? String(parsed.safetyNotes) : undefined,
       summaryTitle: parsed.summaryTitle ? String(parsed.summaryTitle) : undefined,
       mainConcerns: Array.isArray(parsed.mainConcerns) ? parsed.mainConcerns.map((v) => String(v)) : undefined,
       symptomTimeline: Array.isArray(parsed.symptomTimeline) ? parsed.symptomTimeline.map((v) => String(v)) : undefined,
@@ -127,6 +163,7 @@ function buildKernelPrompt(request: AIKernelRequest): string {
   if (request.task === 'intake') return buildIntakePrompt(request.input, request.context);
   if (request.task === 'plan_explain') return buildPlanPrompt(request.input, request.context);
   if (request.task === 'next_action_reasoning') return request.input;
+  if (request.task === 'next_action_synthesis') return request.input;
   if (request.task === 'doctor_summary') return request.input;
   return buildSummaryPrompt(request.input, request.context);
 }
@@ -140,7 +177,8 @@ export async function runAIKernelClient(request: AIKernelRequest): Promise<AIKer
     systemPrompt: String(request.context?.systemPrompt ?? INTAKE_SYSTEM_PROMPT),
     prompt: buildKernelPrompt(request),
     max_tokens: request.maxTokens ?? MAX_TOKENS,
-    temperature: KERNEL_TEMPERATURE,
+    temperature:
+      request.task === 'next_action_synthesis' ? SYNTHESIS_TEMPERATURE : KERNEL_TEMPERATURE,
   });
   if (!response.success || !response.text) return kernelFallback(request.input);
   const parsed = parseKernelResponse(response.text, request.input);

@@ -24,6 +24,7 @@ function shouldUseAI(task: AIKernelRequest['task']): boolean {
     task === 'plan_explain' ||
     task === 'summary' ||
     task === 'next_action_reasoning' ||
+    task === 'next_action_synthesis' ||
     task === 'doctor_summary'
   );
 }
@@ -72,7 +73,7 @@ export async function runAIKernel(request: AIKernelRequest): Promise<AIKernelRes
   aiCallsThisSession += 1;
   try {
     const result = await runAIKernelClient(request);
-    if (request.task === 'next_action_reasoning') {
+    if (request.task === 'next_action_reasoning' || request.task === 'next_action_synthesis') {
       setCache(cacheKey, result);
       console.info('[Curavon AI Kernel] enabled: true fallback: false cache: miss');
       return result;
