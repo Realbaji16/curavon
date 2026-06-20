@@ -5,7 +5,11 @@ import { useApp } from '../context/useApp';
 import { fadeUp } from '../motion/variants';
 import { useScreenBack } from '../hooks/useScreenBack';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
+import { getConfiguredAuthMode } from '../lib/auth/authConfig';
 import { SUPABASE_EMAIL_CONFIRMATION_MESSAGE } from '../lib/auth/supabaseAuthAdapter';
+
+const SIGNUP_INCOMPLETE_MESSAGE =
+  'Sign-up did not complete. Check Supabase configuration or email confirmation settings.';
 
 type AuthStage = 'start' | 'create' | 'signin' | 'consent' | 'profile';
 
@@ -61,6 +65,9 @@ export function AuthFlow() {
     resetToOnboarding,
   } = useApp();
   const { signIn, signUp, user, isAuthenticated } = useCuravonAuth();
+  const resolvedAuthMode = getConfiguredAuthMode();
+  const isSupabaseAuth = resolvedAuthMode === 'supabase';
+  const isDev = process.env.NODE_ENV !== 'production';
   const authResolvedStage = resolveAuthStage(isAuthenticated, setupComplete, consentComplete);
   const [manualStage, setManualStage] = useState<AuthStage | null>(null);
   const stage = manualStage ?? authResolvedStage;
@@ -97,12 +104,14 @@ export function AuthFlow() {
       },
       {
         id: 'privacy',
-        title: 'Local-first storage',
-        copy: 'In this version, your data is stored on this device. You can export or delete it anytime from Profile.',
+        title: isSupabaseAuth ? 'Account-backed storage' : 'Local-first storage',
+        copy: isSupabaseAuth
+          ? 'Your Curavon account uses Supabase Auth. Health notes on this device are not automatically synced until you choose to migrate.'
+          : 'In this version, your data is stored on this device. You can export or delete it anytime from Profile.',
         icon: 'shield' as const,
       },
     ],
-    [],
+    [isSupabaseAuth],
   );
 
   const goToConsent = () => {
@@ -134,7 +143,14 @@ export function AuthFlow() {
       }
       if (result.error) {
         showToast(result.error);
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Curavon Supabase sign-up failed', result.error);
+        }
         return;
+      }
+      showToast(SIGNUP_INCOMPLETE_MESSAGE);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Curavon Supabase sign-up incomplete', SIGNUP_INCOMPLETE_MESSAGE);
       }
       return;
     }
@@ -221,9 +237,13 @@ export function AuthFlow() {
             <div className="auth-start-icon" aria-hidden="true">
               <Lock size={28} strokeWidth={1.5} />
             </div>
-            <h1 className="auth-title">Create your account</h1>
+            <h1 className="auth-title">
+              {isSupabaseAuth ? 'Create your Curavon account.' : 'Create your account'}
+            </h1>
             <p className="auth-subtitle">
-              Set up your local Curavon profile. Your data is stored on this device in this version.
+              {isSupabaseAuth
+                ? 'Your account is connected to Supabase Auth.'
+                : 'Set up your local Curavon profile. Your data is stored on this device in this version.'}
             </p>
             <p className="auth-trust-line">
               <Shield size={15} aria-hidden="true" />
@@ -447,6 +467,11 @@ export function AuthFlow() {
           </section>
         </motion.div>
       </div>
+      {isDev ? (
+        <p className="auth-note auth-mode-debug" style={{ textAlign: 'center', opacity: 0.7, fontSize: 12 }}>
+          Auth mode: {isSupabaseAuth ? 'Supabase' : 'Local demo'}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { HealthProvider } from './context/HealthContext';
 import { DoctorSummaryProvider } from './context/DoctorSummaryContext';
 import { CuravonAuthProvider } from './lib/auth/authProvider';
 import { getConfiguredAuthMode } from './lib/auth/authConfig';
+import { getAuthDebugState } from './lib/auth/authDebug';
 import { AppAuthGate } from './components/AppAuthGate';
 import { RouteLoadingFallback } from './components/RouteLoadingFallback';
 import { HomeScreen } from './screens/Home';
@@ -61,6 +62,12 @@ function MainAppTabs() {
 
 export default function CuravonClientApp() {
   const authMode = getConfiguredAuthMode();
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.info('Curavon auth debug', getAuthDebugState());
+    }
+  }, []);
 
   return (
     <MotionConfig reducedMotion="user">
