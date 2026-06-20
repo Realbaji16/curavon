@@ -129,10 +129,13 @@ npm run lint     # ESLint
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXT_PUBLIC_AUTH_MODE` | `local_demo` (default) or `supabase` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Optional Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Optional publishable key (never service_role) |
-| `NEXT_PUBLIC_OPENAI_API_KEY` | Optional OpenAI-compatible API key for governed AI |
+| `APP_ENV` / `NEXT_PUBLIC_APP_ENV` | `development`, `test`, `staging`, or `production` |
+| `NEXT_PUBLIC_AUTH_MODE` | `local_demo` (development only) or `supabase` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable key (never service_role) |
+| `OPENAI_API_KEY` | Server-only OpenAI-compatible key (never `NEXT_PUBLIC_*`) |
+| `AI_ENABLED` | `true` / `false` — server-side AI gate |
+| `AI_PROVIDER` | `openai-compatible` (default) |
 
 Create a local `.env.local` file (never commit it). See `.env.example`.
 
@@ -142,11 +145,11 @@ Rules:
 
 - **Never commit API keys** to git
 - Browser-exposed vars must use **`NEXT_PUBLIC_`** prefix in Next.js
-- If the OpenAI key is missing, AI is disabled and **deterministic fallbacks** still work
+- **AI keys are server-only** — if `OPENAI_API_KEY` is missing, AI is disabled and deterministic fallbacks still work
 - AI is **not required** for local demo usage
-- Supabase is **not fully connected** in this step — missing env falls back to `local_demo`
+- **`local_demo` auth is disabled outside development** — pilot/production require Supabase
 
-Configuration is read in `src/lib/env/publicEnv.ts`, `src/lib/auth/authConfig.ts`, and `src/lib/ai/aiConfig.ts`.
+Configuration is read in `src/lib/env/publicEnv.ts`, `src/lib/env/appEnv.ts`, `src/lib/auth/authConfig.ts`, and `src/lib/server/aiConfig.ts`.
 
 ---
 

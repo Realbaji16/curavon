@@ -1,6 +1,5 @@
 import { detectUrgentConcern } from '../../utils/healthSafety';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
-import { safeRead, safeWrite } from '../../utils/healthStorage';
+import { recordSafeAiUsageLog } from '../data/operationalDataService';
 import { buildSafePlanCandidates } from './planCandidates';
 import {
   generateNextBestPlanAction,
@@ -33,8 +32,19 @@ type V3UsageLog = {
 };
 
 function logV3Usage(entry: V3UsageLog) {
-  const logs = safeRead<V3UsageLog[]>(APP_STORAGE_KEYS.aiUsageLog, []);
-  safeWrite(APP_STORAGE_KEYS.aiUsageLog, [entry, ...logs].slice(0, 250));
+  recordSafeAiUsageLog({
+    taskName: entry.task,
+    status: 'completed',
+    occurredAt: entry.timestamp,
+    payload: {
+      cacheHit: entry.cacheHit,
+      fallbackUsed: entry.fallbackUsed,
+      aiSynthesized: entry.aiSynthesized,
+      boundaryValidated: entry.boundaryValidated,
+      safetyOverride: entry.safetyOverride,
+      moduleVersion: ENGINE_VERSION,
+    },
+  });
 }
 
 function makeInputKey(input: PlanEngineInput): string {

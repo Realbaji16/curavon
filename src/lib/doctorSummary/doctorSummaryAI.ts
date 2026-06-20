@@ -9,12 +9,10 @@ import {
   isDoctorSummaryOutputSafe,
 } from './doctorSummaryGuards';
 import { buildDoctorSummaryPrompt, DOCTOR_SUMMARY_SYSTEM_PROMPT } from './doctorSummaryPrompt';
-import { safeRead, safeWrite } from '../../utils/healthStorage';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
+import { recordSafeAiUsageLog } from '../data/operationalDataService';
 
 const SUMMARY_VERSION = 'doctor-summary-v1';
 const SUMMARY_CACHE = new Map<string, DoctorSummaryOutput>();
-const AI_USAGE_LOG_KEY = APP_STORAGE_KEYS.aiUsageLog;
 
 type AIUsageLogEntry = {
   task: 'doctor_summary';
@@ -26,8 +24,18 @@ type AIUsageLogEntry = {
 };
 
 function logUsage(entry: AIUsageLogEntry) {
-  const logs = safeRead<AIUsageLogEntry[]>(AI_USAGE_LOG_KEY, []);
-  safeWrite(AI_USAGE_LOG_KEY, [entry, ...logs].slice(0, 300));
+  recordSafeAiUsageLog({
+    taskName: entry.task,
+    status: entry.aiUsed ? 'completed' : 'fallback',
+    estimatedTokens: entry.inputSizeEstimate,
+    occurredAt: entry.timestamp,
+    payload: {
+      cacheHit: entry.cacheHit,
+      fallbackUsed: entry.fallbackUsed,
+      aiUsed: entry.aiUsed,
+      moduleVersion: SUMMARY_VERSION,
+    },
+  });
 }
 
 function cacheKey(input: { dateRange: string; selectedNoteIds: string[] }) {
@@ -84,7 +92,7 @@ export async function generateDoctorSummaryAI(input: {
     return cached;
   }
 
-  const collected = collectDoctorSummaryInput({
+  const collected = await collectDoctorSummaryInput({
     selectedNoteIds: input.selectedNoteIds,
     userNotes: input.userNotes,
     dateRangeDays: Number.parseInt(input.dateRange, 10) || 30,

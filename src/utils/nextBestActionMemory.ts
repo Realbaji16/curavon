@@ -1,54 +1,44 @@
-import type { AskHistoryEntry } from '../types/askIntake';
 import type { DoctorSummaryItem, RedFlagLog } from '../types/doctorSummary';
-import type { DailyCheckIn, HealthProfile, NextActionState } from '../types/health';
 import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
 import type { PersonalizationMemorySnapshot } from '../types/nextBestAction';
-import { loadGuideResults } from './guideResultStorage';
-import {
-  createDefaultHealthProfile,
-  HEALTH_STORAGE_KEYS,
-  normalizeCheckIn,
-  safeRead,
-} from './healthStorage';
-import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import type { GuideResultRecord } from './guideResultStorage';
 
-const ASK_HISTORY_KEY = APP_STORAGE_KEYS.askHistory;
-const DOCTOR_ITEMS_KEY = APP_STORAGE_KEYS.doctorSummaryItems;
-const RED_FLAGS_KEY = APP_STORAGE_KEYS.redFlagLogs;
-const FOLLOW_UPS_KEY = APP_STORAGE_KEYS.followUps;
+export type CuravonMemoryProductInputs = Pick<
+  PersonalizationMemorySnapshot,
+  'doctorSummaryItems' | 'askHistory' | 'redFlagLogs' | 'followUps' | 'guideResults'
+>;
 
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
+export type CuravonMemoryCoreInputs = Pick<
+  PersonalizationMemorySnapshot,
+  'healthProfile' | 'dailyCheckins' | 'nextActionState' | 'askHistory'
+>;
 
-export function readCuravonMemorySnapshot(): PersonalizationMemorySnapshot {
-  const healthProfile = safeRead<HealthProfile>(
-    HEALTH_STORAGE_KEYS.healthProfile,
-    createDefaultHealthProfile(),
-  );
-
-  const rawCheckins = safeRead<unknown>(HEALTH_STORAGE_KEYS.dailyCheckins, []);
-  const dailyCheckins = asArray<DailyCheckIn>(rawCheckins).map(normalizeCheckIn);
-
-  const nextActionState = safeRead<NextActionState | null>(
-    HEALTH_STORAGE_KEYS.nextActionState,
-    null,
-  );
-
-  const doctorSummaryItems = asArray<DoctorSummaryItem>(safeRead<unknown>(DOCTOR_ITEMS_KEY, []));
-  const askHistory = asArray<AskHistoryEntry>(safeRead<unknown>(ASK_HISTORY_KEY, []));
-  const redFlagLogs = asArray<RedFlagLog>(safeRead<unknown>(RED_FLAGS_KEY, []));
-  const followUps = asArray<FollowUpRecord>(safeRead<unknown>(FOLLOW_UPS_KEY, []));
-  const guideResults = loadGuideResults();
-
+export function readCuravonMemorySnapshot(
+  core?: CuravonMemoryCoreInputs,
+  product?: CuravonMemoryProductInputs,
+): PersonalizationMemorySnapshot {
   return {
-    healthProfile,
-    dailyCheckins,
-    nextActionState,
-    doctorSummaryItems,
-    askHistory,
-    redFlagLogs,
-    followUps,
-    guideResults,
+    healthProfile: core?.healthProfile ?? {
+      preferredName: '',
+      primaryGoals: [],
+      sensitiveMode: false,
+      smartSilencePreference: 'gentle-reminders',
+      conditions: [],
+      medications: [],
+      allergies: [],
+      healthNotes: [],
+      doctorQuestions: [],
+      emergencyContactName: '',
+      emergencyContactPhone: '',
+    },
+    dailyCheckins: core?.dailyCheckins ?? [],
+    nextActionState: core?.nextActionState ?? null,
+    askHistory: core?.askHistory ?? product?.askHistory ?? [],
+    doctorSummaryItems: product?.doctorSummaryItems ?? [],
+    redFlagLogs: product?.redFlagLogs ?? [],
+    followUps: product?.followUps ?? [],
+    guideResults: product?.guideResults ?? [],
   };
 }
+
+export type { GuideResultRecord, DoctorSummaryItem, RedFlagLog, FollowUpRecord };

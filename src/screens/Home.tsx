@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/useApp';
 import { useHealth } from '../context/useHealth';
+import { useDoctorSummary } from '../context/useDoctorSummary';
 import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
 import { TodayCheckIn } from '../components/TodayCheckIn';
 import { HealthActionSheets } from '../components/HealthActionSheets';
@@ -75,6 +76,10 @@ export function HomeScreen() {
     todayCheckIn,
     nextActionState,
     healthSnapshot,
+    askHistory,
+    followUps,
+    redFlagLogs,
+    guideResults,
     dueFollowUp,
     openCheckIn,
     markActionDone,
@@ -82,6 +87,7 @@ export function HomeScreen() {
     openHealthAdjustSheet,
     saveCurrentActionToSummary,
   } = useHealth();
+  const { items: doctorSummaryItems } = useDoctorSummary();
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
   const [showFullFlow, setShowFullFlow] = useState(false);
@@ -118,16 +124,12 @@ export function HomeScreen() {
   const actionText = nextActionState?.currentAction ?? '';
 
   const personalizationPlan = useMemo(() => {
-    const snapshot = readCuravonMemorySnapshot();
-    const merged = {
-      ...snapshot,
-      healthProfile,
-      dailyCheckins,
-      nextActionState,
-    };
-    // Legacy next-action path. Supporting insights only — hero action reads persisted nextActionState.
-    return buildNextBestActionPlan(merged);
-  }, [healthProfile, dailyCheckins, nextActionState]);
+    const snapshot = readCuravonMemorySnapshot(
+      { healthProfile, dailyCheckins, nextActionState, askHistory },
+      { doctorSummaryItems, redFlagLogs, followUps, askHistory, guideResults },
+    );
+    return buildNextBestActionPlan(snapshot);
+  }, [healthProfile, dailyCheckins, nextActionState, askHistory, doctorSummaryItems, redFlagLogs, followUps, guideResults]);
 
   const noCheckInSignal = !hasCheckInToday;
   const canRespondToAction = Boolean(nextActionState) && !noCheckInSignal;

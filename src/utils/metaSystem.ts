@@ -1,7 +1,9 @@
-import type { AskHistoryEntry } from '../types/askIntake';
 import type { RedFlagLog } from '../types/doctorSummary';
 import { syncRuleInsightsAfterMetaCycle } from '../lib/activityInsights/activityInsightEngine';
-import type { DailyCheckIn } from '../types/health';
+import {
+  getMetaSystemAskHistory,
+  getMetaSystemCheckins,
+} from '../lib/meta/metaSystemContext';
 import type {
   MetaActionOutcome,
   MetaFailureInsight,
@@ -11,17 +13,38 @@ import type {
   MetaPatternInsight,
   MetaSafetyEvent,
 } from '../types/metaSystem';
-import { ASK_HISTORY_KEY } from './askIntakeStorage';
-import { HEALTH_STORAGE_KEYS, safeRead, safeWrite } from './healthStorage';
 
-export const META_STORAGE_KEYS = {
-  actionOutcomes: 'curavon_meta_action_outcomes',
-  safetyEvents: 'curavon_meta_safety_events',
-  flowBehavior: 'curavon_meta_flow_behavior',
-  orchestratorEvents: 'curavon_meta_orchestrator_events',
-  insights: 'curavon_meta_insights',
-  improvementQueue: 'curavon_meta_improvement_queue',
-} as const;
+let metaActionOutcomes: MetaActionOutcome[] = [];
+let metaSafetyEvents: MetaSafetyEvent[] = [];
+let metaFlowBehavior: MetaFlowBehaviorEvent[] = [];
+let metaOrchestratorEvents: Array<{
+  id: string;
+  stage: string;
+  safetyLevel: 'normal' | 'caution' | 'urgent';
+  decisionOutcome: string;
+  actionCategory: string;
+  memoryUsed: string[];
+  createdAt: string;
+}> = [];
+let metaInsights: MetaInsightsBundle = {
+  generatedAt: new Date(0).toISOString(),
+  patterns: [],
+  failures: [],
+  proposals: [],
+};
+
+export function resetMetaSystemForTests() {
+  metaActionOutcomes = [];
+  metaSafetyEvents = [];
+  metaFlowBehavior = [];
+  metaOrchestratorEvents = [];
+  metaInsights = {
+    generatedAt: new Date(0).toISOString(),
+    patterns: [],
+    failures: [],
+    proposals: [],
+  };
+}
 
 function appendLimited<T extends { createdAt: string }>(items: T[], entry: T, limit = 300): T[] {
   return [entry, ...items].slice(0, limit);
@@ -44,24 +67,19 @@ function sanitizeSignal(signal: string): string {
 }
 
 export function loadMetaActionOutcomes(): MetaActionOutcome[] {
-  return safeRead<MetaActionOutcome[]>(META_STORAGE_KEYS.actionOutcomes, []);
+  return metaActionOutcomes;
 }
 
 export function loadMetaSafetyEvents(): MetaSafetyEvent[] {
-  return safeRead<MetaSafetyEvent[]>(META_STORAGE_KEYS.safetyEvents, []);
+  return metaSafetyEvents;
 }
 
 export function loadMetaFlowBehavior(): MetaFlowBehaviorEvent[] {
-  return safeRead<MetaFlowBehaviorEvent[]>(META_STORAGE_KEYS.flowBehavior, []);
+  return metaFlowBehavior;
 }
 
 export function loadMetaInsights(): MetaInsightsBundle {
-  return safeRead<MetaInsightsBundle>(META_STORAGE_KEYS.insights, {
-    generatedAt: new Date(0).toISOString(),
-    patterns: [],
-    failures: [],
-    proposals: [],
-  });
+  return metaInsights;
 }
 
 export function collectOrchestratorExecution(input: {
@@ -71,17 +89,6 @@ export function collectOrchestratorExecution(input: {
   actionCategory: string;
   memoryUsed: string[];
 }) {
-  const events = safeRead<
-    Array<{
-      id: string;
-      stage: string;
-      safetyLevel: 'normal' | 'caution' | 'urgent';
-      decisionOutcome: string;
-      actionCategory: string;
-      memoryUsed: string[];
-      createdAt: string;
-    }>
-  >(META_STORAGE_KEYS.orchestratorEvents, []);
   const entry = {
     id: `meta-orch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     stage: input.stage,
@@ -91,7 +98,7 @@ export function collectOrchestratorExecution(input: {
     memoryUsed: input.memoryUsed.slice(0, 6),
     createdAt: new Date().toISOString(),
   };
-  safeWrite(META_STORAGE_KEYS.orchestratorEvents, appendLimited(events, entry));
+  metaOrchestratorEvents = appendLimited(metaOrchestratorEvents, entry);
 }
 
 export function collectActionOutcome(input: {
@@ -110,8 +117,7 @@ export function collectActionOutcome(input: {
     reasonCode: input.reasonCode,
     createdAt: new Date().toISOString(),
   };
-  const next = appendLimited(loadMetaActionOutcomes(), entry);
-  safeWrite(META_STORAGE_KEYS.actionOutcomes, next);
+  metaActionOutcomes = appendLimited(metaActionOutcomes, entry);
 }
 
 export function collectSafetyEvent(input: {
@@ -128,8 +134,7 @@ export function collectSafetyEvent(input: {
     signal: sanitizeSignal(input.signal),
     createdAt: new Date().toISOString(),
   };
-  const next = appendLimited(loadMetaSafetyEvents(), entry);
-  safeWrite(META_STORAGE_KEYS.safetyEvents, next);
+  metaSafetyEvents = appendLimited(metaSafetyEvents, entry);
 }
 
 export function collectFlowBehavior(input: {
@@ -146,15 +151,14 @@ export function collectFlowBehavior(input: {
     totalSteps: input.totalSteps,
     createdAt: new Date().toISOString(),
   };
-  const next = appendLimited(loadMetaFlowBehavior(), entry);
-  safeWrite(META_STORAGE_KEYS.flowBehavior, next);
+  metaFlowBehavior = appendLimited(metaFlowBehavior, entry);
 }
 
 export function analyzePatterns(): MetaPatternInsight[] {
   const outcomes = loadMetaActionOutcomes();
   const flows = loadMetaFlowBehavior();
-  const checkins = safeRead<DailyCheckIn[]>(HEALTH_STORAGE_KEYS.dailyCheckins, []);
-  const ask = safeRead<AskHistoryEntry[]>(ASK_HISTORY_KEY, []);
+  const checkins = getMetaSystemCheckins();
+  const ask = getMetaSystemAskHistory();
 
   const patterns: MetaPatternInsight[] = [];
 
@@ -366,8 +370,7 @@ export function runMetaSystemCycle(): MetaInsightsBundle {
     failures,
     proposals,
   };
-  safeWrite(META_STORAGE_KEYS.insights, bundle);
-  safeWrite(META_STORAGE_KEYS.improvementQueue, proposals);
+  metaInsights = bundle;
   syncRuleInsightsAfterMetaCycle();
   return bundle;
 }

@@ -9,9 +9,16 @@ import {
   type ReactNode,
 } from 'react';
 import type { ThemePreset } from '../theme/themes';
-import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
-import { syncSupabaseHealthProfileRow } from '../lib/supabase/profileSync';
+import type { DemoAuthUser, ProfileSetupData } from '../types/appShell';
+import {
+  clearAppShellState,
+  getAppShellState,
+  patchAppShellState,
+} from '../lib/app/appShellState';
+import { saveHealthProfileRecord } from '../lib/data/coreHealthDataService';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
+
+export type { DemoAuthUser, ProfileSetupData } from '../types/appShell';
 
 export type TabId = 'home' | 'ask' | 'circle' | 'settings' | 'flow';
 
@@ -33,18 +40,6 @@ export interface OnboardingData {
   goals: string[];
   goalNotes?: string;
   sensitiveMode: boolean;
-}
-
-export interface DemoAuthUser {
-  fullName: string;
-  email: string;
-}
-
-export interface ProfileSetupData {
-  preferredName: string;
-  primaryGoals: string[];
-  smartSilencePreference: 'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications';
-  sensitiveMode?: boolean;
 }
 
 function normalizeProfileSetup(
@@ -93,7 +88,7 @@ interface AppState {
 }
 
 interface AppContextValue extends AppState {
-  /** True after client shell state is read from localStorage (avoids SSR hydration mismatch). */
+  /** True after in-memory shell state is hydrated on the client (avoids SSR hydration mismatch). */
   shellHydrated: boolean;
   setTheme: (t: ThemePreset) => void;
   setActiveTab: (tab: TabId) => void;
@@ -125,41 +120,22 @@ const defaultOnboarding: OnboardingData = {
   sensitiveMode: false,
 };
 
-const STORAGE_KEYS = {
-  onboardingSeen: APP_STORAGE_KEYS.onboardingSeen,
-  authDemoUser: APP_STORAGE_KEYS.authDemoUser,
-  consentComplete: APP_STORAGE_KEYS.consentComplete,
-  setupComplete: APP_STORAGE_KEYS.setupComplete,
-  profileSetup: APP_STORAGE_KEYS.profileSetup,
-} as const;
-
-function safeRead<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function safeWrite(key: string, value: unknown) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-function safeRemove(key: string) {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(key);
-}
-
-function clearSessionForOnboarding() {
-  safeRemove(STORAGE_KEYS.onboardingSeen);
-  safeRemove(STORAGE_KEYS.authDemoUser);
-  safeRemove(STORAGE_KEYS.consentComplete);
-  safeRemove(STORAGE_KEYS.setupComplete);
-  safeRemove(STORAGE_KEYS.profileSetup);
+function createShellStateFromStore(overrides: Partial<AppState> = {}): AppState {
+  const shell = getAppShellState();
+  return {
+    onboardingComplete: shell.onboardingSeen,
+    authDemoUser: shell.authDemoUser,
+    consentComplete: shell.consentComplete,
+    setupComplete: shell.setupComplete,
+    profileSetup: normalizeProfileSetup(shell.profileSetup),
+    theme: 'sky',
+    activeTab: 'home',
+    onboardingData: defaultOnboarding,
+    toast: null,
+    showDoctorSummary: false,
+    pendingGuideFlowId: null,
+    ...overrides,
+  };
 }
 
 function createShellState(overrides: Partial<AppState> = {}): AppState {
@@ -192,18 +168,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(() => createShellState());
 
   useEffect(() => {
-    // Client-only localStorage hydration; cannot run during SSR render.
+    // Client-only in-memory shell hydration; cannot run during SSR render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState(
-      createShellState({
-        onboardingComplete: safeRead<boolean>(STORAGE_KEYS.onboardingSeen, false),
-        consentComplete: safeRead<boolean>(STORAGE_KEYS.consentComplete, false),
-        setupComplete: safeRead<boolean>(STORAGE_KEYS.setupComplete, false),
-        profileSetup: normalizeProfileSetup(
-          safeRead<ProfileSetupData | null>(STORAGE_KEYS.profileSetup, null),
-        ),
-      }),
-    );
+    setState(createShellStateFromStore());
     setShellHydrated(true);
   }, []);
 
@@ -234,7 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOnboarding = useCallback((data: OnboardingData) => {
-    safeWrite(STORAGE_KEYS.onboardingSeen, true);
+    patchAppShellState({ onboardingSeen: true });
     setState((s) => ({
       ...s,
       onboardingComplete: true,
@@ -248,9 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearAuthShellState = useCallback(() => {
-    safeRemove(STORAGE_KEYS.consentComplete);
-    safeRemove(STORAGE_KEYS.setupComplete);
-    safeRemove(STORAGE_KEYS.profileSetup);
+    clearAppShellState();
     setState((s) => ({
       ...s,
       authDemoUser: null,
@@ -266,7 +231,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signOutDemo = clearAuthShellState;
 
   const completeAuthConsent = useCallback(() => {
-    safeWrite(STORAGE_KEYS.consentComplete, true);
+    patchAppShellState({ consentComplete: true });
     setState((s) => ({ ...s, consentComplete: true }));
   }, []);
 
@@ -278,22 +243,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         smartSilencePreference: setup.smartSilencePreference,
         sensitiveMode: setup.sensitiveMode,
       };
-      safeWrite(STORAGE_KEYS.profileSetup, persistedProfile);
-      safeWrite(STORAGE_KEYS.setupComplete, true);
-      safeWrite(APP_STORAGE_KEYS.healthProfile, {
-        preferredName: setup.preferredName,
-        primaryGoals: setup.primaryGoals,
-        sensitiveMode: setup.sensitiveMode,
-        smartSilencePreference: setup.smartSilencePreference,
-        conditions: [],
-        medications: [],
-        allergies: [],
-        healthNotes: [],
-        doctorQuestions: [],
-        emergencyContactName: '',
-        emergencyContactPhone: '',
+      patchAppShellState({
+        profileSetup: persistedProfile,
+        setupComplete: true,
       });
-      void syncSupabaseHealthProfileRow({
+      void saveHealthProfileRecord({
         preferredName: setup.preferredName,
         primaryGoals: setup.primaryGoals,
         sensitiveMode: setup.sensitiveMode,
@@ -316,7 +270,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const resetToOnboarding = useCallback(() => {
-    clearSessionForOnboarding();
+    clearAppShellState();
+    patchAppShellState({ onboardingSeen: false });
     screenBackHandlerRef.current = null;
     setScreenBackVisible(false);
     setState(createShellState());

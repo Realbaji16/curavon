@@ -4,9 +4,19 @@ import {
   loadMetaFlowBehavior,
   loadMetaSafetyEvents,
 } from '../../utils/metaSystem';
-import { HEALTH_STORAGE_KEYS, safeRead } from '../../utils/healthStorage';
 import type { DailyCheckIn } from '../../types/health';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
+import { fetchUserPreference } from '../data/productDataService';
+
+let userPreferencesCache: Record<string, unknown> = {};
+
+export async function hydrateUserPreferencesSnapshot(): Promise<Record<string, unknown>> {
+  userPreferencesCache = (await fetchUserPreference()) ?? {};
+  return userPreferencesCache;
+}
+
+export function loadUserPreferencesSnapshot(): Record<string, unknown> {
+  return userPreferencesCache;
+}
 
 const SUMMARY_DAYS = 14;
 
@@ -43,13 +53,11 @@ function generalizeFlowId(flowId: string): string {
   return flowId.replace(/-/g, ' ').slice(0, 40);
 }
 
-export function buildActivityInsightInputSummary(): ActivityInsightInputSummary {
+export function buildActivityInsightInputSummary(checkins: DailyCheckIn[] = []): ActivityInsightInputSummary {
   const outcomes = loadMetaActionOutcomes().filter((o) => inLastDays(o.createdAt, SUMMARY_DAYS));
   const flows = loadMetaFlowBehavior().filter((f) => inLastDays(f.createdAt, SUMMARY_DAYS));
   const safety = loadMetaSafetyEvents().filter((e) => inLastDays(e.createdAt, SUMMARY_DAYS));
-  const checkins = safeRead<DailyCheckIn[]>(HEALTH_STORAGE_KEYS.dailyCheckins, []).filter((c) =>
-    inLastDays(c.createdAt, SUMMARY_DAYS),
-  );
+  const recentCheckins = checkins.filter((c) => inLastDays(c.createdAt, SUMMARY_DAYS));
 
   const completed = outcomes.filter((o) => o.status === 'done').length;
   const blocked = outcomes.filter((o) => o.status === 'blocked').length;
@@ -84,9 +92,9 @@ export function buildActivityInsightInputSummary(): ActivityInsightInputSummary 
       mostAbandonedFlow: topAbandon ? generalizeFlowId(topAbandon[0]) : undefined,
     },
     checkInStats: {
-      count: checkins.length,
-      recentMoodTrend: trendFromCheckIns(checkins, 'mood'),
-      recentEnergyTrend: trendFromCheckIns(checkins, 'energy'),
+      count: recentCheckins.length,
+      recentMoodTrend: trendFromCheckIns(recentCheckins, 'mood'),
+      recentEnergyTrend: trendFromCheckIns(recentCheckins, 'energy'),
     },
     safetyStats: {
       redFlagCount: safety.filter((e) => e.eventType === 'red_flag_trigger').length,
@@ -123,8 +131,4 @@ export function summaryHasMeaningfulActivity(summary: ActivityInsightInputSummar
       safetyStats.redFlagCount >
     0
   );
-}
-
-export function loadUserPreferencesSnapshot(): Record<string, unknown> {
-  return safeRead<Record<string, unknown>>(APP_STORAGE_KEYS.userPreferences, {});
 }

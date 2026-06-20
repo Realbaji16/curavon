@@ -1,7 +1,12 @@
 import type { User } from '@supabase/supabase-js';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
-import { safeRead } from '../../utils/healthStorage';
+import { getAppShellState } from '../app/appShellState';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
+import {
+  clearLocalSupabaseSession,
+  isFetchFailure,
+  isRecoverableAuthError,
+  SUPABASE_NETWORK_ERROR_MESSAGE,
+} from '../supabase/supabaseAuthHelpers';
 import { syncSupabaseProfileRow } from '../supabase/profileSync';
 import type { AuthAdapter, AuthMode, AuthSession, CuravonUser } from './authTypes';
 
@@ -17,6 +22,7 @@ function mapSupabaseUser(user: User): CuravonUser {
     (typeof metadata?.full_name === 'string' && metadata.full_name) ||
     user.email?.split('@')[0] ||
     'Curavon user';
+  const shell = getAppShellState();
 
   return {
     id: user.id,
@@ -25,8 +31,8 @@ function mapSupabaseUser(user: User): CuravonUser {
     createdAt: user.created_at,
     updatedAt: user.updated_at ?? user.created_at,
     authMode: SUPABASE_MODE,
-    consentCompleted: safeRead<boolean>(APP_STORAGE_KEYS.consentComplete, false),
-    setupCompleted: safeRead<boolean>(APP_STORAGE_KEYS.setupComplete, false),
+    consentCompleted: shell.consentComplete,
+    setupCompleted: shell.setupComplete,
   };
 }
 
@@ -34,11 +40,12 @@ function asSession(
   user: CuravonUser | null,
   error: string | null = null,
 ): AuthSession {
+  const shell = getAppShellState();
   const freshUser = user
     ? {
         ...user,
-        consentCompleted: safeRead<boolean>(APP_STORAGE_KEYS.consentComplete, false),
-        setupCompleted: safeRead<boolean>(APP_STORAGE_KEYS.setupComplete, false),
+        consentCompleted: shell.consentComplete,
+        setupCompleted: shell.setupComplete,
       }
     : null;
 
@@ -63,18 +70,47 @@ async function syncProfileRow(user: User): Promise<void> {
   }
 }
 
+async function loadAuthenticatedSession(
+  client: NonNullable<ReturnType<typeof getBrowserSupabaseClient>>,
+): Promise<AuthSession> {
+  try {
+    const {
+      data: { user },
+      error,
+    } = await client.auth.getUser();
+
+    if (error) {
+      if (isRecoverableAuthError(error) || isFetchFailure(error)) {
+        await clearLocalSupabaseSession(client);
+      }
+      if (isFetchFailure(error)) {
+        return asSession(null, SUPABASE_NETWORK_ERROR_MESSAGE);
+      }
+      return asSession(null, error.message);
+    }
+
+    if (!user) return asSession(null);
+
+    await syncProfileRow(user);
+    return asSession(mapSupabaseUser(user));
+  } catch (error) {
+    if (isFetchFailure(error)) {
+      await clearLocalSupabaseSession(client);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Curavon Supabase auth unreachable; cleared local session.', error);
+      }
+      return asSession(null, SUPABASE_NETWORK_ERROR_MESSAGE);
+    }
+    return asSession(null, 'Could not load Supabase session.');
+  }
+}
+
 export function createSupabaseAuthAdapter(): AuthAdapter {
   return {
     async getSession() {
       const client = getBrowserSupabaseClient();
       if (!client) return missingClientSession();
-
-      const { data, error } = await client.auth.getSession();
-      if (error) return asSession(null, error.message);
-      if (!data.session?.user) return asSession(null);
-
-      await syncProfileRow(data.session.user);
-      return asSession(mapSupabaseUser(data.session.user));
+      return loadAuthenticatedSession(client);
     },
 
     async signInWithEmail(email, password) {
@@ -121,7 +157,13 @@ export function createSupabaseAuthAdapter(): AuthAdapter {
     async signOut() {
       const client = getBrowserSupabaseClient();
       if (!client) return;
-      await client.auth.signOut();
+      try {
+        await client.auth.signOut();
+      } catch (error) {
+        if (isFetchFailure(error)) {
+          await clearLocalSupabaseSession(client);
+        }
+      }
     },
 
     async resetPassword(email) {
@@ -147,13 +189,13 @@ export function createSupabaseAuthAdapter(): AuthAdapter {
       const client = getBrowserSupabaseClient();
       if (!client) return missingClientSession();
 
-      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      const { data: sessionData, error: sessionError } = await client.auth.getUser();
       if (sessionError) return asSession(null, sessionError.message);
-      if (!sessionData.session?.user) {
+      if (!sessionData.user) {
         return asSession(null, 'No authenticated user.');
       }
 
-      const current = mapSupabaseUser(sessionData.session.user);
+      const current = mapSupabaseUser(sessionData.user);
       const nextDisplayName = patch.displayName ?? current.displayName;
       const nextEmail = (patch.email ?? current.email).trim().toLowerCase();
 
@@ -170,7 +212,6 @@ export function createSupabaseAuthAdapter(): AuthAdapter {
     },
 
     async deleteLocalAccount() {
-      // Placeholder: full Supabase account deletion requires a server-side flow.
       const client = getBrowserSupabaseClient();
       if (!client) {
         throw new Error('Supabase is not configured.');

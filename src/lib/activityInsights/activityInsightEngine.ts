@@ -1,7 +1,9 @@
 import type { ActivityInsight } from '../../types/activityInsights';
+import { loadCoreHealthData } from '../data/coreHealthDataService';
 import {
   buildActivityInsightInputSummary,
   hashActivitySummary,
+  hydrateUserPreferencesSnapshot,
   summaryHasMeaningfulActivity,
 } from './activityInsightSummary';
 import { generateRuleActivityInsights } from './ruleActivityInsights';
@@ -9,6 +11,7 @@ import { generateAIActivityInsights } from './aiActivityInsightInterpreter';
 import {
   getActivityInsightLastAiRunAt,
   getActivityInsightSummaryHash,
+  hydrateActivityInsightStore,
   loadActivityInsights,
   saveActivityInsights,
   clearActivityInsights as clearStoredInsights,
@@ -39,8 +42,13 @@ function shouldRunAiRefresh(summaryHash: string, force = false): boolean {
   return getActivityInsightSummaryHash() !== summaryHash;
 }
 
-export function refreshRuleActivityInsights(): ActivityInsight[] {
-  const summary = buildActivityInsightInputSummary();
+async function loadSummaryContext() {
+  const [core] = await Promise.all([loadCoreHealthData(), hydrateUserPreferencesSnapshot()]);
+  return buildActivityInsightInputSummary(core.dailyCheckins);
+}
+
+export async function refreshRuleActivityInsights(): Promise<ActivityInsight[]> {
+  const summary = await loadSummaryContext();
   const ruleInsights = generateRuleActivityInsights(summary);
   const summaryHash = hashActivitySummary(summary);
 
@@ -57,7 +65,8 @@ export async function refreshActivityInsights(options?: {
   safetyLevel?: 'normal' | 'caution' | 'urgent';
   consentCompleted?: boolean;
 }): Promise<ActivityInsight[]> {
-  const summary = buildActivityInsightInputSummary();
+  await hydrateActivityInsightStore();
+  const summary = await loadSummaryContext();
   const summaryHash = hashActivitySummary(summary);
   const ruleInsights = generateRuleActivityInsights(summary);
 
@@ -91,16 +100,17 @@ export async function refreshActivityInsights(options?: {
   return finalInsights;
 }
 
-export function getCachedActivityInsights(): ActivityInsight[] {
+export async function getCachedActivityInsights(): Promise<ActivityInsight[]> {
+  await hydrateActivityInsightStore();
   const cached = loadActivityInsights();
   if (cached.length > 0) return cached;
   return refreshRuleActivityInsights();
 }
 
-export function clearActivityInsightsData() {
-  clearStoredInsights();
+export async function clearActivityInsightsData() {
+  await clearStoredInsights();
 }
 
 export function syncRuleInsightsAfterMetaCycle() {
-  refreshRuleActivityInsights();
+  void refreshRuleActivityInsights();
 }

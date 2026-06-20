@@ -27,6 +27,14 @@ function kernelFallback(input: string): AIKernelResponse {
 }
 
 export async function runAIClient(request: AIClientRequest): Promise<AIClientResponse> {
+  if (typeof window !== 'undefined') {
+    return {
+      success: false,
+      text: '',
+      warnings: ['AI client calls are server-only in private pilot builds.'],
+    };
+  }
+
   const config = getAIConfig();
   if (!config.enabled || !config.apiKey) {
     return {

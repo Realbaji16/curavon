@@ -47,8 +47,10 @@ export function CuravonAuthProvider({
 
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange(() => {
-      void refresh();
+    } = client.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        void refresh();
+      }
     });
 
     return () => {

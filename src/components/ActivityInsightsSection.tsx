@@ -6,6 +6,7 @@ import {
   getCachedActivityInsights,
   refreshActivityInsights,
 } from '../lib/activityInsights/activityInsightEngine';
+import { hydrateActivityInsightStore } from '../lib/activityInsights/activityInsightStorage';
 
 type ActivityInsightsSectionProps = {
   safetyLevel?: 'normal' | 'caution' | 'urgent';
@@ -18,9 +19,15 @@ export function ActivityInsightsSection({
   consentCompleted = true,
   onToast,
 }: ActivityInsightsSectionProps) {
-  const [insights, setInsights] = useState<ActivityInsight[]>(() => getCachedActivityInsights());
+  const [insights, setInsights] = useState<ActivityInsight[]>([]);
   const [loading, setLoading] = useState(false);
   const [aiRefreshing, setAiRefreshing] = useState(false);
+
+  useEffect(() => {
+    void hydrateActivityInsightStore().then(() => {
+      void getCachedActivityInsights().then(setInsights);
+    });
+  }, []);
 
   const loadInsights = useCallback(async (forceAi = false) => {
     setLoading(true);
@@ -58,10 +65,11 @@ export function ActivityInsightsSection({
   };
 
   const handleClear = () => {
-    clearActivityInsightsData();
-    const next = getCachedActivityInsights();
-    setInsights(next);
-    onToast?.('Activity Insights cleared');
+    void clearActivityInsightsData().then(async () => {
+      const next = await getCachedActivityInsights();
+      setInsights(next);
+      onToast?.('Activity Insights cleared');
+    });
   };
 
   return (

@@ -1,6 +1,5 @@
 import { runAIOrchestrator } from '../ai/orchestrator/aiOrchestrator';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
-import { safeRead, safeWrite } from '../../utils/healthStorage';
+import { recordSafeAiUsageLog } from '../data/operationalDataService';
 import {
   DISALLOWED_ACTION_LABELS,
   allowedCategoriesForContext,
@@ -25,8 +24,20 @@ type SynthesisUsageLog = {
 };
 
 function logSynthesisUsage(entry: SynthesisUsageLog) {
-  const logs = safeRead<SynthesisUsageLog[]>(APP_STORAGE_KEYS.aiUsageLog, []);
-  safeWrite(APP_STORAGE_KEYS.aiUsageLog, [entry, ...logs].slice(0, 250));
+  recordSafeAiUsageLog({
+    taskName: entry.task,
+    status: entry.aiUsed ? 'completed' : 'fallback',
+    occurredAt: entry.timestamp,
+    payload: {
+      cacheHit: entry.cacheHit,
+      fallbackUsed: entry.fallbackUsed,
+      aiUsed: entry.aiUsed,
+      aiSynthesized: entry.aiSynthesized,
+      boundaryValidated: entry.boundaryValidated,
+      blockReason: entry.blockReason,
+      moduleVersion: SYNTHESIS_VERSION,
+    },
+  });
 }
 
 function makeSynthesisCacheKey(input: PlanSynthesisInput): string {

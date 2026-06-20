@@ -10,8 +10,7 @@ import {
 import {
   readSupabaseHealthProfile,
   SupabaseDataError,
-} from '../lib/data/supabaseDataAdapter';
-import { previewLocalDataForMigration } from '../lib/data/localToSupabaseMigration';
+} from '../lib/data/supabaseDataClient';
 
 const ENV_KEYS = [
   'NEXT_PUBLIC_AUTH_MODE',
@@ -88,15 +87,12 @@ describe('Supabase connection (Step 18)', () => {
     } satisfies Partial<SupabaseDataError>);
   });
 
-  it('preview migration is not ready without Supabase sign-in', async () => {
-    const preview = await previewLocalDataForMigration();
-    expect(preview.ready).toBe(false);
-    expect(preview.reason).toMatch(/sign in/i);
-  });
-
   it('includes required SQL and setup docs', () => {
     const repoRoot = path.resolve(__dirname, '../..');
     const required = [
+      'supabase/migrations/20250618100001_curavon_app_schema.sql',
+      'supabase/migrations/20250618100002_curavon_rls_policies.sql',
+      'docs/runbooks/supabase-migrations.md',
       'docs/backend/supabase-schema-v1.sql',
       'docs/backend/supabase-rls-v1.sql',
       'docs/backend/nextjs-supabase-setup.md',

@@ -3,25 +3,11 @@ import type { DoctorSummaryItem, RedFlagLog } from '../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../types/health';
 import type { HealthSnapshot, SnapshotFocusArea, SnapshotTrend } from '../types/healthSnapshot';
 import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
-import type { GuideResultRecord } from './guideResultStorage';
-import { loadGuideResults } from './guideResultStorage';
+import type { GuideResultRecord } from '../types/guideResult';
 import {
   createDefaultHealthProfile,
-  safeRead,
-  safeWrite,
   todayDateKey,
-} from './healthStorage';
-import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
-import { queueSyncForCurrentUser } from '../lib/sync/syncQueue';
-
-const DAILY_CHECKINS_KEY = APP_STORAGE_KEYS.dailyCheckins;
-const ASK_HISTORY_KEY = APP_STORAGE_KEYS.askHistory;
-const NEXT_ACTION_KEY = APP_STORAGE_KEYS.nextActionState;
-const DOCTOR_ITEMS_KEY = APP_STORAGE_KEYS.doctorSummaryItems;
-const RED_FLAGS_KEY = APP_STORAGE_KEYS.redFlagLogs;
-const FOLLOW_UPS_KEY = APP_STORAGE_KEYS.followUps;
-const HEALTH_PROFILE_KEY = APP_STORAGE_KEYS.healthProfile;
-export const HEALTH_SNAPSHOT_KEY = APP_STORAGE_KEYS.healthSnapshot;
+} from './healthUtils';
 
 const MOOD_SCORE: Record<string, number> = {
   Clear: 4,
@@ -274,17 +260,33 @@ function trendSummary(
   return `Patterns are mostly stable. Keep focus on ${focusLabel}.${goalHint}${guideHint}`;
 }
 
-export function buildHealthSnapshot(): HealthSnapshot {
-  const checkins = safeRead<DailyCheckIn[]>(DAILY_CHECKINS_KEY, [])
+export type HealthSnapshotCoreInputs = {
+  profile?: HealthProfile;
+  dailyCheckins?: DailyCheckIn[];
+  askHistory?: AskHistoryEntry[];
+  nextActionState?: NextActionState | null;
+};
+
+export type HealthSnapshotProductInputs = {
+  doctorItems?: DoctorSummaryItem[];
+  redFlags?: RedFlagLog[];
+  followUps?: FollowUpRecord[];
+  guideResults?: GuideResultRecord[];
+};
+
+export type HealthSnapshotInputs = HealthSnapshotCoreInputs & HealthSnapshotProductInputs;
+
+export function buildHealthSnapshot(inputs?: HealthSnapshotInputs): HealthSnapshot {
+  const checkins = (inputs?.dailyCheckins ?? [])
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const askHistory = safeRead<AskHistoryEntry[]>(ASK_HISTORY_KEY, []);
-  const nextAction = safeRead<NextActionState | null>(NEXT_ACTION_KEY, null);
-  const doctorItems = safeRead<DoctorSummaryItem[]>(DOCTOR_ITEMS_KEY, []);
-  const redFlags = safeRead<RedFlagLog[]>(RED_FLAGS_KEY, []);
-  const profile = safeRead<HealthProfile>(HEALTH_PROFILE_KEY, createDefaultHealthProfile());
-  const followUps = safeRead<FollowUpRecord[]>(FOLLOW_UPS_KEY, []);
-  const guideResults = loadGuideResults();
+  const askHistory = inputs?.askHistory ?? [];
+  const nextAction = inputs?.nextActionState ?? null;
+  const doctorItems = inputs?.doctorItems ?? [];
+  const redFlags = inputs?.redFlags ?? [];
+  const profile = inputs?.profile ?? createDefaultHealthProfile();
+  const followUps = inputs?.followUps ?? [];
+  const guideResults = inputs?.guideResults ?? [];
 
   const profileContext = buildProfileContext(profile);
   const followUpSignals = buildFollowUpSignals(followUps);
@@ -406,20 +408,14 @@ export function buildHealthSnapshot(): HealthSnapshot {
   };
 }
 
+let healthSnapshotCache: HealthSnapshot | null = null;
+
 export function saveHealthSnapshot(snapshot: HealthSnapshot) {
-  safeWrite(HEALTH_SNAPSHOT_KEY, snapshot);
-  queueSyncForCurrentUser({
-    entityType: 'memory_snapshot',
-    operationType: 'update',
-    payload: {
-      updatedAt: snapshot.updatedAt,
-      focus: snapshot.recommendedFocusArea,
-    },
-  });
+  healthSnapshotCache = snapshot;
 }
 
 export function loadHealthSnapshot(): HealthSnapshot {
-  const stored = safeRead<HealthSnapshot>(HEALTH_SNAPSHOT_KEY, createEmptyHealthSnapshot());
+  const stored = healthSnapshotCache ?? createEmptyHealthSnapshot();
   return {
     ...createEmptyHealthSnapshot(),
     ...stored,
@@ -429,8 +425,12 @@ export function loadHealthSnapshot(): HealthSnapshot {
   };
 }
 
-export function refreshHealthSnapshot(): HealthSnapshot {
-  const snapshot = buildHealthSnapshot();
+export function resetHealthSnapshotCacheForTests() {
+  healthSnapshotCache = null;
+}
+
+export function refreshHealthSnapshot(inputs?: HealthSnapshotInputs): HealthSnapshot {
+  const snapshot = buildHealthSnapshot(inputs);
   saveHealthSnapshot(snapshot);
   return snapshot;
 }

@@ -1,7 +1,6 @@
-import { readDecisionTraces, writeDecisionTraces } from './aiObservabilityStorage';
+import { appendDecisionTrace } from '../../data/operationalDataService';
 import type { AIDecisionTrace } from './aiObservabilityTypes';
 
 export function recordAIDecisionTrace(trace: AIDecisionTrace) {
-  const traces = readDecisionTraces();
-  writeDecisionTraces([trace, ...traces].slice(0, 100));
+  appendDecisionTrace(trace);
 }
