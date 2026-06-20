@@ -280,6 +280,21 @@ export function createSupabaseDataAdapter(): DataAdapter {
         return mapAskIntakeSessionRow(data as Record<string, unknown>);
       }),
 
+    getAskIntakeSession: (id) =>
+      runDataOp(async () => {
+        const client = requireClient();
+        const userId = await requireSupabaseUserId();
+        const { data, error } = await client
+          .from('ask_intake_sessions')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (error) throw new SupabaseDataError('query_failed', error.message);
+        return data ? mapAskIntakeSessionRow(data as Record<string, unknown>) : null;
+      }),
+
     updateAskIntakeSession: (id, input) =>
       runDataOp(async () => {
         const client = requireClient();

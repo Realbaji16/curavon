@@ -36,7 +36,7 @@ describe('Supabase data adapter foundation (Fix 8)', () => {
     for (const method of DATA_ADAPTER_METHODS) {
       expect(typeof adapter[method as keyof DataAdapter]).toBe('function');
     }
-    expect(DATA_ADAPTER_METHODS).toHaveLength(47);
+    expect(DATA_ADAPTER_METHODS).toHaveLength(48);
   });
 
   it('adapter foundation files do not use localStorage directly', () => {

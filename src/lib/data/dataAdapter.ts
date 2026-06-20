@@ -59,6 +59,7 @@ export interface DataAdapter {
   createAskHistoryItem(input: CreateAskHistoryItemInput): Promise<AskHistoryItem>;
 
   createAskIntakeSession(input: CreateAskIntakeSessionInput): Promise<AskIntakeSession>;
+  getAskIntakeSession(id: string): Promise<AskIntakeSession | null>;
   updateAskIntakeSession(id: string, input: UpdateAskIntakeSessionInput): Promise<AskIntakeSession>;
 
   createGuideResult(input: CreateGuideResultInput): Promise<GuideResult>;
@@ -124,6 +125,7 @@ export const DATA_ADAPTER_METHODS = [
   'listAskHistory',
   'createAskHistoryItem',
   'createAskIntakeSession',
+  'getAskIntakeSession',
   'updateAskIntakeSession',
   'createGuideResult',
   'getGuideResult',
