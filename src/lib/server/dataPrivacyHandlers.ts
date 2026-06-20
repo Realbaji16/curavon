@@ -11,6 +11,7 @@ import type { DataPrivacyError } from './dataPrivacyTypes';
 import { PRIVACY_ROUTE_MESSAGES } from './dataPrivacyTypes';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { withServerDataAccess } from './serverDataContext';
+import { trackSafeEvent } from '../observability/safeAnalytics';
 
 function privacyError(
   status: number,
@@ -64,6 +65,17 @@ export async function handleExportRequestPost(request: Request) {
       }),
     });
 
+    trackSafeEvent(
+      body.requestType === 'doctor_summary_export'
+        ? 'summary_export_requested'
+        : 'data_export_requested',
+      {
+        request_status: requestRecord.requestStatus,
+        status: 'pending',
+        route_name: 'api_data_export_request',
+      },
+    );
+
     return {
       status: 200,
       body: {
@@ -105,6 +117,12 @@ export async function handleDeletionRequestPost(request: Request) {
         requested_at: new Date().toISOString(),
         account_deleted: false,
       }),
+    });
+
+    trackSafeEvent('data_deletion_requested', {
+      request_status: requestRecord.requestStatus,
+      status: 'pending',
+      route_name: 'api_data_deletion_request',
     });
 
     return {

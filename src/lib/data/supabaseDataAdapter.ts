@@ -821,6 +821,12 @@ export function createSupabaseDataAdapter(): DataAdapter {
           .select('*')
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Insert failed');
+        void import('../observability/safeAnalytics').then(({ trackSafeEvent }) => {
+          trackSafeEvent('care_circle_invite_created', {
+            status: 'pending',
+            request_status: 'created',
+          });
+        });
         return mapCareCircleMemberRow(data as Record<string, unknown>);
       }),
 

@@ -15,6 +15,7 @@ import {
   resolveServerAIIntakeMode,
 } from './aiRouteGuards';
 import { recordFlowProposalEvent } from './aiServerObservability';
+import { trackSafeEvent } from '../observability/safeAnalytics';
 import type {
   FlowProposalResponse,
   ParsedFlowProposalInput,
@@ -178,6 +179,21 @@ export async function handleAIFlowProposalPost(request: Request): Promise<{
         riskLevel: 'urgent',
       });
 
+      trackSafeEvent('ai_route_blocked', {
+        route_name: 'ai_flow_proposal',
+        error_code: 'safety_blocked',
+        safety_flag: true,
+        risk_level: 'urgent',
+        flow_id: safetyFlow.id,
+        privacy_level: privacyLevel,
+      });
+      trackSafeEvent('unsafe_response_blocked', {
+        route_name: 'ai_flow_proposal',
+        error_code: 'safety_blocked',
+        safety_flag: true,
+        risk_level: 'urgent',
+      });
+
       return {
         status: 422,
         body: {
@@ -245,6 +261,22 @@ export async function handleAIFlowProposalPost(request: Request): Promise<{
       outputType: 'draft_flow',
       privacyLevel,
       riskLevel,
+    });
+
+    trackSafeEvent('ai_route_called', {
+      route_name: 'ai_flow_proposal',
+      status: 'completed',
+      safety_flag: false,
+      risk_level: riskLevel,
+      flow_id: draftFlow.id,
+      privacy_level: privacyLevel,
+    });
+    trackSafeEvent('flow_created', {
+      flow_id: draftFlow.id,
+      privacy_level: privacyLevel,
+      risk_level: riskLevel,
+      status: 'awaiting_user_approval',
+      route_name: 'ai_flow_proposal',
     });
 
     return {

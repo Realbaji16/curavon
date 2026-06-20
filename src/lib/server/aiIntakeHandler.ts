@@ -1,4 +1,5 @@
 import type { AIIntakeResponse } from './aiIntakeTypes';
+import { trackSafeEvent } from '../observability/safeAnalytics';
 import {
   assessIntakeSafety,
   buildMockIntakeResult,
@@ -49,6 +50,18 @@ export async function handleAIIntakePost(request: Request): Promise<{
 
   const safety = assessIntakeSafety(body.input);
   if (!safety.allowed) {
+    trackSafeEvent('ai_route_blocked', {
+      route_name: 'ai_intake',
+      error_code: 'safety_blocked',
+      safety_flag: true,
+      risk_level: safety.riskLevel ?? 'urgent',
+    });
+    trackSafeEvent('unsafe_response_blocked', {
+      route_name: 'ai_intake',
+      error_code: 'safety_blocked',
+      safety_flag: true,
+      risk_level: safety.riskLevel ?? 'urgent',
+    });
     return {
       status: 422,
       body: {
@@ -75,6 +88,12 @@ export async function handleAIIntakePost(request: Request): Promise<{
   }
 
   // Pilot: deterministic mock for mock and ready modes — live OpenAI calls deferred.
+  trackSafeEvent('ai_route_called', {
+    route_name: 'ai_intake',
+    status: 'completed',
+    safety_flag: false,
+    risk_level: safety.riskLevel ?? 'low',
+  });
   return {
     status: 200,
     body: {

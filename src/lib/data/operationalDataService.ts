@@ -4,6 +4,7 @@ import {
   buildSafeAgentEventPayload,
   redactPrivacyPayload,
 } from '../privacy/privacyRedaction';
+import { trackSafeEvent } from '../observability/safeAnalytics';
 import type {
   CreateAiUsageLogInput,
   DataDeletionRequest,
@@ -139,6 +140,16 @@ export async function requestAccountDataExport(
     throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
   }
 
+  trackSafeEvent(
+    body.request.requestType === 'doctor_summary_export'
+      ? 'summary_export_requested'
+      : 'data_export_requested',
+    {
+      request_status: body.request.status,
+      status: 'pending',
+    },
+  );
+
   const now = new Date().toISOString();
   return {
     id: body.request.id,
@@ -177,6 +188,11 @@ export async function requestAccountDataDeletion(input: {
   if (!response.ok || !body.ok || !body.request) {
     throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
   }
+
+  trackSafeEvent('data_deletion_requested', {
+    request_status: body.request.status,
+    status: 'pending',
+  });
 
   const now = new Date().toISOString();
   return {

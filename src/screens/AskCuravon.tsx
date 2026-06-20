@@ -62,6 +62,7 @@ import {
   mapPlanSafetyToRiskLevel,
   resolveAskPrivacyLevel,
 } from '../lib/data/healthFlowService';
+import { trackSafeEvent } from '../lib/observability/safeAnalytics';
 
 type AskMode = 'landing' | 'intake' | 'safety' | 'result';
 
@@ -358,6 +359,18 @@ export function AskCuravonScreen() {
           }),
         });
         setDraftHealthFlowId(draftFlow.id);
+        trackSafeEvent('ask_submitted', {
+          privacy_level: privacyLevel,
+          risk_level: riskLevel,
+          status: 'completed',
+          route_name: 'ask_curavon',
+        });
+        trackSafeEvent('flow_created', {
+          flow_id: draftFlow.id,
+          privacy_level: privacyLevel,
+          risk_level: riskLevel,
+          status: 'awaiting_user_approval',
+        });
         if (intakeSessionId) {
           void updateAskIntakeSession(intakeSessionId, {
             flowId: draftFlow.id,
@@ -479,6 +492,13 @@ export function AskCuravonScreen() {
           });
           flowActionId = action.id;
         }
+
+        trackSafeEvent('flow_activated', {
+          flow_id: draftHealthFlowId ?? healthFlowId,
+          privacy_level: resolveAskPrivacyLevel(sensitive),
+          status: 'active',
+          action_status: 'pending',
+        });
 
         acceptNextAction({
           actionText,

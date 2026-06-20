@@ -33,6 +33,8 @@ import {
   todayDateKey,
 } from '../utils/healthUtils';
 import { setMetaSystemHealthContext } from '../lib/meta/metaSystemContext';
+import { trackSafeEvent } from '../lib/observability/safeAnalytics';
+import { reportSafeError } from '../lib/observability/errorReporter';
 import { ADJUSTED_ACTIONS } from '../utils/nextActionRules';
 import { stepsBandToCount } from '../utils/stepsUtils';
 import {
@@ -393,6 +395,10 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
   const reportPersistError = useCallback((error: unknown) => {
     setCoreDataError(toDataErrorMessage(error));
+    reportSafeError(error, {
+      route_name: 'health_context',
+      error_code: 'persist_failed',
+    });
   }, []);
 
   const persistProfile = useCallback((profile: HealthProfile) => {
@@ -631,6 +637,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setHealthProfile((prev) => {
       const next = { ...prev, ...patch };
       persistProfile(next);
+      if (patch.sensitiveMode === true) {
+        trackSafeEvent('sensitive_mode_enabled', {
+          privacy_level: 'sensitive',
+          status: 'enabled',
+        });
+      }
       if (patch.smartSilencePreference) {
         void saveNotificationPreferenceRecord({
           smartSilencePreference: patch.smartSilencePreference,
@@ -756,6 +768,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: next.category,
         source: next.source,
       });
+      trackSafeEvent('action_done', {
+        action_status: 'done',
+        flow_id: next.healthFlowId,
+        privacy_level: next.privacyLevel,
+        risk_level: next.safetyLevel === 'urgent' ? 'urgent' : next.safetyLevel === 'caution' ? 'medium' : 'low',
+      });
       runMetaSystemCycle();
       return next;
     });
@@ -788,6 +806,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: next.category,
         source: next.source,
         reasonCode: reason,
+      });
+      trackSafeEvent('action_blocked', {
+        action_status: 'blocked',
+        blocked_reason: reason,
+        flow_id: next.healthFlowId,
+        privacy_level: next.privacyLevel,
       });
       runMetaSystemCycle();
       return next;
@@ -823,6 +847,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: next.category,
         source: next.source,
         reasonCode: option,
+      });
+      trackSafeEvent('action_adjusted', {
+        action_status: 'adjusted',
+        blocked_reason: option,
+        flow_id: next.healthFlowId,
+        privacy_level: next.privacyLevel,
       });
       runMetaSystemCycle();
       return next;

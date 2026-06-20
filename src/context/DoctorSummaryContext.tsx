@@ -22,6 +22,8 @@ import {
   saveDoctorSummaryDraft,
   saveDoctorSummaryItem,
 } from '../utils/doctorSummaryStorage';
+import { detectRedFlags } from '../lib/health/redFlags';
+import { trackSafeEvent } from '../lib/observability/safeAnalytics';
 import {
   buildSummaryDocument,
   createAskIntakeSummaryItem,
@@ -219,6 +221,13 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
       const matches = findUrgentMatches(input.userText);
       const matchedConcern = input.matchedConcern ?? matches[0] ?? 'urgent language';
       const guidance = input.guidanceShown ?? URGENT_SAFETY_MESSAGE;
+      const detection = detectRedFlags(input.userText);
+      trackSafeEvent('red_flag_triggered', {
+        blocked_reason: detection.categories[0] ?? 'unknown',
+        risk_level: 'urgent',
+        safety_flag: true,
+        route_name: input.source.toLowerCase().replace(/\s+/g, '_'),
+      });
       try {
         const log = await persistAddRedFlag({
           source: input.source,
