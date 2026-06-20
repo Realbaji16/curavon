@@ -3,7 +3,8 @@ import {
   getSupabasePublicPublishableKey,
   getSupabasePublicUrl,
   hasSupabasePublicConfig,
-} from '../supabase/supabaseEnv';import { getConfiguredAuthMode } from './authConfig';
+} from '../supabase/supabaseEnv';
+import { getConfiguredAuthMode } from './authConfig';
 import type { AuthMode } from './authTypes';
 
 export type AuthEnvSource = 'next_public' | 'vite_fallback' | 'missing';

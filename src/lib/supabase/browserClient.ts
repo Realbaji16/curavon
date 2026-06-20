@@ -14,7 +14,14 @@ export function getBrowserSupabaseClient(): SupabaseClient | null {
   if (!browserClient) {
     const config = getSupabasePublicConfig();
     if (!config) return null;
-    browserClient = createBrowserClient(config.url, config.publishableKey);
+    browserClient = createBrowserClient(config.url, config.publishableKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+      },
+    });
   }
 
   return browserClient;
