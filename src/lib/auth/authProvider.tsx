@@ -1,3 +1,5 @@
+'use client';
+
 import {
   useCallback,
   useEffect,
@@ -8,6 +10,7 @@ import {
 import { createAuthAdapter } from './authAdapter';
 import { CuravonAuthContext } from './authContext';
 import type { AuthMode, AuthSession } from './authTypes';
+import { getBrowserSupabaseClient } from '../supabase/browserClient';
 
 export function CuravonAuthProvider({
   children,
@@ -37,11 +40,28 @@ export function CuravonAuthProvider({
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (mode !== 'supabase') return;
+    const client = getBrowserSupabaseClient();
+    if (!client) return;
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(() => {
+      void refresh();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [mode, refresh]);
+
   const signIn = useCallback(
     async (email: string, password: string) => {
       setSession((prev) => ({ ...prev, loading: true, error: null }));
       const next = await adapter.signInWithEmail(email, password);
       setSession(next);
+      return next;
     },
     [adapter],
   );
@@ -51,6 +71,7 @@ export function CuravonAuthProvider({
       setSession((prev) => ({ ...prev, loading: true, error: null }));
       const next = await adapter.signUpWithEmail(email, password, displayName);
       setSession(next);
+      return next;
     },
     [adapter],
   );

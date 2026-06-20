@@ -1,4 +1,4 @@
-export type AuthMode = 'local_demo';
+export type AuthMode = 'local_demo' | 'supabase';
 
 export interface CuravonUser {
   id: string;

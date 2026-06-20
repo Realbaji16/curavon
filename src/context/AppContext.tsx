@@ -1,12 +1,16 @@
+'use client';
+
 import {
   createContext,
   useState,
   useCallback,
   useRef,
+  useEffect,
   type ReactNode,
 } from 'react';
 import type { ThemePreset } from '../theme/themes';
 import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
+import { syncSupabaseHealthProfileRow } from '../lib/supabase/profileSync';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 
 export type TabId = 'home' | 'ask' | 'circle' | 'settings' | 'flow';
@@ -89,6 +93,8 @@ interface AppState {
 }
 
 interface AppContextValue extends AppState {
+  /** True after client shell state is read from localStorage (avoids SSR hydration mismatch). */
+  shellHydrated: boolean;
   setTheme: (t: ThemePreset) => void;
   setActiveTab: (tab: TabId) => void;
   completeOnboarding: (data: OnboardingData) => void;
@@ -179,23 +185,27 @@ export { AppContext };
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useCuravonAuth();
-  const onboardingSeen = safeRead<boolean>(STORAGE_KEYS.onboardingSeen, false);
-  const consentComplete = safeRead<boolean>(STORAGE_KEYS.consentComplete, false);
-  const setupComplete = safeRead<boolean>(STORAGE_KEYS.setupComplete, false);
-  const profileSetup = normalizeProfileSetup(
-    safeRead<ProfileSetupData | null>(STORAGE_KEYS.profileSetup, null),
-  );
+  const [shellHydrated, setShellHydrated] = useState(false);
   const screenBackHandlerRef = useRef<(() => void) | null>(null);
   const [screenBackVisible, setScreenBackVisible] = useState(false);
 
-  const [state, setState] = useState<AppState>(() =>
-    createShellState({
-      onboardingComplete: onboardingSeen,
-      consentComplete,
-      setupComplete,
-      profileSetup,
-    }),
-  );
+  const [state, setState] = useState<AppState>(() => createShellState());
+
+  useEffect(() => {
+    // Client-only localStorage hydration; cannot run during SSR render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setState(
+      createShellState({
+        onboardingComplete: safeRead<boolean>(STORAGE_KEYS.onboardingSeen, false),
+        consentComplete: safeRead<boolean>(STORAGE_KEYS.consentComplete, false),
+        setupComplete: safeRead<boolean>(STORAGE_KEYS.setupComplete, false),
+        profileSetup: normalizeProfileSetup(
+          safeRead<ProfileSetupData | null>(STORAGE_KEYS.profileSetup, null),
+        ),
+      }),
+    );
+    setShellHydrated(true);
+  }, []);
 
   const authDemoUser =
     !authLoading && user ? { fullName: user.displayName, email: user.email } : null;
@@ -283,6 +293,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         emergencyContactName: '',
         emergencyContactPhone: '',
       });
+      void syncSupabaseHealthProfileRow({
+        preferredName: setup.preferredName,
+        primaryGoals: setup.primaryGoals,
+        sensitiveMode: setup.sensitiveMode,
+        smartSilencePreference: setup.smartSilencePreference,
+        conditions: [],
+        medications: [],
+        allergies: [],
+        healthNotes: [],
+        doctorQuestions: [],
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+      });
       setState((s) => ({
         ...s,
         setupComplete: true,
@@ -326,6 +349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         ...state,
+        shellHydrated,
         authDemoUser,
         setTheme,
         setActiveTab,

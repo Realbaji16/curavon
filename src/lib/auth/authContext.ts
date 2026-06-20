@@ -7,8 +7,8 @@ export type CuravonAuthContextValue = {
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<AuthSession>;
+  signUp: (email: string, password: string, displayName?: string) => Promise<AuthSession>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateProfile: (patch: Partial<Pick<CuravonUser, 'displayName' | 'email'>>) => Promise<void>;

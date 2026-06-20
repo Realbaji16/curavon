@@ -73,7 +73,7 @@ If symptoms may be severe, sudden, or unsafe, users should seek local emergency 
 
 Current status:
 
-- React + TypeScript + Vite frontend
+- React + TypeScript + **Next.js** frontend (migrated from Vite)
 - Local demo auth (`CuravonAuthProvider` + `localStorage`)
 - `localStorage`-based data layer
 - Guarded AI architecture with deterministic fallbacks
@@ -92,7 +92,7 @@ From `package.json`:
 | Layer | Technology |
 |-------|------------|
 | UI | React 19, TypeScript |
-| Build | Vite 8 |
+| Build | Next.js 16 (App Router) |
 | Motion | Framer Motion |
 | Icons | Lucide React |
 | Data (current) | Browser `localStorage` |
@@ -112,15 +112,15 @@ npm install
 npm run dev
 ```
 
-Open the URL shown in the terminal (typically `http://localhost:5173`).
+Open [http://localhost:3000](http://localhost:3000).
 
 Other useful commands:
 
 ```bash
-npm run build    # production build
+npm run build    # Next.js production build
+npm run start    # serve production build
 npm run test     # Vitest smoke tests
 npm run lint     # ESLint
-npm run preview  # preview production build locally
 ```
 
 ---
@@ -129,22 +129,24 @@ npm run preview  # preview production build locally
 
 | Variable | Purpose |
 |----------|---------|
-| `VITE_OPENAI_API_KEY` | Optional OpenAI-compatible API key for governed AI features |
+| `NEXT_PUBLIC_AUTH_MODE` | `local_demo` (default) or `supabase` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Optional Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Optional publishable key (never service_role) |
+| `NEXT_PUBLIC_OPENAI_API_KEY` | Optional OpenAI-compatible API key for governed AI |
 
-Create a local `.env` file (never commit it):
+Create a local `.env.local` file (never commit it). See `.env.example`.
 
-```env
-VITE_OPENAI_API_KEY=your_key_here
-```
+Legacy `VITE_*` names still work as fallback during migration.
 
 Rules:
 
 - **Never commit API keys** to git
-- If the key is missing, AI is disabled and **deterministic fallbacks** still work
+- Browser-exposed vars must use **`NEXT_PUBLIC_`** prefix in Next.js
+- If the OpenAI key is missing, AI is disabled and **deterministic fallbacks** still work
 - AI is **not required** for local demo usage
-- No Supabase or backend env vars are required today
+- Supabase is **not fully connected** in this step — missing env falls back to `local_demo`
 
-Configuration is read in `src/lib/ai/aiConfig.ts`.
+Configuration is read in `src/lib/env/publicEnv.ts`, `src/lib/auth/authConfig.ts`, and `src/lib/ai/aiConfig.ts`.
 
 ---
 
@@ -152,9 +154,9 @@ Configuration is read in `src/lib/ai/aiConfig.ts`.
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Start Vite dev server |
-| `npm run build` | Typecheck + production build |
-| `npm run preview` | Serve `dist/` locally |
+| `npm run dev` | Start Next.js dev server |
+| `npm run build` | Production build |
+| `npm run start` | Serve production build |
 | `npm run test` | Run Vitest once |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:coverage` | Vitest with coverage |
@@ -195,7 +197,7 @@ src/
 | `lib/data/` | Local-first export / delete / backup |
 | `utils/healthSafety.ts` | Rule-based red-flag detection |
 
-Provider order in `App.tsx`:
+Provider order in `src/CuravonClientApp.tsx`:
 
 ```
 CuravonAuthProvider → AppProvider → HealthProvider → DoctorSummaryProvider → AppAuthGate

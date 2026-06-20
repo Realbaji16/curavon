@@ -1,3 +1,5 @@
+'use client';
+
 import { lazy, Suspense, useEffect } from 'react';
 import { MotionConfig } from 'framer-motion';
 import { AppProvider } from './context/AppContext';
@@ -6,10 +8,10 @@ import type { TabId } from './context/AppContext';
 import { HealthProvider } from './context/HealthContext';
 import { DoctorSummaryProvider } from './context/DoctorSummaryContext';
 import { CuravonAuthProvider } from './lib/auth/authProvider';
+import { getConfiguredAuthMode } from './lib/auth/authConfig';
 import { AppAuthGate } from './components/AppAuthGate';
 import { RouteLoadingFallback } from './components/RouteLoadingFallback';
 import { HomeScreen } from './screens/Home';
-import './styles/index.css';
 
 const AskCuravonScreen = lazy(() =>
   import('./screens/AskCuravon').then((module) => ({ default: module.AskCuravonScreen })),
@@ -57,10 +59,12 @@ function MainAppTabs() {
   );
 }
 
-function App() {
+export default function CuravonClientApp() {
+  const authMode = getConfiguredAuthMode();
+
   return (
     <MotionConfig reducedMotion="user">
-      <CuravonAuthProvider mode="local_demo">
+      <CuravonAuthProvider mode={authMode}>
         <AppProvider>
           <HealthProvider>
             <DoctorSummaryProvider>
@@ -80,5 +84,3 @@ function App() {
     </MotionConfig>
   );
 }
-
-export default App;

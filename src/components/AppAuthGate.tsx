@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useApp } from '../context/useApp';
@@ -51,14 +53,14 @@ function PhoneFrameShell({
 }
 
 export function AppAuthGate({ children }: { children: ReactNode }) {
-  const { onboardingComplete, setupComplete, activeTab, theme } = useApp();
+  const { onboardingComplete, setupComplete, activeTab, theme, shellHydrated } = useApp();
   const { healthProfile } = useHealth();
   const { isAuthenticated, loading: authLoading } = useCuravonAuth();
   const sensitiveMode = healthProfile.sensitiveMode;
 
   const cloudMood = onboardingComplete ? moodForTab(activeTab) : 'onboarding';
 
-  if (authLoading) {
+  if (authLoading || !shellHydrated) {
     return (
       <PhoneFrameShell cloudMood="onboarding" theme={theme}>
         <div className="auth-loading-shell" aria-busy="true" aria-label="Loading session" />

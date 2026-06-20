@@ -46,6 +46,11 @@ export function SettingsScreen() {
   } = useHealth();
   const { includedCount, latestDraftDate, clearAllDoctorSummaryData, refreshFromStorage } = useDoctorSummary();
   const { session, user, signOut, deleteLocalAccount } = useCuravonAuth();
+  const isSupabaseMode = session.authMode === 'supabase';
+  const storageModeCopy = isSupabaseMode
+    ? 'Your Curavon data is connected to your Curavon account.'
+    : 'Your Curavon data is stored on this device.';
+  const accountStatusLabel = isSupabaseMode ? 'Curavon account' : 'Local demo account';
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -196,7 +201,14 @@ export function SettingsScreen() {
         <div className="settings-account-grid">
           <p className="settings-account-row">
             <span>Account status</span>
-            <strong>Local demo account</strong>
+            <strong>{accountStatusLabel}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Storage mode</span>
+            <strong>{storageModeCopy}</strong>
+          </p>
+          <p className="section-desc" style={{ marginTop: 8 }}>
+            Local demo data is not automatically moved to Supabase.
           </p>
           <p className="settings-account-row">
             <span>Signed in as</span>

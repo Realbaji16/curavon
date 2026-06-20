@@ -5,6 +5,7 @@ import { useApp } from '../context/useApp';
 import { fadeUp } from '../motion/variants';
 import { useScreenBack } from '../hooks/useScreenBack';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
+import { SUPABASE_EMAIL_CONFIRMATION_MESSAGE } from '../lib/auth/supabaseAuthAdapter';
 
 type AuthStage = 'start' | 'create' | 'signin' | 'consent' | 'profile';
 
@@ -124,7 +125,19 @@ export function AuthFlow() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    await signUp(createForm.email.trim(), createForm.password, createForm.fullName.trim());
+    const result = await signUp(createForm.email.trim(), createForm.password, createForm.fullName.trim());
+    if (!result.isAuthenticated) {
+      if (result.error === SUPABASE_EMAIL_CONFIRMATION_MESSAGE) {
+        showToast(result.error);
+        setManualStage('signin');
+        return;
+      }
+      if (result.error) {
+        showToast(result.error);
+        return;
+      }
+      return;
+    }
     setProfileName(createForm.fullName.trim());
     goToConsent();
   };

@@ -12,16 +12,19 @@ export function PhoneChrome() {
     onboardingComplete,
     setupComplete,
     showDoctorSummary,
+    shellHydrated,
   } = useApp();
-  const { isAuthenticated } = useCuravonAuth();
+  const { isAuthenticated, loading: authLoading } = useCuravonAuth();
 
+  const chromeReady = shellHydrated && !authLoading;
   const inMainApp = onboardingComplete && isAuthenticated && setupComplete;
   const showBack =
+    chromeReady &&
     !showDoctorSummary &&
     (screenBackVisible ||
       (inMainApp && activeTab !== 'home') ||
       (onboardingComplete && (!isAuthenticated || !setupComplete)));
-  const showStartOver = inMainApp;
+  const showStartOver = chromeReady && inMainApp;
 
   return (
     <div className="phone-chrome" aria-hidden={!showBack && !showStartOver}>
