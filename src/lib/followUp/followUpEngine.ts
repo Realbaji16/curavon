@@ -9,7 +9,6 @@ export function evaluateFollowUp(
   record: FollowUpRecord,
   outcome: FollowUpOutcome,
   userNote: string,
-  _context?: Record<string, unknown>,
 ): FollowUpDecision {
   const note = userNote.trim();
   const noteWithMedicationGuard = safeMedicationFollowUpLanguage(note);

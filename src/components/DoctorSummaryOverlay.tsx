@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
+import { useApp } from '../context/useApp';
+import { useDoctorSummary } from '../context/useDoctorSummary';
 import { DoctorSummaryHub } from './DoctorSummaryHub';
 import { tapScale } from '../motion/variants';
 export function DoctorSummaryOverlay() {

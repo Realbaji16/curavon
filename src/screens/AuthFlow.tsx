@@ -1,19 +1,20 @@
 import { useMemo, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle2, ChevronRight, Lock, Shield } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/useApp';
 import { fadeUp } from '../motion/variants';
 import { useScreenBack } from '../hooks/useScreenBack';
-import { useCuravonAuth } from '../lib/auth/authProvider';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
+import { SUPABASE_EMAIL_CONFIRMATION_MESSAGE } from '../lib/auth/supabaseAuthAdapter';
 
 type AuthStage = 'start' | 'create' | 'signin' | 'consent' | 'profile';
 
 function resolveAuthStage(
-  authDemoUser: { fullName: string; email: string } | null,
+  isAuthenticated: boolean,
   setupComplete: boolean,
   consentComplete: boolean,
 ): AuthStage {
-  if (!authDemoUser) return 'start';
+  if (!isAuthenticated) return 'start';
   if (setupComplete) return 'start';
   return consentComplete ? 'profile' : 'consent';
 }
@@ -52,19 +53,17 @@ function isValidEmail(value: string): boolean {
 
 export function AuthFlow() {
   const {
-    authDemoUser,
     setupComplete,
     consentComplete,
-    setAuthDemoUser,
     completeAuthConsent,
     completeProfileSetup,
     showToast,
     resetToOnboarding,
   } = useApp();
-  const { signIn, signUp } = useCuravonAuth();
-  const [stage, setStage] = useState<AuthStage>(() =>
-    resolveAuthStage(authDemoUser, setupComplete, consentComplete),
-  );
+  const { signIn, signUp, user, isAuthenticated } = useCuravonAuth();
+  const authResolvedStage = resolveAuthStage(isAuthenticated, setupComplete, consentComplete);
+  const [manualStage, setManualStage] = useState<AuthStage | null>(null);
+  const stage = manualStage ?? authResolvedStage;
   const [createForm, setCreateForm] = useState<CreateForm>({
     fullName: '',
     email: '',
@@ -74,7 +73,7 @@ export function AuthFlow() {
     consentStorage: false,
   });
   const [signInForm, setSignInForm] = useState<SignInForm>({ email: '', password: '' });
-  const [profileName, setProfileName] = useState(authDemoUser?.fullName ?? '');
+  const [profileName, setProfileName] = useState(user?.displayName ?? '');
   const [primaryGoals, setPrimaryGoals] = useState<string[]>([]);
   const [sensitiveMode, setSensitiveMode] = useState(false);
   const [smartSilencePreference, setSmartSilencePreference] = useState<
@@ -108,7 +107,7 @@ export function AuthFlow() {
 
   const goToConsent = () => {
     setErrors({});
-    setStage('consent');
+    setManualStage('consent');
   };
 
   const submitCreate = async () => {
@@ -126,11 +125,19 @@ export function AuthFlow() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    await signUp(createForm.email.trim(), createForm.password, createForm.fullName.trim());
-    setAuthDemoUser({
-      fullName: createForm.fullName.trim(),
-      email: createForm.email.trim(),
-    });
+    const result = await signUp(createForm.email.trim(), createForm.password, createForm.fullName.trim());
+    if (!result.isAuthenticated) {
+      if (result.error === SUPABASE_EMAIL_CONFIRMATION_MESSAGE) {
+        showToast(result.error);
+        setManualStage('signin');
+        return;
+      }
+      if (result.error) {
+        showToast(result.error);
+        return;
+      }
+      return;
+    }
     setProfileName(createForm.fullName.trim());
     goToConsent();
   };
@@ -145,10 +152,6 @@ export function AuthFlow() {
     const inferredName = signInForm.email.split('@')[0].replace(/[._-]+/g, ' ').trim();
     const normalizedName = inferredName ? inferredName[0].toUpperCase() + inferredName.slice(1) : 'Curavon member';
     await signIn(signInForm.email.trim(), signInForm.password);
-    setAuthDemoUser({
-      fullName: normalizedName,
-      email: signInForm.email.trim(),
-    });
     setProfileName(normalizedName);
 
     if (setupComplete) {
@@ -187,15 +190,15 @@ export function AuthFlow() {
       return;
     }
     if (stage === 'create' || stage === 'signin') {
-      setStage('start');
+      setManualStage('start');
       return;
     }
     if (stage === 'consent') {
-      setStage('start');
+      setManualStage('start');
       return;
     }
     if (stage === 'profile') {
-      setStage('consent');
+      setManualStage('consent');
     }
   }, [stage, resetToOnboarding]);
 
@@ -226,11 +229,11 @@ export function AuthFlow() {
               <Shield size={15} aria-hidden="true" />
               <span>Prototype account — private by design, not a diagnosis tool.</span>
             </p>
-            <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={() => setStage('create')}>
+            <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={() => setManualStage('create')}>
               Create account
               <ChevronRight size={18} />
             </button>
-            <button type="button" className="btn btn-secondary btn-glass auth-secondary" onClick={() => setStage('signin')}>
+            <button type="button" className="btn btn-secondary btn-glass auth-secondary" onClick={() => setManualStage('signin')}>
               I already have an account
             </button>
             <p className="auth-note">You can export or delete your local data anytime in Profile.</p>
@@ -304,7 +307,7 @@ export function AuthFlow() {
             <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={submitCreate}>
               Create account
             </button>
-            <button type="button" className="auth-link-btn" onClick={() => setStage('signin')}>
+            <button type="button" className="auth-link-btn" onClick={() => setManualStage('signin')}>
               I already have an account
             </button>
           </>
@@ -338,7 +341,7 @@ export function AuthFlow() {
             <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={submitSignIn}>
               Sign in
             </button>
-            <button type="button" className="auth-link-btn" onClick={() => setStage('create')}>
+            <button type="button" className="auth-link-btn" onClick={() => setManualStage('create')}>
               Create an account
             </button>
             <p className="auth-note auth-note--link">Forgot password? Coming soon</p>
@@ -367,7 +370,7 @@ export function AuthFlow() {
               className="btn btn-primary btn-pill auth-primary"
               onClick={() => {
                 completeAuthConsent();
-                setStage('profile');
+                setManualStage('profile');
               }}
             >
               I understand

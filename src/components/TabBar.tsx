@@ -2,18 +2,17 @@ import { motion } from 'framer-motion';
 import {
   Sun,
   MessageCircle,
-  GitBranch,
   BookOpen,
   User,
 } from 'lucide-react';
-import { useApp, type TabId } from '../context/AppContext';
+import { type TabId } from '../context/AppContext';
+import { useApp } from '../context/useApp';
 import { themes } from '../theme/themes';
 import { tapScale } from '../motion/variants';
 
 const TABS: { id: TabId; label: string; icon: typeof Sun }[] = [
   { id: 'home', label: 'Today', icon: Sun },
   { id: 'ask', label: 'Ask', icon: MessageCircle },
-  { id: 'flow', label: 'Flow', icon: GitBranch },
   { id: 'circle', label: 'Guides', icon: BookOpen },
   { id: 'settings', label: 'Profile', icon: User },
 ];
@@ -26,7 +25,7 @@ export function TabBar() {
     <div className="tab-bar-wrap">
       <nav className="tab-bar glass-card">
         {TABS.map(({ id, label, icon: Icon }) => {
-          const active = activeTab === id;
+          const active = activeTab === id || (id === 'circle' && activeTab === 'flow');
           return (
             <motion.button
               key={id}

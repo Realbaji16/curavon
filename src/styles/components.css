@@ -1,0 +1,814 @@
+/* Curavon styles — migrated from App.css (Phase 1) */
+
+/* ─── Design System — Soft Medical Glass ─── */
+.glass-card {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  background: linear-gradient(
+    148deg,
+    var(--glass-card-top, rgba(255, 255, 255, 0.42)) 0%,
+    var(--glass-card-bottom, rgba(255, 255, 255, 0.26)) 100%
+  ) !important;
+  box-shadow: var(--glass-shadow);
+}
+
+.warm-card,
+.glass-card-inner {
+  position: relative;
+  z-index: 2;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: var(--card-radius);
+  border: 1px solid var(--glass-border);
+  background: linear-gradient(
+    148deg,
+    var(--glass-card-top, rgba(255, 255, 255, 0.42)) 0%,
+    var(--glass-card-bottom, rgba(255, 255, 255, 0.26)) 100%
+  ) !important;
+  box-shadow: var(--glass-shadow);
+  animation: cardFadeUp 0.45s ease-out both;
+}
+
+.warm-card::before,
+.glass-card-inner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    165deg,
+    var(--glass-card-highlight, rgba(255, 255, 255, 0.55)) 0%,
+    rgba(255, 255, 255, 0.08) 38%,
+    transparent 62%
+  );
+}
+
+.warm-card > *,
+.glass-card-inner > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-action-card--premium > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Typography hierarchy ─── */
+.curavon-wordmark {
+  font-family: var(--font-brand), Georgia, serif;
+  font-weight: 800;
+  letter-spacing: -0.065em;
+  line-height: 0.95;
+  display: inline-flex;
+  align-items: baseline;
+  position: relative;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.curavon-wordmark-cura {
+  color: inherit;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.curavon-wordmark-von {
+  position: relative;
+  margin-left: -0.05em;
+  background: linear-gradient(135deg, #2f7e8a 0%, #3ebfa3 48%, #8edccb 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.curavon-wordmark-von::before {
+  content: '';
+  position: absolute;
+  top: -0.26em;
+  left: 0.12em;
+  width: 0.17em;
+  height: 0.17em;
+  border-radius: 999px;
+  background: var(--care-seed);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.24);
+}
+
+.curavon-wordmark::after {
+  content: '';
+  position: absolute;
+  bottom: -0.07em;
+  right: 0.015em;
+  width: 42%;
+  height: 0.075em;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(142, 220, 203, 0),
+    rgba(62, 191, 163, 0.7),
+    rgba(255, 138, 100, 0.35)
+  );
+  opacity: 0.8;
+  transform: translateY(1px);
+}
+
+.curavon-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.curavon-brand-lockup--compact {
+  gap: 8px;
+}
+
+.curavon-icon {
+  --curavon-icon-size: 36px;
+  width: var(--curavon-icon-size);
+  height: var(--curavon-icon-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.curavon-icon-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.curavon-icon--compact .curavon-icon-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.type-hero,
+.text-heading,
+.header-title,
+.onboarding-title,
+.greeting-name {
+  font-family: var(--font-ui);
+  font-size: clamp(1.85rem, 6vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  color: var(--text-primary);
+}
+
+.type-card-title,
+.text-title,
+.section-header h3,
+.flow-preview-title,
+.streak-title,
+.insight-card h3 {
+  font-family: var(--font-ui);
+  font-size: clamp(1rem, 2.8vw, 1.15rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+.type-subtitle,
+.onboarding-subtitle,
+.header-subtitle {
+  font-family: var(--font-ui);
+  font-size: clamp(0.9rem, 2.5vw, 1rem);
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.type-body,
+.text-body,
+.onboarding-body,
+.section-desc,
+.toggle-desc {
+  font-family: var(--font-ui);
+  font-size: clamp(0.875rem, 2.4vw, 0.95rem);
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.type-safety,
+.text-muted,
+.text-safety,
+.onboarding-safety span,
+.disclaimer-box,
+.safety-note {
+  font-family: var(--font-ui);
+  font-size: clamp(0.78rem, 2.2vw, 0.84rem);
+  font-weight: 500;
+  line-height: 1.52;
+  color: var(--text-soft);
+}
+
+.text-heading {
+  color: var(--text-heading);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.text-title {
+  color: var(--text-title);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.text-body {
+  color: var(--text-body);
+  line-height: 1.55;
+  font-weight: 500;
+}
+
+.text-muted {
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.text-safety {
+  color: var(--text-safety);
+  line-height: 1.55;
+  font-weight: 500;
+}
+
+.text-label-warm {
+  color: var(--text-label-warm);
+  font-weight: 700;
+}
+
+.text-label-teal {
+  color: var(--text-label-teal);
+  font-weight: 700;
+}
+
+/* ─── Curavon Button System ─── */
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-glass,
+.onboarding-continue-btn,
+.primary-btn,
+.ghost-button,
+.soft-button,
+.send-btn {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    filter 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.btn-pill {
+  border-radius: 999px;
+}
+
+/* ── Primary CTA ── */
+.btn-primary,
+.onboarding-continue-btn,
+.primary-btn,
+.soft-button.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 54px;
+  height: auto;
+  padding: 0 22px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #f8fafb;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  backdrop-filter: blur(10px) saturate(1.06);
+  -webkit-backdrop-filter: blur(10px) saturate(1.06);
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color), var(--btn-sweep-color)),
+    var(--action-gradient);
+  background-size: 0% 100%, 100% 100%;
+  background-position: right center, 0% 50%;
+  background-repeat: no-repeat;
+  box-shadow: var(--btn-primary-shadow);
+  text-shadow: 0 1px 1px rgba(40, 60, 70, 0.12);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    color 280ms ease,
+    background-size 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary::before,
+.onboarding-continue-btn::before,
+.primary-btn::before,
+.soft-button.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.1));
+  transform: scaleX(0);
+  transform-origin: right center;
+  opacity: 0.55;
+  z-index: 1;
+  pointer-events: none;
+  transition: transform 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary .button-label,
+.onboarding-continue-btn .button-label,
+.primary-btn .button-label,
+.soft-button.btn-primary .button-label,
+.btn-primary svg,
+.onboarding-continue-btn svg,
+.primary-btn svg,
+.soft-button.btn-primary svg {
+  position: relative;
+  z-index: 2;
+  color: #ffffff !important;
+}
+
+/* ── Hover sweep (right → left, behind text) ── */
+.btn-primary,
+.onboarding-continue-btn,
+.primary-btn,
+.soft-button.btn-primary,
+.btn-secondary,
+.btn-glass,
+.ghost-button,
+.soft-button.btn-secondary,
+.send-btn,
+.btn-icon,
+.btn-safety-primary,
+.btn-safety-urgent,
+.action-btn {
+  --btn-sweep-color: var(--btn-gradient-end);
+  --btn-sweep-color-active: var(--btn-gradient-end-active);
+}
+
+.btn-safety-primary,
+.btn-safety-urgent {
+  --btn-sweep-color: var(--btn-safety-gradient-end);
+  --btn-sweep-color-active: var(--btn-safety-gradient-end-active);
+}
+
+.btn-primary:focus-visible,
+.onboarding-continue-btn:focus-visible,
+.primary-btn:focus-visible,
+.soft-button.btn-primary:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--btn-focus-ring),
+    var(--btn-primary-shadow);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover:not(:disabled),
+  .onboarding-continue-btn:not(:disabled):hover,
+  .primary-btn:hover:not(:disabled),
+  .soft-button.btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-glass:hover,
+  .ghost-button:hover,
+  .soft-button.btn-secondary:hover,
+  .send-btn:hover,
+  .btn-icon:hover,
+  .btn-safety-primary:hover,
+  .btn-safety-urgent:hover,
+  .btn-health-done:not(.completed):hover,
+  .done-btn:not(.completed):hover,
+  .btn-health-blocked:hover,
+  .blocked-btn:hover,
+  .btn-health-adjust:hover,
+  .adjust-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--btn-sweep-shadow);
+    background-size: 100% 100%, 100% 100%;
+  }
+
+  .btn-primary:hover:not(:disabled)::before,
+  .onboarding-continue-btn:not(:disabled):hover::before,
+  .primary-btn:hover:not(:disabled)::before,
+  .soft-button.btn-primary:hover::before {
+    transform: scaleX(1);
+  }
+
+  .btn-secondary:hover,
+  .btn-glass:hover,
+  .ghost-button:hover,
+  .soft-button.btn-secondary:hover {
+    color: var(--text-primary);
+  }
+}
+
+.btn-primary:active:not(:disabled),
+.onboarding-continue-btn:not(:disabled):active,
+.primary-btn:active:not(:disabled),
+.soft-button.btn-primary:active:not(:disabled),
+.btn-secondary:active,
+.btn-glass:active,
+.ghost-button:active,
+.send-btn:active,
+.btn-safety-primary:active,
+.btn-safety-urgent:active,
+.btn-health-done:active:not(.completed),
+.done-btn:active:not(.completed),
+.btn-health-blocked:active,
+.blocked-btn:active,
+.btn-health-adjust:active,
+.adjust-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 8px 18px rgba(106, 158, 152, 0.2);
+  background-size: 100% 100%, 100% 100%;
+  color: #ffffff !important;
+}
+
+.btn-primary:active:not(:disabled),
+.onboarding-continue-btn:not(:disabled):active,
+.primary-btn:active:not(:disabled),
+.soft-button.btn-primary:active:not(:disabled),
+.btn-secondary:active,
+.btn-glass:active,
+.ghost-button:active,
+.send-btn:active,
+.btn-safety-primary:active,
+.btn-safety-urgent:active,
+.btn-health-done:active:not(.completed),
+.done-btn:active:not(.completed),
+.btn-health-blocked:active,
+.blocked-btn:active,
+.btn-health-adjust:active,
+.adjust-btn:active {
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color-active), var(--btn-sweep-color-active)),
+    var(--action-gradient);
+}
+
+.btn-primary:active:not(:disabled)::before,
+.onboarding-continue-btn:not(:disabled):active::before,
+.primary-btn:active:not(:disabled)::before,
+.soft-button.btn-primary:active:not(:disabled)::before {
+  transform: scaleX(1);
+}
+
+.btn-secondary:active,
+.btn-glass:active,
+.ghost-button:active,
+.soft-button.btn-secondary:active {
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color-active), var(--btn-sweep-color-active)),
+    linear-gradient(rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.34));
+}
+
+.btn-safety-primary:active,
+.btn-safety-urgent:active {
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color-active), var(--btn-sweep-color-active)),
+    var(--btn-safety-gradient);
+}
+
+.action-btn:active,
+.done-btn:active:not(.completed),
+.blocked-btn:active,
+.adjust-btn:active {
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color-active), var(--btn-sweep-color-active)),
+    linear-gradient(rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.24));
+}
+
+.btn-primary:disabled,
+.onboarding-continue-btn:disabled,
+.primary-btn:disabled,
+.soft-button.btn-primary:disabled {
+  opacity: 0.55;
+  filter: saturate(0.7);
+  cursor: not-allowed;
+}
+
+/* ── Secondary glass ── */
+.btn-secondary,
+.btn-glass,
+.ghost-button,
+.soft-button.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--text-primary);
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color), var(--btn-sweep-color)),
+    linear-gradient(rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.34));
+  background-size: 0% 100%, 100% 100%;
+  background-position: right center, center;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  box-shadow:
+    0 12px 28px rgba(48, 73, 108, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-size 340ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 180ms ease,
+    color 280ms ease;
+}
+
+.btn-secondary:focus-visible,
+.btn-glass:focus-visible,
+.ghost-button:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--btn-focus-ring),
+    0 12px 28px rgba(48, 73, 108, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* ── Safety primary ── */
+.btn-safety-primary,
+.btn-safety-urgent {
+  min-height: 54px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color), var(--btn-sweep-color)),
+    var(--btn-safety-gradient);
+  background-size: 0% 100%, 100% 100%;
+  background-position: right center, center;
+  background-repeat: no-repeat;
+  color: #ffffff !important;
+  box-shadow: var(--btn-safety-shadow) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-size 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-safety-primary:focus-visible,
+.btn-safety-urgent:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--btn-focus-ring),
+    var(--btn-safety-shadow) !important;
+}
+
+/* ── Soft button utility (modifier base) ── */
+.soft-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+}
+
+.soft-button:active {
+  transform: scale(0.98);
+}
+
+/* ── Icon / send button ── */
+.btn-icon,
+.send-btn {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: #ffffff;
+  background-image:
+    linear-gradient(90deg, var(--btn-sweep-color), var(--btn-sweep-color)),
+    var(--action-gradient);
+  background-size: 0% 100%, 100% 100%;
+  background-position: right center, center;
+  background-repeat: no-repeat;
+  box-shadow:
+    0 10px 24px rgba(100, 130, 150, 0.14),
+    0 4px 12px rgba(120, 145, 140, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-size 340ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.send-btn:focus-visible,
+.btn-icon.btn-primary:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--btn-focus-ring),
+    0 10px 24px rgba(47, 158, 143, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-glass,
+  .onboarding-continue-btn,
+  .primary-btn,
+  .ghost-button,
+  .soft-button,
+  .send-btn,
+  .btn-safety-primary,
+  .btn-safety-urgent,
+  .btn-health-done,
+  .btn-health-blocked,
+  .btn-health-adjust,
+  .done-btn,
+  .blocked-btn,
+  .adjust-btn {
+    transition: none !important;
+  }
+
+  .btn:hover,
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-glass:hover,
+  .onboarding-continue-btn:hover,
+  .ghost-button:hover,
+  .send-btn:hover,
+  .btn-safety-primary:hover,
+  .done-btn:hover,
+  .blocked-btn:hover,
+  .adjust-btn:hover {
+    transform: none !important;
+  }
+
+  .btn-primary:hover:not(:disabled),
+  .onboarding-continue-btn:not(:disabled):hover,
+  .primary-btn:hover:not(:disabled),
+  .soft-button.btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-glass:hover,
+  .ghost-button:hover,
+  .soft-button.btn-secondary:hover,
+  .send-btn:hover,
+  .btn-icon:hover,
+  .btn-safety-primary:hover,
+  .btn-safety-urgent:hover,
+  .btn-health-done:not(.completed):hover,
+  .done-btn:not(.completed):hover,
+  .btn-health-blocked:hover,
+  .blocked-btn:hover,
+  .btn-health-adjust:hover,
+  .adjust-btn:hover {
+    background-size: 100% 100%, 100% 100%;
+  }
+
+  .btn-primary::before,
+  .onboarding-continue-btn::before,
+  .primary-btn::before,
+  .soft-button.btn-primary::before {
+    transition: none !important;
+    transform: scaleX(0) !important;
+  }
+}
+
+@keyframes cardFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-card {
+  border-radius: 32px;
+  padding: 24px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-card {
+  border-radius: 20px;
+  padding: 18px;
+}
+
+.safety-card {
+  border-radius: 18px;
+  padding: 18px;
+  border-left: 4px solid var(--safety-accent, #E8A84C);
+}
+
+.progress-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.progress-pill--teal {
+  background: var(--pill-teal-bg);
+  color: var(--text-label-teal);
+}
+
+.progress-pill--warm {
+  background: var(--pill-warm-bg);
+  color: var(--text-label-warm);
+}
+
+
+/* ─── Native Switch ─── */
+.native-switch {
+  width: 52px;
+  height: 32px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.25s;
+  flex-shrink: 0;
+  background: rgba(37, 54, 74, 0.1);
+}
+
+.native-switch.on {
+  background: var(--text-label-warm);
+}
+
+.native-switch .switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.native-switch.on .switch-thumb {
+  transform: translateX(20px);
+}
+

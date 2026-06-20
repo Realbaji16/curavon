@@ -1,5 +1,6 @@
 import { ChevronLeft, RotateCcw } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/useApp';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 
 export function PhoneChrome() {
   const {
@@ -9,17 +10,21 @@ export function PhoneChrome() {
     showToast,
     activeTab,
     onboardingComplete,
-    authDemoUser,
     setupComplete,
     showDoctorSummary,
+    shellHydrated,
   } = useApp();
+  const { isAuthenticated, loading: authLoading } = useCuravonAuth();
 
-  const inMainApp = onboardingComplete && !!authDemoUser && setupComplete;
+  const chromeReady = shellHydrated && !authLoading;
+  const inMainApp = onboardingComplete && isAuthenticated && setupComplete;
   const showBack =
+    chromeReady &&
     !showDoctorSummary &&
     (screenBackVisible ||
       (inMainApp && activeTab !== 'home') ||
-      (onboardingComplete && (!authDemoUser || !setupComplete)));  const showStartOver = inMainApp;
+      (onboardingComplete && (!isAuthenticated || !setupComplete)));
+  const showStartOver = chromeReady && inMainApp;
 
   return (
     <div className="phone-chrome" aria-hidden={!showBack && !showStartOver}>

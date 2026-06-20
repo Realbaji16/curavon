@@ -1,0 +1,125 @@
+/* Curavon styles — migrated from App.css (Phase 1) */
+
+:root {
+  --font-brand: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-display: var(--font-brand);
+  --font-ui: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --bg-gradient: linear-gradient(180deg, #d5deea 0%, #d6d1e2 46%, #d8d0c6 100%);
+  --brand-teal: #2bb3a3;
+  --brand-teal-deep: #157b70;
+  --brand-teal-warm: #4e8f7e;
+  --brand-teal-sunset: #a67c62;
+  --brand-teal-soft: color-mix(in srgb, var(--sky-bottom) 30%, #eaf6f3 70%);
+  --brand-teal-border: color-mix(in srgb, var(--brand-teal) 28%, var(--sky-bottom) 72%);
+  --brand-teal-glow: color-mix(in srgb, rgba(58, 155, 138, 0.38) 60%, rgba(200, 155, 120, 0.28) 40%);
+  --brand-teal-halo: color-mix(in srgb, var(--brand-teal) 24%, transparent);
+  --warm-peach: #f5c9a8;
+  --warm-coral: #e89972;
+  --care-seed: #ff8a64;
+  --ink: #1a1f2c;
+  --muted-ink: #4f5966;
+  --text-primary: #1a1f2c;
+  --text-muted: #424a56;
+  --text-soft: #525c6a;
+  --text-body-readable: #2f3640;
+  --text-caption: 0.8125rem;
+  --text-secondary-size: 0.9375rem;
+  --text-body-size: 1rem;
+  --text-lead-size: 1.125rem;
+  --line-height-readable: 1.55;
+  --safety-cream: #fdf6ee;
+  --safety-amber: #c9923a;
+  --disclaimer-accent: var(--safety-amber);
+  --accent-teal: var(--brand-teal);
+  --accent-mint: #8edccb;
+  --accent-peach: var(--warm-coral);
+  --accent-coral: var(--warm-coral);
+  --glass-bg: rgba(255, 255, 255, 0.34);
+  --glass-bg-soft: rgba(255, 255, 255, 0.22);
+
+  --phone-width: 402px;
+  --phone-height: 874px;
+  --phone-radius: 55px;
+  --phone-frame-x: 8px;
+  --phone-frame-y: 12px;
+  --phone-outer-width: 418px;
+  --phone-outer-height: 898px;
+  --phone-safe-top: 58px;
+  --summary-inset-top: max(var(--phone-safe-top), calc(env(safe-area-inset-top, 0px) + 44px));
+  --summary-inset-bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 18px));
+
+  /* Soft Medical Sky — morning blue → lavender-peach → sunrise glow */
+  --sky-top: #c5d9eb;
+  --sky-mid: #dcc8d4;
+  --sky-bottom: #f0c8a8;
+  --sky-gradient: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 46%, var(--sky-bottom) 100%);
+  --cta-gradient: linear-gradient(135deg, var(--brand-teal) 0%, var(--brand-teal-deep) 100%);
+  --cta-shadow:
+    0 12px 28px rgba(43, 179, 163, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --cta-focus: 0 0 0 4px rgba(43, 179, 163, 0.38);
+  --accent-sky-blend: linear-gradient(
+    180deg,
+    var(--brand-teal) 0%,
+    color-mix(in srgb, var(--brand-teal) 55%, var(--sky-bottom) 45%) 100%
+  );
+
+  /* Typography — Curavon text system */
+  --text-heading: #1f2d3d;
+  --text-title: #25364a;
+  --text-subtitle: #31465c;
+  --text-body: #536779;
+  --text-safety: #455b6d;
+  --text-label-warm: #d96f5a;
+  --text-label-teal: #3a8f86;
+  --btn-gradient-end: #8edccb;
+  --btn-gradient-end-active: #77cdbd;
+  --btn-safety-gradient-end: #c9a080;
+  --btn-safety-gradient-end-active: #b89070;
+  --btn-sweep-shadow:
+    0 16px 34px rgba(255, 138, 100, 0.22),
+    0 8px 18px rgba(78, 190, 168, 0.12);
+
+  /* Primary button — sky-harmonized warm sand → soft sea-glass */
+  --action-gradient: linear-gradient(135deg, #FF8A64 0%, #F4B36D 52%, #8EDCCB 100%);
+  --hero-gradient: linear-gradient(145deg, #8eb4cc 0%, #a8a0bc 48%, #c4b4a4 100%);
+  --btn-primary-shadow:
+    0 14px 30px rgba(100, 130, 150, 0.16),
+    0 6px 16px rgba(120, 145, 140, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+  --btn-primary-shadow-hover:
+    0 16px 34px rgba(100, 130, 150, 0.2),
+    0 8px 18px rgba(120, 145, 140, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  --btn-focus-ring: 0 0 0 4px rgba(126, 176, 168, 0.28);
+  --btn-safety-gradient: linear-gradient(135deg, #c88472 0%, #c9a080 100%);
+  --btn-safety-shadow: 0 12px 28px rgba(140, 110, 95, 0.18);
+
+  /* Glass cards — translucent frosted glass over sky */
+  --glass-fill: rgba(255, 255, 255, 0.34);
+  --glass-fill-soft: rgba(255, 255, 255, 0.22);
+  --glass-border: rgba(255, 255, 255, 0.58);
+  --glass-shadow:
+    0 22px 52px rgba(42, 35, 32, 0.1),
+    0 6px 18px rgba(42, 35, 32, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+  --glass-blur: blur(28px) saturate(1.2);
+  --pill-bg: rgba(255, 255, 255, 0.28);
+  --pill-warm-bg: rgba(245, 201, 168, 0.18);
+  --pill-teal-bg: rgba(58, 155, 138, 0.14);
+  --card-radius: 30px;
+
+  /* Premium elevation — layered glass depth */
+  --premium-shadow:
+    0 20px 48px rgba(48, 73, 108, 0.11),
+    0 4px 14px rgba(48, 73, 108, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  --premium-shadow-soft:
+    0 12px 32px rgba(48, 73, 108, 0.09),
+    0 2px 8px rgba(48, 73, 108, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --premium-accent-bar: linear-gradient(90deg, var(--brand-teal) 0%, #7ec8c2 42%, var(--warm-coral) 100%);
+  --dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.88) 55%);
+}

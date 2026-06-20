@@ -1,15 +1,15 @@
 import type { AuthSession } from './authTypes';
 
 export function canEnterApp(session: AuthSession): boolean {
-  return session.isAuthenticated && Boolean(session.user?.consentCompleted) && Boolean(session.user?.setupCompleted);
+  return session.isAuthenticated && !!session.user?.consentCompleted && !!session.user?.setupCompleted;
 }
 
 export function requiresConsent(session: AuthSession): boolean {
-  return session.isAuthenticated && !Boolean(session.user?.consentCompleted);
+  return session.isAuthenticated && !session.user?.consentCompleted;
 }
 
 export function requiresSetup(session: AuthSession): boolean {
-  return session.isAuthenticated && Boolean(session.user?.consentCompleted) && !Boolean(session.user?.setupCompleted);
+  return session.isAuthenticated && !!session.user?.consentCompleted && !session.user?.setupCompleted;
 }
 
 export function canSignOutWithoutDataDeletion(): boolean {

@@ -31,6 +31,7 @@ export const APP_STORAGE_KEYS = {
   aiObservabilitySummary: 'curavon_ai_observability_summary',
   aiBudgetState: 'curavon_ai_budget_state',
   aiPolicyState: 'curavon_ai_policy_state',
+  activityInsights: 'curavon_meta_activity_insights',
 } as const;
 
 export type AppStorageKey = (typeof APP_STORAGE_KEYS)[keyof typeof APP_STORAGE_KEYS];
@@ -80,6 +81,9 @@ export const AUTH_SESSION_KEYS: AppStorageKey[] = [
   APP_STORAGE_KEYS.profileSetup,
 ];
 
+/** Prefixes cleared with delete health data (meta-system analytics, behavior traces). */
+export const HEALTH_DERIVED_DELETE_PREFIXES = ['curavon_meta_'] as const;
+
 /** All keys removed by delete all health data. */
 export const DELETE_HEALTH_DATA_KEYS: AppStorageKey[] = [
   ...CORE_HEALTH_DATA_KEYS,
@@ -90,4 +94,5 @@ export const DELETE_HEALTH_DATA_KEYS: AppStorageKey[] = [
 /** User-facing export keys — no secrets, raw prompts, or model responses. */
 export const EXPORT_HEALTH_DATA_KEYS: AppStorageKey[] = [
   ...CORE_HEALTH_DATA_KEYS,
+  APP_STORAGE_KEYS.activityInsights,
 ];

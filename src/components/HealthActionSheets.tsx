@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { Clock, Brain, HelpCircle, TrendingDown, MoreHorizontal, Timer, Calendar, FileText, RefreshCw } from 'lucide-react';
-import { useHealth } from '../context/HealthContext';
+import { useHealth } from '../context/useHealth';
 import type { AdjustOption, HealthBlockedReason } from '../types/health';
 import { sheetSlide, staggerContainer, fadeUp, tapScale } from '../motion/variants';
 

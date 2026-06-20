@@ -1,5 +1,7 @@
 import type { PlanAction, PlanCategory, PlanSafetyLevel } from '../plan/planTypes';
 import type { CuravonNextActionOutput } from '../plan/nextActionAdapter';
+import type { AcceptedActionSource } from '../../types/actionLifecycle';
+import { isPreviewActionSource } from '../../types/actionLifecycle';
 import type { FollowUpIntent, FollowUpRecord } from './followUpTypes';
 import { followUpIntentForCategory, promptForFollowUp } from './followUpQuestions';
 import { dueAtForCategory, getFollowUps, saveFollowUp } from './followUpStorage';
@@ -9,7 +11,8 @@ export type FollowUpScheduleSource = 'today' | 'ask' | 'guides' | 'followup' | '
 export type FollowUpScheduleStatus = 'created' | 'existing' | 'skipped';
 
 export type FollowUpScheduleInput = {
-  source: FollowUpScheduleSource;
+  /** Must be an accepted-action source — preview paths are rejected. */
+  acceptanceSource: AcceptedActionSource;
   action:
     | PlanAction
     | CuravonNextActionOutput
@@ -32,10 +35,26 @@ export type FollowUpScheduleResult = {
   reason?: string;
 };
 
+function scheduleSourceFromAcceptance(source: AcceptedActionSource): FollowUpScheduleSource {
+  switch (source) {
+    case 'ask_promoted':
+      return 'ask';
+    case 'guide_completed':
+      return 'guides';
+    case 'followup_adjusted':
+      return 'followup';
+    case 'manual_refresh':
+      return 'manual';
+    default:
+      return 'today';
+  }
+}
+
 function actionIdFor(input: FollowUpScheduleInput): string {
+  const scheduleSource = scheduleSourceFromAcceptance(input.acceptanceSource);
   if ('actionId' in input.action && input.action.actionId) return input.action.actionId;
   if ('id' in input.action && input.action.id) {
-    const prefix = input.source === 'ask' ? 'ask' : input.source === 'guides' ? 'guide' : 'plan';
+    const prefix = scheduleSource === 'ask' ? 'ask' : scheduleSource === 'guides' ? 'guide' : 'plan';
     return `${prefix}-${input.action.id}`;
   }
   return `fup-${Date.now()}`;
@@ -59,13 +78,18 @@ function sourceSignalsFor(input: FollowUpScheduleInput): string[] {
 }
 
 function recordIdFor(input: FollowUpScheduleInput, actionId: string): string {
+  const scheduleSource = scheduleSourceFromAcceptance(input.acceptanceSource);
   if (input.context?.entryId) return `fup-ask-${input.context.entryId}`;
   if (input.context?.guideId) return `fup-guide-${input.context.guideId}-${Date.now()}`;
-  return `fup-${input.source}-${actionId}-${Date.now()}`;
+  return `fup-${scheduleSource}-${actionId}-${Date.now()}`;
 }
 
 export function scheduleFollowUpForAction(input: FollowUpScheduleInput): FollowUpScheduleResult {
   try {
+    if (isPreviewActionSource(input.acceptanceSource)) {
+      return { status: 'skipped', record: null, reason: 'preview_action' };
+    }
+
     const category = categoryFor(input);
     const safetyLevel = safetyLevelFor(input);
 

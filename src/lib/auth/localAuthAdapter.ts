@@ -4,6 +4,7 @@ import type { AuthAdapter, AuthMode, AuthSession, CuravonUser } from './authType
 
 type LocalAuthCredential = {
   email: string;
+  /** Local demo auth only. Passwords are not production-secure. Replace with backend auth before public launch. */
   password: string;
   displayName: string;
   userId: string;
@@ -68,6 +69,7 @@ function asSession(user: CuravonUser | null, mode: AuthMode, error: string | nul
 }
 
 export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapter {
+  // Local demo auth only. Passwords are not production-secure. Replace with backend auth before public launch.
   return {
     async getSession() {
       return asSession(readCurrentUser(mode), mode);

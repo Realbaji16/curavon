@@ -10,9 +10,9 @@ import {
   Sparkles,
   Stethoscope,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
-import { useHealth } from '../context/HealthContext';
+import { useApp } from '../context/useApp';
+import { useDoctorSummary } from '../context/useDoctorSummary';
+import { useHealth } from '../context/useHealth';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useScreenBack } from '../hooks/useScreenBack';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
@@ -661,22 +661,24 @@ export function CareCircleScreen() {
         includesSearch(guide.description, searchQuery)),
   );
 
-  const openFlowDetail = (flowId: FlowId) => {
+  const openFlowDetail = useCallback((flowId: FlowId) => {
     setSelectedFlowId(flowId);
     setFlowUrgentTerminal(false);
     setGuidesSafetyAcknowledged(false);
     setViewMode('flowDetail');
-  };
+  }, []);
 
   useEffect(() => {
     if (!pendingGuideFlowId) return;
     const flow = FLOW_CARDS.find((f) => f.id === pendingGuideFlowId);
     if (flow) {
+      // Deep-link from AppContext pendingGuideFlowId into Guides detail view.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync external navigation request into local view state
       openFlowDetail(pendingGuideFlowId as FlowId);
       showToast(`Recommended guide: ${flow.title}`);
     }
     clearPendingGuideFlow();
-  }, [pendingGuideFlowId, clearPendingGuideFlow, showToast]);
+  }, [pendingGuideFlowId, clearPendingGuideFlow, showToast, openFlowDetail]);
 
   const openGuideDetail = (guideId: string) => {
     setSelectedGuideId(guideId);
@@ -709,11 +711,11 @@ export function CareCircleScreen() {
     });
   };
 
-  const backToBrowse = () => {
+  const backToBrowse = useCallback(() => {
     setViewMode('browse');
     setSelectedGuideId(null);
     setSelectedFlowId(null);
-  };
+  }, []);
 
   const saveGuide = (guideId: string) => {
     setSavedGuides((prev) => ({ ...prev, [guideId]: true }));
@@ -792,7 +794,7 @@ export function CareCircleScreen() {
     setAnswer(question, next);
   };
 
-  const goRunnerBack = () => {
+  const goRunnerBack = useCallback(() => {
     if (!selectedFlowRunner?.questions) return;
     if (runnerStep === 0) {
       if (selectedFlowId) {
@@ -815,7 +817,7 @@ export function CareCircleScreen() {
       });
     }
     setRunnerStep((step) => Math.max(step - 1, 0));
-  };
+  }, [runnerStep, selectedFlowId, selectedFlowRunner]);
 
   const goRunnerNext = () => {
     if (!selectedFlowRunner?.questions || !currentQuestion || !canContinue) return;
@@ -918,7 +920,7 @@ export function CareCircleScreen() {
     });
     refreshHealthSnapshot();
     scheduleFollowUpForAction({
-      source: 'guides',
+      acceptanceSource: 'guide_completed',
       action: plan,
       context: { guideId: selectedFlow.id },
     });

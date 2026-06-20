@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2,
@@ -11,12 +11,15 @@ import {
   CalendarDays,
   AlertTriangle,
   Info,
+  GitBranch,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useHealth } from '../context/HealthContext';
+import { useApp } from '../context/useApp';
+import { useHealth } from '../context/useHealth';
 import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
 import { TodayCheckIn } from '../components/TodayCheckIn';
 import { HealthActionSheets } from '../components/HealthActionSheets';
+import { FullFlowOverlay } from '../components/FullFlowOverlay';
+import { buildFullFlowModel } from '../lib/plan/fullFlowBuilder';
 import { staggerContainer, fadeUp, tapScale, cardEntrance } from '../motion/variants';
 import { buildNextBestActionPlan } from '../utils/nextBestActionEngine';
 import { readCuravonMemorySnapshot } from '../utils/nextBestActionMemory';
@@ -72,6 +75,7 @@ export function HomeScreen() {
     todayCheckIn,
     nextActionState,
     healthSnapshot,
+    dueFollowUp,
     openCheckIn,
     markActionDone,
     openHealthBlockedSheet,
@@ -80,6 +84,30 @@ export function HomeScreen() {
   } = useHealth();
   const [showDoneMessage, setShowDoneMessage] = useState(false);
   const [donePressed, setDonePressed] = useState(false);
+  const [showFullFlow, setShowFullFlow] = useState(false);
+
+  const fullFlowModel = useMemo(
+    () =>
+      buildFullFlowModel({
+        nextActionState,
+        healthSnapshot,
+        healthProfile,
+        recentCheckins: dailyCheckins,
+        dueFollowUp,
+      }),
+    [nextActionState, healthSnapshot, healthProfile, dailyCheckins, dueFollowUp],
+  );
+
+  const hasCurrentAction = Boolean(nextActionState?.currentAction?.trim());
+  const fullFlowLabel = hasCurrentAction ? 'See full flow' : 'How Curavon builds your flow';
+
+  const handleOpenGuidesFromFlow = useCallback(() => {
+    if (nextActionState?.relatedGuideFlowId) {
+      openGuidesWithFlow(nextActionState.relatedGuideFlowId);
+      return;
+    }
+    setActiveTab('circle');
+  }, [nextActionState, openGuidesWithFlow, setActiveTab]);
 
   const name = healthProfile.preferredName.trim();
   const greetingLine = name ? `${getGreeting()}, ${name}` : 'Welcome back';
@@ -216,6 +244,14 @@ export function HomeScreen() {
                 >
                   Start check-in
                 </motion.button>
+                <button
+                  type="button"
+                  className="home-text-link home-fullflow-link"
+                  onClick={() => setShowFullFlow(true)}
+                >
+                  <GitBranch size={14} aria-hidden="true" />
+                  {fullFlowLabel}
+                </button>
               </div>
             ) : (
               <div className="home-hero-body">
@@ -251,6 +287,15 @@ export function HomeScreen() {
                     {safetyNote}
                   </p>
                 ) : null}
+
+                <button
+                  type="button"
+                  className="home-text-link home-fullflow-link"
+                  onClick={() => setShowFullFlow(true)}
+                >
+                  <GitBranch size={14} aria-hidden="true" />
+                  {fullFlowLabel}
+                </button>
 
                 <AnimatePresence>
                   {isDone && (
@@ -373,6 +418,14 @@ export function HomeScreen() {
 
       <TodayCheckIn />
       <HealthActionSheets />
+      <FullFlowOverlay
+        isOpen={showFullFlow}
+        onClose={() => setShowFullFlow(false)}
+        model={fullFlowModel}
+        onOpenDoctorSummary={openDoctorSummary}
+        onOpenGuides={handleOpenGuidesFromFlow}
+        onOpenAsk={() => setActiveTab('ask')}
+      />
     </div>
   );
 }

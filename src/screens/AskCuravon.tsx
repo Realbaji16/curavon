@@ -9,9 +9,9 @@ import {
   EyeOff,
   MessageCircle,
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
-import { useHealth } from '../context/HealthContext';
+import { useApp } from '../context/useApp';
+import { useDoctorSummary } from '../context/useDoctorSummary';
+import { useHealth } from '../context/useHealth';
 import { useScreenBack } from '../hooks/useScreenBack';
 import {
   CALM_URGENT_BODY,
@@ -49,7 +49,6 @@ import { collectAskCompletion, runMetaSystemCycle } from '../utils/metaSystem';
 import { runAIOrchestrator } from '../lib/ai/orchestrator/aiOrchestrator';
 import { generateCuravonNextAction } from '../lib/plan/nextActionAdapter';
 import type { PlanAction } from '../lib/plan/planTypes';
-import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
 
 type AskMode = 'landing' | 'intake' | 'safety' | 'result';
 
@@ -143,7 +142,7 @@ function AskHistorySection({
 
 export function AskCuravonScreen() {
   const { setActiveTab, openDoctorSummary, openGuidesWithFlow, showToast } = useApp();
-  const { healthProfile, setNextActionFromSource, refreshHealthSnapshot, healthSnapshot, nextActionState } = useHealth();
+  const { healthProfile, acceptNextAction, refreshHealthSnapshot, healthSnapshot, nextActionState } = useHealth();
   const { addFromAsk, logRedFlag } = useDoctorSummary();
 
   const [mode, setMode] = useState<AskMode>('landing');
@@ -159,6 +158,7 @@ export function AskCuravonScreen() {
   const [aiRefinedConcern, setAiRefinedConcern] = useState('');
   const [aiMissingQuestions, setAiMissingQuestions] = useState<string[]>([]);
   const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
+  const [isAcceptingAction, setIsAcceptingAction] = useState(false);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
@@ -270,11 +270,7 @@ export function AskCuravonScreen() {
         aiReasoned: plan.aiReasoned,
         fallbackUsed: plan.fallbackUsed,
       });
-      scheduleFollowUpForAction({
-        source: 'ask',
-        action: plan,
-        context: { entryId: entry.id },
-      });
+      // Ask result is preview-only until user adds it to Today.
     runMetaSystemCycle();
   }, [intake, nextSafeStep, logRedFlag, refreshHealthSnapshot, healthSnapshot, history, nextActionState, healthProfile]);
 
@@ -331,6 +327,7 @@ export function AskCuravonScreen() {
   useScreenBack(handleScreenBack, mode !== 'landing');
 
   const saveToDoctorSummary = () => {
+    // Doctor Summary save does not imply user accepted this as Today's action.
     const concernForSummary = aiRefinedConcern || intake.mainConcern;
     const actionForSummary = askFinalAction?.actionText || nextSafeStep;
     addFromAsk({
@@ -353,9 +350,27 @@ export function AskCuravonScreen() {
   };
 
   const markAsNextAction = () => {
-    setNextActionFromSource(askFinalAction?.actionText || nextSafeStep, 'Ask Curavon');
-    showToast('Added to Today.');
-    setActiveTab('home');
+    if (isAcceptingAction) return;
+    setIsAcceptingAction(true);
+    try {
+      const actionText = askFinalAction?.actionText || nextSafeStep;
+      acceptNextAction({
+        actionText,
+        acceptanceSource: 'ask_promoted',
+        actionId: askFinalAction?.id ? `ask-v2-${askFinalAction.id}` : undefined,
+        title: askFinalAction?.title,
+        category: askFinalAction?.category,
+        safetyLevel: askFinalAction?.safetyLevel,
+        reason: askFinalAction?.reason,
+        sourceLabel: 'Ask Curavon',
+        sourceSignals: askFinalAction?.sourceSignals,
+        followUpContext: historyEntryId ? { entryId: historyEntryId } : undefined,
+      });
+      showToast('Added to Today.');
+      setActiveTab('home');
+    } finally {
+      setIsAcceptingAction(false);
+    }
   };
 
   const startRelatedGuide = () => {
@@ -517,7 +532,12 @@ export function AskCuravonScreen() {
               <BookOpen size={16} />
               Start related Guide
             </button>
-            <button type="button" className="btn btn-secondary btn-glass" onClick={markAsNextAction}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-glass"
+              onClick={markAsNextAction}
+              disabled={isAcceptingAction}
+            >
               <CheckCircle2 size={16} />
               Mark as Today&apos;s next action
             </button>

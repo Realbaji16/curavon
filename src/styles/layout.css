@@ -1,0 +1,344 @@
+/* Curavon styles — migrated from App.css (Phase 1) */
+
+/* ─── App Root ─── */
+.app-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100dvh;
+  width: 100vw;
+  padding: 16px;
+  overflow: visible;
+  background:
+    radial-gradient(72% 56% at 50% 42%, rgba(255, 248, 238, 0.34) 0%, transparent 68%),
+    radial-gradient(48% 42% at 50% 50%, rgba(255, 255, 255, 0.2) 0%, transparent 72%);
+  box-shadow: inset 0 0 160px rgba(69, 82, 112, 0.08);
+}
+
+.phone-scaler {
+  --phone-scale: min(
+    calc((100vw - 48px) / var(--phone-outer-width)),
+    calc((100dvh - 48px) / var(--phone-outer-height))
+  );
+  width: calc(var(--phone-outer-width) * var(--phone-scale));
+  height: calc(var(--phone-outer-height) * var(--phone-scale));
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.phone-device {
+  width: var(--phone-outer-width);
+  height: var(--phone-outer-height);
+  padding: var(--phone-frame-y) var(--phone-frame-x);
+  box-sizing: border-box;
+  background: linear-gradient(165deg, #8E8E93 0%, #636366 35%, #48484a 70%, #2c2c2e 100%);
+  border-radius: calc(var(--phone-radius) + var(--phone-frame-y));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 48px 120px rgba(20, 40, 80, 0.35);
+  transform: scale(var(--phone-scale));
+  transform-origin: top left;
+}
+
+/* ─── Phone Frame ─── */
+.phone-frame {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--phone-radius);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: transparent;
+}
+
+.phone-sky-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.phone-ui-layer {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+}
+
+.phone-frame--device {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.phone-bezel {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+  z-index: 120;
+}
+
+.phone-dynamic-island {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 126px;
+  height: 37px;
+  background: #000;
+  border-radius: 19px;
+  z-index: 110;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.phone-home-indicator {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+  z-index: 110;
+  pointer-events: none;
+}
+
+.onboarding,
+.screen-wrapper {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Page shells must never paint over the cloud layer */
+.phone-frame,
+.phone-content,
+.onboarding,
+.screen-wrapper,
+.screen,
+.home-screen,
+.chat-screen,
+.flow-screen,
+.learn-screen,
+.settings-screen,
+.intake-screen,
+.safety-screen,
+.onboarding-step,
+.onboarding-main {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.phone-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--phone-safe-top) 28px 4px;
+  font-size: 15px;
+  font-weight: 600;
+  z-index: 2;
+  flex-shrink: 0;
+  position: relative;
+  background: transparent !important;
+}
+
+.status-icons {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.phone-frame > .onboarding,
+.phone-frame .phone-ui-layer > .onboarding,
+.phone-frame .phone-ui-layer > .auth-shell {
+  flex: 1;
+  min-height: 0;
+}
+
+.phone-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  font-size: var(--text-body-size);
+  line-height: var(--line-height-readable);
+}
+
+.screen-wrapper {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  will-change: opacity, transform;
+  background: transparent;
+}
+
+.screen-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.route-loading-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 2rem 1.5rem 6rem;
+}
+
+.route-loading-text {
+  margin: 0;
+  color: var(--text-muted, rgba(255, 255, 255, 0.72));
+  font-size: 0.95rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.auth-loading-shell {
+  min-height: 40vh;
+}
+
+.safe-area-top {
+  height: var(--phone-safe-top);
+}
+
+.screen {
+  padding: 0 20px 120px;
+  min-height: 100%;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ─── Header ─── */
+.screen-header {
+  padding: 8px 0 16px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.phone-frame,
+.phone-frame button,
+.phone-frame input,
+.phone-frame textarea,
+.phone-frame select {
+  font-family: var(--font-ui);
+}
+
+.header-title {
+  margin: 0;
+}
+
+.header-subtitle {
+  font-size: clamp(0.9375rem, 2.8vw, 1.0625rem);
+  margin-top: 4px;
+  font-weight: 600;
+  line-height: var(--line-height-readable);
+  color: var(--text-muted);
+}
+
+.brand-name {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.brand-name .curavon-wordmark {
+  font-size: 1.35rem;
+}
+
+.brand-name .curavon-icon {
+  --curavon-icon-size: 36px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+
+/* ─── Tab Bar ─── */
+.tab-bar-wrap {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  padding: 0 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+
+.tab-bar {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 26px;
+  pointer-events: auto;
+}
+
+.tab-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 10px;
+  min-width: 52px;
+  flex: 1;
+  z-index: 1;
+}
+
+.tab-active-pill {
+  position: absolute;
+  inset: 2px 4px;
+  border-radius: 18px;
+  z-index: -1;
+}
+
+.tab-icon {
+  transition: transform 0.2s ease;
+}
+
+.tab-item.active .tab-icon {
+  transform: scale(1.08);
+}
+
+.tab-item:active {
+  transform: scale(0.94);
+}
+
+.tab-label {
+  font-family: var(--font-ui);
+  font-size: max(0.8125rem, 13px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}

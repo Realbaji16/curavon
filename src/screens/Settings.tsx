@@ -1,13 +1,13 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { Shield, Lock, Heart, User, FileText } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { useHealth } from '../context/HealthContext';
-import { useDoctorSummary } from '../context/DoctorSummaryContext';
+import { useApp } from '../context/useApp';
+import { useHealth } from '../context/useHealth';
+import { useDoctorSummary } from '../context/useDoctorSummary';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HealthListEditor } from '../components/HealthListEditor';
 import type { SmartSilencePreference } from '../types/health';
 import { clearAskHistory } from '../utils/askIntakeStorage';
-import { useCuravonAuth } from '../lib/auth/authProvider';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
 import { safeRead } from '../utils/healthStorage';
 import {
@@ -18,6 +18,7 @@ import { restoreLocalBackup, validateBackupFile } from '../lib/data/dataRestore'
 import { runLocalDataHealthCheck } from '../lib/data/dataHealthCheck';
 import { deleteLocalAccountData } from '../lib/data/dataDeletion';
 import { DELETION_CONFIRMATION_COPY } from '../lib/data/dataDeletionConfirm';
+import { ActivityInsightsSection } from '../components/ActivityInsightsSection';
 
 const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
   { id: 'gentle-reminders', label: 'Gentle reminders' },
@@ -28,9 +29,8 @@ const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
 export function SettingsScreen() {
   const {
     authDemoUser,
-    resetChat,
     showToast,
-    signOutDemo,
+    clearAuthShellState,
     openDoctorSummary,
   } = useApp();
   const {
@@ -40,10 +40,17 @@ export function SettingsScreen() {
     removeListItem,
     clearHealthData,
     exportHealthData,
+    refreshHealthStateFromStorage,
     smartSilenceLabel,
+    nextActionState,
   } = useHealth();
-  const { includedCount, latestDraftDate, clearAllDoctorSummaryData } = useDoctorSummary();
-  const { session, signOut, deleteLocalAccount } = useCuravonAuth();
+  const { includedCount, latestDraftDate, clearAllDoctorSummaryData, refreshFromStorage } = useDoctorSummary();
+  const { session, user, signOut, deleteLocalAccount } = useCuravonAuth();
+  const isSupabaseMode = session.authMode === 'supabase';
+  const storageModeCopy = isSupabaseMode
+    ? 'Your Curavon data is connected to your Curavon account.'
+    : 'Your Curavon data is stored on this device.';
+  const accountStatusLabel = isSupabaseMode ? 'Curavon account' : 'Local demo account';
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -126,9 +133,21 @@ export function SettingsScreen() {
       showToast('Restore failed');
       return;
     }
-    showToast(mode === 'replace' ? 'Backup restored (replace)' : 'Backup restored (merge)');
+
+    refreshHealthStateFromStorage();
+    refreshFromStorage();
     setRestoreDraft(null);
     setRestorePreview(null);
+
+    if (mode === 'replace') {
+      showToast('Backup restored. Refreshing Curavon…');
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 600);
+      return;
+    }
+
+    showToast('Backup restored (merge)');
   };
 
   const handleCheckDataHealth = () => {
@@ -151,7 +170,7 @@ export function SettingsScreen() {
     }
     await deleteLocalAccount();
     deleteLocalAccountData(localUserId, { deleteHealthData: false });
-    signOutDemo();
+    clearAuthShellState();
     showToast('Local account deleted');
     setConfirmDeleteAccount(false);
   };
@@ -165,7 +184,7 @@ export function SettingsScreen() {
     deleteLocalAccountData(localUserId, { deleteHealthData: true });
     clearHealthData();
     clearAllDoctorSummaryData();
-    signOutDemo();
+    clearAuthShellState();
     showToast('Local account and health data deleted');
     setConfirmDeleteAll(false);
   };
@@ -177,16 +196,23 @@ export function SettingsScreen() {
       <section className="settings-section warm-card glass-card-inner profile-header-card">
         <div className="section-header">
           <User size={20} className="icon-teal" />
-          <h3>{healthProfile.preferredName || authDemoUser?.fullName || 'Curavon member'}</h3>
+          <h3>{healthProfile.preferredName || user?.displayName || authDemoUser?.fullName || 'Curavon member'}</h3>
         </div>
         <div className="settings-account-grid">
           <p className="settings-account-row">
             <span>Account status</span>
-            <strong>Local demo account</strong>
+            <strong>{accountStatusLabel}</strong>
+          </p>
+          <p className="settings-account-row">
+            <span>Storage mode</span>
+            <strong>{storageModeCopy}</strong>
+          </p>
+          <p className="section-desc" style={{ marginTop: 8 }}>
+            Local demo data is not automatically moved to Supabase.
           </p>
           <p className="settings-account-row">
             <span>Signed in as</span>
-            <strong>{authDemoUser?.email || session.user?.email || 'Guest'}</strong>
+            <strong>{user?.email || session.user?.email || authDemoUser?.email || 'Guest'}</strong>
           </p>
           <p className="settings-account-row">
             <span>Primary goal</span>
@@ -207,7 +233,7 @@ export function SettingsScreen() {
             className="btn btn-secondary btn-glass"
             onClick={async () => {
               await signOut();
-              signOutDemo();
+              clearAuthShellState();
               showToast('Signed out');
             }}
           >
@@ -314,6 +340,12 @@ export function SettingsScreen() {
         </button>
       </section>
 
+      <ActivityInsightsSection
+        safetyLevel={nextActionState?.safetyLevel ?? 'normal'}
+        consentCompleted={Boolean(safeRead(APP_STORAGE_KEYS.consentComplete, false))}
+        onToast={showToast}
+      />
+
       <section className="settings-section warm-card glass-card-inner">
         <div className="section-header">
           <Shield size={20} className="icon-warm" />
@@ -386,7 +418,15 @@ export function SettingsScreen() {
         </div>
         <p className="section-desc">Your data is stored on this device in this version.</p>
         <p className="settings-data-note">
+          Activity Insights use your local Curavon activity, such as completed actions, blocked steps,
+          check-ins, and saved safety notes, to help make future suggestions easier to understand.
+          They are not a diagnosis. You can delete Activity Insights by deleting health data.
+        </p>
+        <p className="settings-data-note">
           Sign out keeps your saved health notes on this device. Delete all health data removes them from this version.
+        </p>
+        <p className="settings-data-note">
+          When Curavon notices an urgent red flag, it may save a short safety note in Doctor Summary so you can review it later or prepare for a clinician conversation. This is not diagnosis or emergency monitoring.
         </p>
         <input
           ref={fileInputRef}
@@ -412,7 +452,6 @@ export function SettingsScreen() {
             type="button"
             className="btn btn-secondary btn-glass"
             onClick={() => {
-              resetChat();
               clearAskHistory();
               showToast('Ask history cleared');
             }}

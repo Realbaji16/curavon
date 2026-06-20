@@ -1,30 +1,16 @@
+'use client';
+
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
 import { createAuthAdapter } from './authAdapter';
-import type { AuthMode, AuthSession, CuravonUser } from './authTypes';
-
-type CuravonAuthContextValue = {
-  user: CuravonUser | null;
-  session: AuthSession;
-  isAuthenticated: boolean;
-  loading: boolean;
-  error: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
-  updateProfile: (patch: Partial<Pick<CuravonUser, 'displayName' | 'email'>>) => Promise<void>;
-  deleteLocalAccount: () => Promise<void>;
-};
-
-const CuravonAuthContext = createContext<CuravonAuthContextValue | null>(null);
+import { CuravonAuthContext } from './authContext';
+import type { AuthMode, AuthSession } from './authTypes';
+import { getBrowserSupabaseClient } from '../supabase/browserClient';
 
 export function CuravonAuthProvider({
   children,
@@ -34,13 +20,13 @@ export function CuravonAuthProvider({
   mode?: AuthMode;
 }) {
   const adapter = useMemo(() => createAuthAdapter(mode), [mode]);
-  const [session, setSession] = useState<AuthSession>({
+  const [session, setSession] = useState<AuthSession>(() => ({
     user: null,
     isAuthenticated: false,
     authMode: mode,
     loading: true,
     error: null,
-  });
+  }));
 
   const refresh = useCallback(async () => {
     setSession((prev) => ({ ...prev, loading: true }));
@@ -49,14 +35,33 @@ export function CuravonAuthProvider({
   }, [adapter]);
 
   useEffect(() => {
+    // One-shot localStorage session hydration; adapter read is async and cannot run during render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (mode !== 'supabase') return;
+    const client = getBrowserSupabaseClient();
+    if (!client) return;
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(() => {
+      void refresh();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [mode, refresh]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
       setSession((prev) => ({ ...prev, loading: true, error: null }));
       const next = await adapter.signInWithEmail(email, password);
       setSession(next);
+      return next;
     },
     [adapter],
   );
@@ -66,6 +71,7 @@ export function CuravonAuthProvider({
       setSession((prev) => ({ ...prev, loading: true, error: null }));
       const next = await adapter.signUpWithEmail(email, password, displayName);
       setSession(next);
+      return next;
     },
     [adapter],
   );
@@ -83,7 +89,7 @@ export function CuravonAuthProvider({
   );
 
   const updateProfile = useCallback(
-    async (patch: Partial<Pick<CuravonUser, 'displayName' | 'email'>>) => {
+    async (patch: Partial<Pick<import('./authTypes').CuravonUser, 'displayName' | 'email'>>) => {
       const next = await adapter.updateProfile(patch);
       setSession(next);
     },
@@ -114,10 +120,4 @@ export function CuravonAuthProvider({
       {children}
     </CuravonAuthContext.Provider>
   );
-}
-
-export function useCuravonAuth() {
-  const ctx = useContext(CuravonAuthContext);
-  if (!ctx) throw new Error('useCuravonAuth must be used within CuravonAuthProvider');
-  return ctx;
 }
