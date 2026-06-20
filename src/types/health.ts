@@ -88,6 +88,10 @@ export interface NextActionState {
   status: ActionStatus;
   updatedAt: string;
   completedAt?: string;
+  /** Supabase health_flow id when action originated from Ask Curavon lifecycle. */
+  healthFlowId?: string;
+  /** Supabase flow_actions id — source of truth alongside next_action_state cache. */
+  flowActionId?: string;
   blockedReason?: HealthBlockedReason;
   blockedLabel?: string;
   adjustNote?: string;

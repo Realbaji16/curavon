@@ -53,6 +53,15 @@ import { collectAskCompletion, runMetaSystemCycle } from '../utils/metaSystem';
 import { runAIOrchestrator } from '../lib/ai/orchestrator/aiOrchestrator';
 import { generateCuravonNextAction } from '../lib/plan/nextActionAdapter';
 import type { PlanAction } from '../lib/plan/planTypes';
+import {
+  activateHealthFlowWithAction,
+  buildAskDraftFlowPayload,
+  buildAskSafetyBlockedPayload,
+  createAskDraftHealthFlow,
+  createAskSafetyBlockedFlow,
+  mapPlanSafetyToRiskLevel,
+  resolveAskPrivacyLevel,
+} from '../lib/data/healthFlowService';
 
 type AskMode = 'landing' | 'intake' | 'safety' | 'result';
 
@@ -166,6 +175,7 @@ export function AskCuravonScreen() {
   const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
   const [isAcceptingAction, setIsAcceptingAction] = useState(false);
   const [intakeSessionId, setIntakeSessionId] = useState<string | null>(null);
+  const [draftHealthFlowId, setDraftHealthFlowId] = useState<string | null>(null);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
@@ -186,6 +196,7 @@ export function AskCuravonScreen() {
     setAiMissingQuestions([]);
     setAskFinalAction(null);
     setIntakeSessionId(null);
+    setDraftHealthFlowId(null);
   }, [refreshAskHistory]);
 
   const startIntake = (prefill = '') => {
@@ -223,6 +234,37 @@ export function AskCuravonScreen() {
         guidanceShown: guidance,
         matchedConcern,
       });
+      try {
+        const privacyLevel = resolveAskPrivacyLevel(sensitive);
+        const safetyFlow = await createAskSafetyBlockedFlow({
+          privacyLevel,
+          payload: buildAskSafetyBlockedPayload({
+            redFlagCategories: safetyDetection.categories,
+            selfHarm: safetyDetection.selfHarm,
+            immediateSafety: safetyDetection.immediateSafety,
+            intakeSessionId,
+          }),
+        });
+        setDraftHealthFlowId(null);
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            flowId: safetyFlow.id,
+            status: 'closed',
+            stage: 'safety',
+            riskLevel: 'urgent',
+            payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
+          });
+        }
+      } catch {
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            status: 'closed',
+            stage: 'safety',
+            riskLevel: 'urgent',
+            payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
+          });
+        }
+      }
       const entry = await addAskHistoryEntry({
         concern: intake.mainConcern,
         concernType: intake.concernType || 'Not sure',
@@ -233,14 +275,6 @@ export function AskCuravonScreen() {
       refreshHealthSnapshot();
       setMode('safety');
       runMetaSystemCycle();
-      if (intakeSessionId) {
-        void updateAskIntakeSession(intakeSessionId, {
-          status: 'closed',
-          stage: 'safety',
-          riskLevel: 'urgent',
-          payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
-        });
-      }
       return;
     }
 
@@ -302,16 +336,50 @@ export function AskCuravonScreen() {
         aiReasoned: plan.aiReasoned,
         fallbackUsed: plan.fallbackUsed,
       });
+      try {
+        const privacyLevel = resolveAskPrivacyLevel(sensitive);
+        const riskLevel = mapPlanSafetyToRiskLevel(plan.safetyLevel);
+        const draftFlow = await createAskDraftHealthFlow({
+          title: plan.title,
+          riskLevel,
+          privacyLevel,
+          payload: buildAskDraftFlowPayload({
+            concernType: intake.concernType || 'Not sure',
+            goal: intake.goal,
+            timeline: intake.timeline,
+            intakeSessionId,
+            askHistoryEntryId: entry.id,
+            actionPreview: {
+              actionId: plan.actionId,
+              title: plan.title,
+              category: plan.category,
+              safetyLevel: plan.safetyLevel,
+            },
+          }),
+        });
+        setDraftHealthFlowId(draftFlow.id);
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            flowId: draftFlow.id,
+            status: 'closed',
+            stage: 'result',
+            riskLevel,
+            payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
+          });
+        }
+      } catch {
+        setDraftHealthFlowId(null);
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            status: 'closed',
+            stage: 'result',
+            payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
+          });
+        }
+      }
       // Ask result is preview-only until user adds it to Today.
     runMetaSystemCycle();
-    if (intakeSessionId) {
-      void updateAskIntakeSession(intakeSessionId, {
-        status: 'closed',
-        stage: 'result',
-        payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
-      });
-    }
-  }, [intake, intakeStep, intakeSessionId, nextSafeStep, logRedFlag, refreshHealthSnapshot, refreshAskHistory, healthSnapshot, askHistory, nextActionState, healthProfile]);
+  }, [intake, intakeStep, intakeSessionId, nextSafeStep, logRedFlag, refreshHealthSnapshot, refreshAskHistory, healthSnapshot, askHistory, nextActionState, healthProfile, sensitive]);
 
   const canContinueStep = (): boolean => {
     switch (intakeStep) {
@@ -392,25 +460,46 @@ export function AskCuravonScreen() {
   const markAsNextAction = () => {
     if (isAcceptingAction) return;
     setIsAcceptingAction(true);
-    try {
-      const actionText = askFinalAction?.actionText || nextSafeStep;
-      acceptNextAction({
-        actionText,
-        acceptanceSource: 'ask_promoted',
-        actionId: askFinalAction?.id ? `ask-v2-${askFinalAction.id}` : undefined,
-        title: askFinalAction?.title,
-        category: askFinalAction?.category,
-        safetyLevel: askFinalAction?.safetyLevel,
-        reason: askFinalAction?.reason,
-        sourceLabel: 'Ask Curavon',
-        sourceSignals: askFinalAction?.sourceSignals,
-        followUpContext: historyEntryId ? { entryId: historyEntryId } : undefined,
-      });
-      showToast('Added to Today.');
-      setActiveTab('home');
-    } finally {
-      setIsAcceptingAction(false);
-    }
+    void (async () => {
+      try {
+        const actionText = askFinalAction?.actionText || nextSafeStep;
+        const stableActionId = askFinalAction?.id ? `ask-v2-${askFinalAction.id}` : undefined;
+        const healthFlowId = draftHealthFlowId ?? undefined;
+        let flowActionId: string | undefined;
+
+        if (draftHealthFlowId) {
+          const { action } = await activateHealthFlowWithAction({
+            flowId: draftHealthFlowId,
+            instruction: actionText,
+            reason: askFinalAction?.reason,
+            category: askFinalAction?.category,
+            safetyLevel: mapPlanSafetyToRiskLevel(askFinalAction?.safetyLevel),
+            actionId: stableActionId,
+            privacyLevel: resolveAskPrivacyLevel(sensitive),
+          });
+          flowActionId = action.id;
+        }
+
+        acceptNextAction({
+          actionText,
+          acceptanceSource: 'ask_promoted',
+          actionId: stableActionId,
+          title: askFinalAction?.title,
+          category: askFinalAction?.category,
+          safetyLevel: askFinalAction?.safetyLevel,
+          reason: askFinalAction?.reason,
+          sourceLabel: 'Ask Curavon',
+          sourceSignals: askFinalAction?.sourceSignals,
+          healthFlowId,
+          flowActionId,
+          followUpContext: historyEntryId ? { entryId: historyEntryId } : undefined,
+        });
+        showToast('Added to Today.');
+        setActiveTab('home');
+      } finally {
+        setIsAcceptingAction(false);
+      }
+    })();
   };
 
   const startRelatedGuide = () => {

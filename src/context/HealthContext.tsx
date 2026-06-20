@@ -86,6 +86,12 @@ import {
   requestAccountDataExport,
   toOperationalDataErrorMessage,
 } from '../lib/data/operationalDataService';
+import {
+  persistFlowActionAdjusted,
+  persistFlowActionBlocked,
+  persistFlowActionDone,
+  shouldPersistHealthFlowLifecycle,
+} from '../lib/data/healthFlowService';
 import { collectActionOutcome, runMetaSystemCycle } from '../utils/metaSystem';
 
 interface HealthContextValue {
@@ -198,6 +204,8 @@ export type AcceptNextActionInput = {
   sourceLabel?: string;
   sourceSignals?: string[];
   scheduleFollowUp?: boolean;
+  healthFlowId?: string;
+  flowActionId?: string;
   followUpContext?: {
     entryId?: string;
     guideId?: string;
@@ -728,6 +736,9 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
+      if (shouldPersistHealthFlowLifecycle(next)) {
+        void persistFlowActionDone(next.flowActionId, next).catch(reportPersistError);
+      }
       void addDoctorSummaryItem(createNextActionSummaryItem(next)).catch(reportPersistError);
       refreshSnapshotState();
       collectActionOutcome({
@@ -752,6 +763,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
+      if (shouldPersistHealthFlowLifecycle(next)) {
+        void persistFlowActionBlocked({
+          flowId: next.healthFlowId,
+          flowActionId: next.flowActionId,
+          reason,
+          state: next,
+        }).catch(reportPersistError);
+      }
       void addDoctorSummaryItem(createNextActionSummaryItem(next, { blockedReason: reason })).catch(reportPersistError);
       refreshSnapshotState();
       collectActionOutcome({
@@ -779,6 +798,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
+      if (shouldPersistHealthFlowLifecycle(prev)) {
+        void persistFlowActionAdjusted({
+          flowId: prev.healthFlowId!,
+          flowActionId: prev.flowActionId!,
+          option,
+          state: prev,
+        }).catch(reportPersistError);
+      }
       void addDoctorSummaryItem(createNextActionSummaryItem(next, { adjustOption: option })).catch(reportPersistError);
       refreshSnapshotState();
       collectActionOutcome({
@@ -813,6 +840,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: input.category ?? 'general',
         safetyLevel: input.safetyLevel ?? 'normal',
         actionId,
+        healthFlowId: input.healthFlowId,
+        flowActionId: input.flowActionId,
         status: 'pending',
         updatedAt: new Date().toISOString(),
       };
