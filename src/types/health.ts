@@ -92,6 +92,8 @@ export interface NextActionState {
   healthFlowId?: string;
   /** Supabase flow_actions id — source of truth alongside next_action_state cache. */
   flowActionId?: string;
+  /** Persisted health_flow privacy level when action originated from Ask lifecycle. */
+  privacyLevel?: 'private' | 'sensitive' | 'care_circle_later' | 'shared';
   blockedReason?: HealthBlockedReason;
   blockedLabel?: string;
   adjustNote?: string;

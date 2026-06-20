@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, Copy, Download, Trash2, Plus, Sparkles, RefreshCw, Save } from 'lucide-react';
 import { useDoctorSummary } from '../context/useDoctorSummary';
+import { useHealth } from '../context/useHealth';
 import { SensitiveBlur } from './ScreenHeader';
+import {
+  getDiscreetSummaryItemTitle,
+  shouldUseDiscreetDisplay,
+} from '../lib/privacy/discreetDisplay';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
 
 function formatItemDate(iso: string) {
@@ -31,6 +36,11 @@ export function DoctorSummaryHub() {
     aiSummary,
     aiSummaryLoading,
   } = useDoctorSummary();
+  const { healthProfile, nextActionState } = useHealth();
+  const isDiscreetSummary = shouldUseDiscreetDisplay(
+    healthProfile.sensitiveMode,
+    nextActionState?.privacyLevel,
+  );
   const [questionInput, setQuestionInput] = useState('');
 
   const recentItems = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -83,7 +93,11 @@ export function DoctorSummaryHub() {
                 <div className="summary-item-head">
                   <div>
                     <p className="summary-item-title">
-                      <SensitiveBlur sensitive>{item.title}</SensitiveBlur>
+                      {isDiscreetSummary ? (
+                        getDiscreetSummaryItemTitle(item.title, true)
+                      ) : (
+                        <SensitiveBlur sensitive>{item.title}</SensitiveBlur>
+                      )}
                     </p>
                     <p className="summary-item-meta">
                       {item.source} · {formatItemDate(item.createdAt)}

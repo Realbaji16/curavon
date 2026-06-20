@@ -97,7 +97,10 @@ export function buildDeterministicFlowSummary(input: {
   return { sections, summaryText, questionsForClinician };
 }
 
-export function mapPrivacyLevelInput(): 'private' {
+export function mapPrivacyLevelInput(
+  privacy?: 'standard' | 'sensitive' | 'private' | 'care_circle_later' | 'shared',
+): 'private' | 'sensitive' {
+  if (privacy === 'sensitive') return 'sensitive';
   return 'private';
 }
 

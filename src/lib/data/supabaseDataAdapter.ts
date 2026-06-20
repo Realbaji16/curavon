@@ -19,6 +19,11 @@ import type {
   HealthFlow,
   NotificationPreference,
 } from './dataTypes';
+import { mergeDefaultSharingRules } from '../privacy/careCirclePrivacy';
+import {
+  redactPrivacyPayload,
+  sanitizeAgentEventSummary,
+} from '../privacy/privacyRedaction';
 import {
   readSinglePayload,
   readSupabaseActivityInsights,
@@ -625,9 +630,9 @@ export function createSupabaseDataAdapter(): DataAdapter {
             flow_id: input.flowId ?? null,
             event_type: input.eventType,
             source: input.source ?? 'app',
-            summary: input.summary ?? null,
+            summary: sanitizeAgentEventSummary(input.summary),
             status: input.status ?? 'recorded',
-            payload: input.payload ?? {},
+            payload: redactPrivacyPayload(input.payload ?? {}),
             occurred_at: input.occurredAt ?? new Date().toISOString(),
           })
           .select('*')
@@ -810,7 +815,7 @@ export function createSupabaseDataAdapter(): DataAdapter {
             member_user_id: input.memberUserId ?? null,
             invite_email: input.inviteEmail ?? null,
             permission_level: input.permissionLevel ?? 'metadata_only',
-            sharing_rules: input.sharingRules ?? {},
+            sharing_rules: mergeDefaultSharingRules(input.sharingRules),
             status: 'pending',
           })
           .select('*')

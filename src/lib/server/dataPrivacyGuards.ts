@@ -1,3 +1,4 @@
+import { redactPrivacyPayload } from '../privacy/privacyRedaction';
 import type {
   DeletionRequestType,
   DeleteFlowBody,
@@ -115,13 +116,5 @@ export function parseDeleteSummaryBody(
 }
 
 export function buildPrivacyPayload(input: Record<string, unknown>): Record<string, unknown> {
-  const safe: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input)) {
-    if (typeof value === 'string' && value.length > 120) {
-      safe[key] = `[redacted:${value.length}chars]`;
-      continue;
-    }
-    safe[key] = value;
-  }
-  return safe;
+  return redactPrivacyPayload(input);
 }

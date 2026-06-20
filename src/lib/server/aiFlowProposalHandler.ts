@@ -61,6 +61,7 @@ async function resolveSafetyCheckText(input: ParsedFlowProposalInput): Promise<{
   timeline: string;
   goal?: string;
   title?: string;
+  privacyLevel?: 'standard' | 'sensitive' | 'private' | 'care_circle_later' | 'shared';
   sourceRef?: { askIntakeSessionId?: string; guideResultId?: string };
 }> {
   const adapter = getDataAdapter();
@@ -91,6 +92,7 @@ async function resolveSafetyCheckText(input: ParsedFlowProposalInput): Promise<{
       timeline: typeof payload.timeline === 'string' ? payload.timeline : 'Unknown timeline',
       goal: typeof payload.goal === 'string' ? payload.goal : undefined,
       title: typeof payload.title === 'string' ? payload.title : 'Ask Curavon flow',
+      privacyLevel: session.privacyLevel === 'sensitive' ? 'sensitive' : input.privacyLevel,
       sourceRef: { askIntakeSessionId: input.askIntakeSessionId },
     };
   }
@@ -144,7 +146,7 @@ export async function handleAIFlowProposalPost(request: Request): Promise<{
     }
 
     const redFlags = detectRedFlags(resolved.safetyText);
-    const privacyLevel = mapPrivacyLevelInput();
+    const privacyLevel = mapPrivacyLevelInput(resolved.privacyLevel ?? body.data.privacyLevel);
 
     if (redFlags.hasUrgent) {
       const safetyFlow = await createAskSafetyBlockedFlow({
@@ -172,6 +174,8 @@ export async function handleAIFlowProposalPost(request: Request): Promise<{
         flowId: safetyFlow.id,
         safetyFlag: true,
         outputType: 'safety_escalation',
+        privacyLevel,
+        riskLevel: 'urgent',
       });
 
       return {
@@ -239,6 +243,8 @@ export async function handleAIFlowProposalPost(request: Request): Promise<{
       flowId: draftFlow.id,
       safetyFlag: false,
       outputType: 'draft_flow',
+      privacyLevel,
+      riskLevel,
     });
 
     return {

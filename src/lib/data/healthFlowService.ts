@@ -29,7 +29,7 @@ export function mapPlanSafetyToRiskLevel(
 }
 
 export function resolveAskPrivacyLevel(sensitiveMode: boolean): FlowPrivacyLevel {
-  return sensitiveMode ? 'private' : 'private';
+  return sensitiveMode ? 'sensitive' : 'private';
 }
 
 export function buildAskDraftFlowPayload(input: {

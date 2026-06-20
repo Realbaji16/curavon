@@ -11,6 +11,7 @@ import {
   persistFlowActionAdjusted,
   persistFlowActionBlocked,
   persistFlowActionDone,
+  resolveAskPrivacyLevel,
 } from '../lib/data/healthFlowService';
 
 const mockCreateDraftHealthFlow = vi.fn();
@@ -218,6 +219,11 @@ describe('healthFlow lifecycle service', () => {
         }),
       }),
     );
+  });
+
+  it('maps Sensitive Mode to sensitive privacy_level on ask flows', () => {
+    expect(resolveAskPrivacyLevel(true)).toBe('sensitive');
+    expect(resolveAskPrivacyLevel(false)).toBe('private');
   });
 
   it('creates safety_blocked flow for urgent intake audit without self-care action', async () => {

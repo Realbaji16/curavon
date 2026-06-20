@@ -1,5 +1,9 @@
 import type { AIDecisionTrace, AIObservabilitySummary } from '../ai/governance/aiObservabilityTypes';
 import type { AIStage } from '../ai/orchestrator/orchestratorTypes';
+import {
+  buildSafeAgentEventPayload,
+  redactPrivacyPayload,
+} from '../privacy/privacyRedaction';
 import type {
   CreateAiUsageLogInput,
   DataDeletionRequest,
@@ -9,41 +13,9 @@ import { DataAuthError, DataUnavailableError } from './dataErrors';
 import { getDataAdapter } from './getDataAdapter';
 
 const MAX_SESSION_TRACES = 100;
-const SENSITIVE_PAYLOAD_KEYS = new Set([
-  'prompt',
-  'rawprompt',
-  'userinput',
-  'symptoms',
-  'medications',
-  'medication',
-  'medicationnames',
-  'doctorsummary',
-  'body',
-  'notes',
-  'usernotes',
-  'concern',
-  'currentconcern',
-  'compressedsnapshot',
-  'healthtext',
-  'summarybody',
-]);
 
 let sessionTraces: AIDecisionTrace[] = [];
 let sessionObservabilitySummary: AIObservabilitySummary | null = null;
-
-function redactPayload(payload: Record<string, unknown> | undefined): Record<string, unknown> {
-  if (!payload) return {};
-  const safe: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    if (SENSITIVE_PAYLOAD_KEYS.has(key.toLowerCase())) continue;
-    if (typeof value === 'string' && value.length > 160) {
-      safe[key] = `[redacted:${value.length}chars]`;
-      continue;
-    }
-    safe[key] = value;
-  }
-  return safe;
-}
 
 function sanitizeDecisionTrace(trace: AIDecisionTrace): AIDecisionTrace {
   return {
@@ -84,7 +56,7 @@ export function appendDecisionTrace(trace: AIDecisionTrace) {
 }
 
 export function recordSafeAiUsageLog(input: CreateAiUsageLogInput) {
-  const payload = redactPayload(input.payload);
+  const payload = redactPrivacyPayload(input.payload);
   persistAdapterCall(async () => {
     await getDataAdapter().createAiUsageLog({
       ...input,
@@ -116,11 +88,12 @@ export function recordOrchestratorAgentEvent(entry: {
       source: entry.source,
       summary,
       status: entry.fallbackUsed ? 'fallback' : entry.aiUsed ? 'completed' : 'skipped',
-      payload: redactPayload({
+      payload: buildSafeAgentEventPayload({
+        eventType: 'orchestrator_step',
         stage: entry.stage,
-        moduleSelected: entry.moduleSelected,
+        status: entry.fallbackUsed ? 'fallback' : entry.aiUsed ? 'completed' : 'skipped',
+        moduleVersion: entry.moduleSelected,
         cache: entry.cache,
-        reason: entry.reason.length > 200 ? `${entry.reason.slice(0, 200)}…` : entry.reason,
       }),
       occurredAt: new Date().toISOString(),
     });
@@ -172,7 +145,7 @@ export async function requestAccountDataExport(
     userId: '',
     requestStatus: body.request.status,
     requestedAt: now,
-    payload: redactPayload({
+    payload: redactPrivacyPayload({
       request_type: body.request.requestType ?? 'account_export',
       requestedVia: 'settings',
     }),
@@ -212,7 +185,7 @@ export async function requestAccountDataDeletion(input: {
     requestStatus: body.request.status,
     deletionScope: requestType === 'full_account_deletion' ? 'full_account' : 'health_data',
     requestedAt: now,
-    payload: redactPayload({
+    payload: redactPrivacyPayload({
       request_type: body.request.requestType ?? requestType,
       requestedVia: 'settings',
       account_deleted: false,
@@ -231,7 +204,7 @@ export function resetOperationalDataForTests() {
 
 /** Exported for static redaction tests. */
 export function redactTelemetryPayload(payload: Record<string, unknown> | undefined): Record<string, unknown> {
-  return redactPayload(payload);
+  return redactPrivacyPayload(payload);
 }
 
 export type SafeAiUsageLogInput = CreateAiUsageLogInput;

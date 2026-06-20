@@ -209,7 +209,7 @@ export function AskCuravonScreen() {
       status: 'open',
       stage: 'intake',
       riskLevel: 'low',
-      privacyLevel: 'private',
+      privacyLevel: resolveAskPrivacyLevel(sensitive),
       payload: { source: 'ask_curavon' },
     })
       .then((session) => setIntakeSessionId(session.id))
@@ -492,6 +492,7 @@ export function AskCuravonScreen() {
           sourceSignals: askFinalAction?.sourceSignals,
           healthFlowId,
           flowActionId,
+          privacyLevel: resolveAskPrivacyLevel(sensitive),
           followUpContext: historyEntryId ? { entryId: historyEntryId } : undefined,
         });
         showToast('Added to Today.');

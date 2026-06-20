@@ -206,6 +206,7 @@ export type AcceptNextActionInput = {
   scheduleFollowUp?: boolean;
   healthFlowId?: string;
   flowActionId?: string;
+  privacyLevel?: NextActionState['privacyLevel'];
   followUpContext?: {
     entryId?: string;
     guideId?: string;
@@ -633,6 +634,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       if (patch.smartSilencePreference) {
         void saveNotificationPreferenceRecord({
           smartSilencePreference: patch.smartSilencePreference,
+          sensitive_preview: false,
+          updatedAt: new Date().toISOString(),
+        }).catch(reportPersistError);
+      }
+      if (patch.sensitiveMode !== undefined) {
+        void saveNotificationPreferenceRecord({
+          sensitive_preview: false,
+          sensitiveMode: patch.sensitiveMode,
           updatedAt: new Date().toISOString(),
         }).catch(reportPersistError);
       }
@@ -842,6 +851,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         actionId,
         healthFlowId: input.healthFlowId,
         flowActionId: input.flowActionId,
+        privacyLevel: input.privacyLevel,
         status: 'pending',
         updatedAt: new Date().toISOString(),
       };

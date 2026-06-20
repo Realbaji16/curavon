@@ -17,6 +17,12 @@ import { useApp } from '../context/useApp';
 import { useHealth } from '../context/useHealth';
 import { useDoctorSummary } from '../context/useDoctorSummary';
 import { ScreenHeader, SensitiveBlur } from '../components/ScreenHeader';
+import {
+  getDiscreetActionPreview,
+  getDiscreetActionTitle,
+  getDiscreetReasonPreview,
+  shouldUseDiscreetDisplay,
+} from '../lib/privacy/discreetDisplay';
 import { TodayCheckIn } from '../components/TodayCheckIn';
 import { HealthActionSheets } from '../components/HealthActionSheets';
 import { FullFlowOverlay } from '../components/FullFlowOverlay';
@@ -118,10 +124,14 @@ export function HomeScreen() {
   const name = healthProfile.preferredName.trim();
   const greetingLine = name ? `${getGreeting()}, ${name}` : 'Welcome back';
   const sensitiveMode = healthProfile.sensitiveMode;
+  const actionText = nextActionState?.currentAction ?? '';
+  const isDiscreetCompact = shouldUseDiscreetDisplay(sensitiveMode, nextActionState?.privacyLevel);
+  const heroTitle = getDiscreetActionTitle(nextActionState?.title, isDiscreetCompact);
+  const heroReason = getDiscreetReasonPreview(nextActionState?.reason, isDiscreetCompact);
+  const heroAction = getDiscreetActionPreview(actionText, isDiscreetCompact);
   const hasCheckInToday = Boolean(todayCheckIn);
   const actionStatus = nextActionState?.status ?? 'pending';
   const isDone = actionStatus === 'done';
-  const actionText = nextActionState?.currentAction ?? '';
 
   const personalizationPlan = useMemo(() => {
     const snapshot = readCuravonMemorySnapshot(
@@ -218,7 +228,7 @@ export function HomeScreen() {
                   <Sparkles size={20} />
                 </span>
                 <div>
-                  <span className="hero-label">{nextActionState?.title ?? "Today's next step"}</span>
+                  <span className="hero-label">{heroTitle}</span>
                   <p className="home-hero-sub">One clear step — calm and safe.</p>
                 </div>
               </div>
@@ -264,11 +274,15 @@ export function HomeScreen() {
                   <p className="home-hero-note">We&apos;ll keep this gentle for today.</p>
                 )}
                 <p className="home-hero-why-label">Why this step</p>
-                <p className="home-hero-why-text">{nextActionState?.reason ?? 'Based on your latest check-in and notes.'}</p>
+                <p className="home-hero-why-text">{heroReason}</p>
                 <p className="hero-task hero-task--action">
-                  <SensitiveBlur sensitive={sensitiveMode}>
-                    {nextActionState?.currentAction || actionText}
-                  </SensitiveBlur>
+                  {isDiscreetCompact ? (
+                    heroAction
+                  ) : (
+                    <SensitiveBlur sensitive={sensitiveMode}>
+                      {nextActionState?.currentAction || actionText}
+                    </SensitiveBlur>
+                  )}
                 </p>
                 {sourceChips.length ? (
                   <div className="hero-source-chips">
@@ -279,7 +293,7 @@ export function HomeScreen() {
                     ))}
                   </div>
                 ) : null}
-                {nextActionState?.watchFor ? (
+                {nextActionState?.watchFor && !isDiscreetCompact ? (
                   <p className="home-hero-note">Watch for: {nextActionState.watchFor}</p>
                 ) : null}
 

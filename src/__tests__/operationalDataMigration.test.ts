@@ -94,7 +94,7 @@ describe('operational data migration (Fix 11)', () => {
 
   it('truncates long string values in telemetry payloads', () => {
     const longText = 'a'.repeat(300);
-    const redacted = redactTelemetryPayload({ reason: longText });
-    expect(String(redacted.reason)).toMatch(/\[redacted:300chars\]/);
+    const redacted = redactTelemetryPayload({ moduleVersion: longText });
+    expect(String(redacted.moduleVersion)).toMatch(/\[redacted:300chars\]/);
   });
 });

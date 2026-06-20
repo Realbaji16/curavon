@@ -42,7 +42,7 @@ export type DataQuery = {
 };
 
 export type FlowRiskLevel = 'low' | 'medium' | 'high' | 'urgent';
-export type FlowPrivacyLevel = 'private' | 'care_circle_later' | 'shared';
+export type FlowPrivacyLevel = 'private' | 'sensitive' | 'care_circle_later' | 'shared';
 
 export type UserProfile = {
   id: string;
