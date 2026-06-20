@@ -1,5 +1,5 @@
 import { getConfiguredAuthMode } from '../auth/authConfig';
-import { detectUrgentConcern } from '../../utils/healthSafety';
+import { detectRedFlags } from '../health/redFlags';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { hasSupabasePublicConfig } from '../supabase/supabaseEnv';
 import type { AIIntakeRiskLevel, AIIntakeSafety, IntakeRequestBody } from './aiIntakeTypes';
@@ -107,7 +107,7 @@ export function parseIntakeRequestBody(body: unknown): BodyGuardResult {
 }
 
 export function assessIntakeSafety(input: string): AIIntakeSafety {
-  const urgent = detectUrgentConcern(input);
+  const urgent = detectRedFlags(input);
 
   if (urgent.hasUrgent) {
     return {

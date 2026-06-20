@@ -1,3 +1,4 @@
+import { detectRedFlags } from '../lib/health/redFlags';
 import type { AskIntakeData, ConcernType } from '../types/askIntake';
 import { SELF_HARM_URGENT_BODY } from './healthSafety';
 
@@ -18,12 +19,54 @@ export const WATCH_POINTS = [
   'Tracking timing, triggers, and changes can make your next step clearer.',
 ];
 
+export function collectIntakeSafetyText(intake: AskIntakeData): string {
+  return [
+    intake.mainConcern,
+    intake.redFlagOther,
+    intake.whatChanged,
+    intake.intensityNote,
+    intake.triedSoFar,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+export function effectiveIntakeRedFlagSelections(intake: AskIntakeData): string[] {
+  const flags = [...intake.redFlags];
+  const other = intake.redFlagOther.trim();
+  if (other && !flags.includes('None of these')) {
+    flags.push(other);
+  }
+  return flags;
+}
+
 export function hasUrgentRedFlags(redFlags: string[]): boolean {
   return redFlags.some((f) => f !== 'None of these');
 }
 
-export function hasSelfHarmRedFlag(redFlags: string[]): boolean {
-  return redFlags.includes('Thoughts of harming myself');
+export function hasSelfHarmRedFlag(redFlags: string[], safetyText?: string): boolean {
+  if (redFlags.includes('Thoughts of harming myself')) {
+    return true;
+  }
+  if (safetyText?.trim()) {
+    return detectRedFlags(safetyText).selfHarm;
+  }
+  return false;
+}
+
+export function detectIntakeRedFlags(intake: AskIntakeData) {
+  const safetyText = collectIntakeSafetyText(intake);
+  const textDetection = detectRedFlags(safetyText);
+  const selectedFlags = effectiveIntakeRedFlagSelections(intake).filter((flag) => flag !== 'None of these');
+  return {
+    ...textDetection,
+    selectedFlags,
+    hasUrgent: textDetection.hasUrgent || hasUrgentRedFlags(selectedFlags),
+  };
+}
+
+export function hasUrgentIntakeSignals(intake: AskIntakeData): boolean {
+  return detectIntakeRedFlags(intake).hasUrgent;
 }
 
 export function generateNextSafeStep(intake: AskIntakeData): string {

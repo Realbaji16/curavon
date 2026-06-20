@@ -16,8 +16,6 @@ import { useScreenBack } from '../hooks/useScreenBack';
 import {
   CALM_URGENT_BODY,
   CALM_URGENT_TITLE,
-  SELF_HARM_URGENT_BODY,
-  SELF_HARM_URGENT_TITLE,
 } from '../utils/healthSafety';
 import {
   ASK_GOAL_OPTIONS,
@@ -40,9 +38,12 @@ import {
   updateAskIntakeSession,
 } from '../utils/askIntakeSessionStorage';
 import {
+  collectIntakeSafetyText,
+  detectIntakeRedFlags,
+  effectiveIntakeRedFlagSelections,
   generateNextSafeStep,
   hasSelfHarmRedFlag,
-  hasUrgentRedFlags,
+  hasUrgentIntakeSignals,
   MENTAL_HEALTH_SAFETY_MESSAGE,
   recommendGuideFlow,
   WATCH_POINTS,
@@ -60,12 +61,7 @@ function formatHistoryDate(iso: string) {
 }
 
 function effectiveRedFlags(intake: AskIntakeData): string[] {
-  const flags = [...intake.redFlags];
-  const other = intake.redFlagOther.trim();
-  if (other && !flags.includes('None of these')) {
-    flags.push(other);
-  }
-  return flags;
+  return effectiveIntakeRedFlagSelections(intake);
 }
 
 function AskFitShell({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -211,17 +207,21 @@ export function AskCuravonScreen() {
 
   const finishIntake = useCallback(async () => {
     const flags = effectiveRedFlags(intake);
+    const safetyDetection = detectIntakeRedFlags(intake);
 
-    if (hasUrgentRedFlags(flags)) {
-      const selfHarm = hasSelfHarmRedFlag(flags);
-      const guidance = selfHarm ? SELF_HARM_URGENT_BODY : CALM_URGENT_BODY;
-      setSafetyTitle(selfHarm ? SELF_HARM_URGENT_TITLE : CALM_URGENT_TITLE);
+    if (hasUrgentIntakeSignals(intake)) {
+      const guidance = safetyDetection.body;
+      setSafetyTitle(safetyDetection.title);
       setSafetyBody(guidance);
+      const matchedConcern =
+        safetyDetection.matches[0]?.label ??
+        flags.find((f) => f !== 'None of these') ??
+        'urgent concern';
       await logRedFlag({
         source: 'Ask Curavon',
-        userText: flags.filter((f) => f !== 'None of these').join(', '),
+        userText: flags.filter((f) => f !== 'None of these').join(', ') || intake.mainConcern,
         guidanceShown: guidance,
-        matchedConcern: flags.find((f) => f !== 'None of these') ?? 'urgent concern',
+        matchedConcern,
       });
       const entry = await addAskHistoryEntry({
         concern: intake.mainConcern,
@@ -453,7 +453,7 @@ export function AskCuravonScreen() {
   };
 
   if (mode === 'safety') {
-    const showMentalHealth = hasSelfHarmRedFlag(redFlags);
+    const showMentalHealth = hasSelfHarmRedFlag(redFlags, collectIntakeSafetyText(intake));
     return (
       <AskFitShell className="ask-fit-shell--safety">
         <div className="screen ask-safety-screen ask-screen-no-scroll">
