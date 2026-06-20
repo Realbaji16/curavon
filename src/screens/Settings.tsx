@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useState } from 'react';
 import { Shield, Lock, Heart, User, FileText } from 'lucide-react';
 import { useApp } from '../context/useApp';
 import { useHealth } from '../context/useHealth';
@@ -8,16 +8,9 @@ import { HealthListEditor } from '../components/HealthListEditor';
 import type { SmartSilencePreference } from '../types/health';
 import { clearAskHistory } from '../utils/askIntakeStorage';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
-import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
-import { safeRead } from '../utils/healthStorage';
-import {
-  downloadLocalBackup,
-  type CuravonLocalBackup,
-} from '../lib/data/dataBackup';
-import { restoreLocalBackup, validateBackupFile } from '../lib/data/dataRestore';
-import { runLocalDataHealthCheck } from '../lib/data/dataHealthCheck';
-import { deleteLocalAccountData } from '../lib/data/dataDeletion';
+import { clearLocalDemoAccountData } from '../lib/app/appShellState';
 import { DELETION_CONFIRMATION_COPY } from '../lib/data/dataDeletionConfirm';
+import { OPERATIONAL_DATA_MESSAGES } from '../lib/data/operationalDataService';
 import { ActivityInsightsSection } from '../components/ActivityInsightsSection';
 
 const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
@@ -32,6 +25,7 @@ export function SettingsScreen() {
     showToast,
     clearAuthShellState,
     openDoctorSummary,
+    consentComplete,
   } = useApp();
   const {
     healthProfile,
@@ -40,11 +34,11 @@ export function SettingsScreen() {
     removeListItem,
     clearHealthData,
     exportHealthData,
-    refreshHealthStateFromStorage,
+    refreshAskHistory,
     smartSilenceLabel,
     nextActionState,
   } = useHealth();
-  const { includedCount, latestDraftDate, clearAllDoctorSummaryData, refreshFromStorage } = useDoctorSummary();
+  const { includedCount, latestDraftDate } = useDoctorSummary();
   const { session, user, signOut, deleteLocalAccount } = useCuravonAuth();
   const isSupabaseMode = session.authMode === 'supabase';
   const storageModeCopy = isSupabaseMode
@@ -54,18 +48,9 @@ export function SettingsScreen() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
-  const [restoreDraft, setRestoreDraft] = useState<CuravonLocalBackup | null>(null);
-  const [restorePreview, setRestorePreview] = useState<{
-    appName: string;
-    backupVersion: string;
-    exportedAt: string;
-    collectionCounts: Record<string, number>;
-  } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const primaryGoalsLabel =
     healthProfile.primaryGoals.length > 0 ? healthProfile.primaryGoals.join(' · ') : 'Not set';
-  const localUserId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
 
   const handleDeleteHealthData = () => {
     if (!confirmClear) {
@@ -73,94 +58,12 @@ export function SettingsScreen() {
       return;
     }
     clearHealthData();
-    clearAllDoctorSummaryData();
-    showToast('All health data cleared');
+    showToast(OPERATIONAL_DATA_MESSAGES.deletionSubmitted);
     setConfirmClear(false);
   };
 
-  const handleBackupDownload = () => {
-    downloadLocalBackup(localUserId);
-    showToast('Local backup downloaded');
-  };
-
-  const handleOpenRestore = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleRestoreFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as CuravonLocalBackup;
-      const validation = validateBackupFile(parsed);
-      if (!validation.valid) {
-        showToast('Invalid backup file');
-        setRestoreDraft(null);
-        setRestorePreview(null);
-        return;
-      }
-      setRestoreDraft(parsed);
-      setRestorePreview({
-        appName: parsed.appName,
-        backupVersion: parsed.backupVersion,
-        exportedAt: parsed.exportedAt,
-        collectionCounts: {
-          dailyCheckins: parsed.collections.dailyCheckins.length,
-          askHistory: parsed.collections.askHistory.length,
-          doctorSummaryItems: parsed.collections.doctorSummaryItems.length,
-          followUps: parsed.collections.followUps.length,
-          guideResults: parsed.collections.guideResults.length,
-        },
-      });
-      showToast('Backup file ready to restore');
-    } catch {
-      showToast('Could not read backup file');
-      setRestoreDraft(null);
-      setRestorePreview(null);
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const runRestore = (mode: 'merge' | 'replace') => {
-    if (!restoreDraft) return;
-    const result = restoreLocalBackup(restoreDraft, {
-      mode,
-      confirmReplace: mode === 'replace',
-    });
-    if (!result.ok) {
-      showToast('Restore failed');
-      return;
-    }
-
-    refreshHealthStateFromStorage();
-    refreshFromStorage();
-    setRestoreDraft(null);
-    setRestorePreview(null);
-
-    if (mode === 'replace') {
-      showToast('Backup restored. Refreshing Curavon…');
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 600);
-      return;
-    }
-
-    showToast('Backup restored (merge)');
-  };
-
   const handleCheckDataHealth = () => {
-    const result = runLocalDataHealthCheck();
-    if (result.status === 'healthy') {
-      showToast('Your local data looks okay.');
-      return;
-    }
-    if (result.status === 'repaired') {
-      showToast('Curavon repaired one local storage issue.');
-      return;
-    }
-    showToast('Curavon found a local data issue. Export a backup before continuing.');
+    showToast('Health data is stored in your Curavon account.');
   };
 
   const handleDeleteLocalAccount = async () => {
@@ -169,7 +72,7 @@ export function SettingsScreen() {
       return;
     }
     await deleteLocalAccount();
-    deleteLocalAccountData(localUserId, { deleteHealthData: false });
+    clearLocalDemoAccountData({ clearHealthData: false });
     clearAuthShellState();
     showToast('Local account deleted');
     setConfirmDeleteAccount(false);
@@ -181,11 +84,10 @@ export function SettingsScreen() {
       return;
     }
     await deleteLocalAccount();
-    deleteLocalAccountData(localUserId, { deleteHealthData: true });
+    clearLocalDemoAccountData({ clearHealthData: true });
     clearHealthData();
-    clearAllDoctorSummaryData();
     clearAuthShellState();
-    showToast('Local account and health data deleted');
+    showToast('Account deletion request submitted');
     setConfirmDeleteAll(false);
   };
 
@@ -342,7 +244,7 @@ export function SettingsScreen() {
 
       <ActivityInsightsSection
         safetyLevel={nextActionState?.safetyLevel ?? 'normal'}
-        consentCompleted={Boolean(safeRead(APP_STORAGE_KEYS.consentComplete, false))}
+        consentCompleted={consentComplete}
         onToast={showToast}
       />
 
@@ -416,71 +318,51 @@ export function SettingsScreen() {
           <Lock size={20} className="icon-teal" />
           <h3>Data &amp; Privacy</h3>
         </div>
-        <p className="section-desc">Your data is stored on this device in this version.</p>
+        <p className="section-desc">{storageModeCopy}</p>
         <p className="settings-data-note">
-          Activity Insights use your local Curavon activity, such as completed actions, blocked steps,
-          check-ins, and saved safety notes, to help make future suggestions easier to understand.
-          They are not a diagnosis. You can delete Activity Insights by deleting health data.
+          Data export will be handled through your account export request. Local backup and restore are not available in this version.
         </p>
         <p className="settings-data-note">
-          Sign out keeps your saved health notes on this device. Delete all health data removes them from this version.
+          Activity Insights use your Curavon activity, such as completed actions, blocked steps,
+          check-ins, and saved safety notes, to help make future suggestions easier to understand.
+          They are not a diagnosis.
+        </p>
+        <p className="settings-data-note">
+          Delete health data submits a deletion request for your account. Processing may take time.
         </p>
         <p className="settings-data-note">
           When Curavon notices an urgent red flag, it may save a short safety note in Doctor Summary so you can review it later or prepare for a clinician conversation. This is not diagnosis or emergency monitoring.
         </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          style={{ display: 'none' }}
-          onChange={handleRestoreFileSelected}
-        />
         <div className="settings-actions-list">
-          <button type="button" className="btn btn-secondary btn-glass" onClick={() => { exportHealthData(); showToast('Health data exported'); }}>
-            Export my data
-          </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={handleBackupDownload}>
-            Download local backup
-          </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={handleOpenRestore}>
-            Restore from backup
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            onClick={() => {
+              exportHealthData();
+              showToast(OPERATIONAL_DATA_MESSAGES.exportSubmitted);
+            }}
+          >
+            Request data export
           </button>
           <button type="button" className="btn btn-secondary btn-glass" onClick={handleCheckDataHealth}>
-            Check local data health
+            Check account data health
           </button>
           <button
             type="button"
             className="btn btn-secondary btn-glass"
             onClick={() => {
-              clearAskHistory();
-              showToast('Ask history cleared');
+              void clearAskHistory()
+                .then(() => refreshAskHistory())
+                .then(() => showToast('Ask history cleared'))
+                .catch(() => showToast('Could not clear Ask history. Try again soon.'));
             }}
           >
             Clear Ask history
           </button>
           <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteHealthData}>
-            {confirmClear ? 'Tap again to delete all health data' : 'Delete all health data'}
+            {confirmClear ? 'Tap again to request health data deletion' : 'Request health data deletion'}
           </button>
         </div>
-        {restorePreview ? (
-          <div className="settings-data-note" style={{ marginTop: 12 }}>
-            <p>
-              Backup: {restorePreview.appName} v{restorePreview.backupVersion} -{' '}
-              {new Date(restorePreview.exportedAt).toLocaleDateString()}
-            </p>
-            <p>
-              Items: check-ins {restorePreview.collectionCounts.dailyCheckins}, Ask {restorePreview.collectionCounts.askHistory}, summary {restorePreview.collectionCounts.doctorSummaryItems}
-            </p>
-            <div className="settings-actions-list" style={{ marginTop: 8 }}>
-              <button type="button" className="btn btn-secondary btn-glass" onClick={() => runRestore('merge')}>
-                Merge restore
-              </button>
-              <button type="button" className="btn btn-secondary btn-glass" onClick={() => runRestore('replace')}>
-                Replace restore
-              </button>
-            </div>
-          </div>
-        ) : null}
       </section>
 
       <div className="disclaimer-box safety-card">

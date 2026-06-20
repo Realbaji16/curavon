@@ -1,13 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { evaluateFollowUp } from '../lib/followUp/followUpEngine';
 import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
-import { saveFollowUp } from '../lib/followUp/followUpStorage';
+import { resetFollowUpsCacheForTests, saveFollowUp } from '../lib/followUp/followUpStorage';
 import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
 import { clearLocalStorage } from './testUtils';
-
-vi.mock('../lib/sync/syncQueue', () => ({
-  queueSyncForCurrentUser: vi.fn(),
-}));
 
 function baseRecord(overrides: Partial<FollowUpRecord> = {}): FollowUpRecord {
   return {
@@ -57,6 +53,7 @@ describe('followUpEngine evaluateFollowUp', () => {
 describe('followUpScheduler scheduleFollowUpForAction', () => {
   beforeEach(() => {
     clearLocalStorage();
+    resetFollowUpsCacheForTests();
   });
 
   it('skips casual follow-up for urgent/escalate actions', () => {

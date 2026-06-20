@@ -1,9 +1,8 @@
 import { detectUrgentConcern } from '../../utils/healthSafety';
-import { safeRead, safeWrite } from '../../utils/healthStorage';
 import { buildSafePlanCandidates } from './planCandidates';
 import { buildPlanReasoningPrompt, PLAN_REASONING_SYSTEM_PROMPT } from './planReasoningPrompt';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
 import { runAIOrchestrator } from '../ai/orchestrator/aiOrchestrator';
+import { recordSafeAiUsageLog } from '../data/operationalDataService';
 import type { AIKernelResponse } from '../ai/aiTypes';
 import type {
   PlanAction,
@@ -21,7 +20,6 @@ import {
 } from './planGuards';
 
 const PLAN_ENGINE_CACHE = new Map<string, PlanEngineResult>();
-const AI_USAGE_LOG_KEY = APP_STORAGE_KEYS.aiUsageLog;
 
 type AIUsageLogEntry = {
   task: string;
@@ -33,8 +31,18 @@ type AIUsageLogEntry = {
 };
 
 function logAIUsage(entry: AIUsageLogEntry) {
-  const logs = safeRead<AIUsageLogEntry[]>(AI_USAGE_LOG_KEY, []);
-  safeWrite(AI_USAGE_LOG_KEY, [entry, ...logs].slice(0, 250));
+  recordSafeAiUsageLog({
+    taskName: entry.task,
+    status: entry.aiUsed ? 'completed' : 'fallback',
+    occurredAt: entry.timestamp,
+    payload: {
+      cacheHit: entry.cacheHit,
+      fallbackUsed: entry.fallbackUsed,
+      aiUsed: entry.aiUsed,
+      candidateCount: entry.candidateCount,
+      moduleVersion: 'plan-engine-v2',
+    },
+  });
 }
 
 function makeInputKey(input: PlanEngineInput): string {

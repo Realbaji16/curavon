@@ -18,6 +18,8 @@ import type {
   NextActionState,
   SmartSilencePreference,
 } from '../types/health';
+import type { AskHistoryEntry } from '../types/askIntake';
+import type { RedFlagLog } from '../types/doctorSummary';
 import type { HealthSnapshot } from '../types/healthSnapshot';
 import type { FollowUpOutcome, FollowUpRecord } from '../lib/followUp/followUpTypes';
 import type { AcceptedActionSource } from '../types/actionLifecycle';
@@ -25,30 +27,41 @@ import { acceptanceSourceFromPlanTrigger } from '../types/actionLifecycle';
 import {
   createDefaultHealthProfile,
   getTodayCheckIn,
-  HEALTH_STORAGE_KEYS,
   loadTodaySteps,
   normalizeCheckIn,
-  safeRead,
-  safeRemove,
-  safeWrite,
+  saveTodaySteps,
   todayDateKey,
-} from '../utils/healthStorage';
+} from '../utils/healthUtils';
+import { setMetaSystemHealthContext } from '../lib/meta/metaSystemContext';
 import { ADJUSTED_ACTIONS } from '../utils/nextActionRules';
 import { stepsBandToCount } from '../utils/stepsUtils';
 import {
   addDoctorSummaryItem,
-  loadRedFlagLogs,
 } from '../utils/doctorSummaryStorage';
 import {
   createCheckInSummaryItem,
   createNextActionSummaryItem,
 } from '../utils/doctorSummaryItems';
-import { loadAskHistory } from '../utils/askIntakeStorage';
 import {
   adjustedOptionLabel,
   blockedReasonLabel,
 } from '../utils/nextBestActionEngine';
-import { loadHealthSnapshot, refreshHealthSnapshot as recomputeHealthSnapshot, buildHealthSnapshot } from '../utils/healthSnapshot';
+import {
+  createEmptyHealthSnapshot,
+  refreshHealthSnapshot as recomputeHealthSnapshot,
+  buildHealthSnapshot,
+  type HealthSnapshotInputs,
+} from '../utils/healthSnapshot';
+import {
+  loadCoreHealthData,
+  fetchAskHistory,
+  saveDailyCheckinRecord,
+  saveHealthProfileRecord,
+  saveNextActionStateRecord,
+  toDataErrorMessage,
+  type CoreHealthDataLoadResult,
+} from '../lib/data/coreHealthDataService';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import {
   generateCuravonNextAction,
   toNextActionStateFromAdapter,
@@ -60,16 +73,19 @@ import {
   type NextActionRegenerationTrigger,
 } from '../lib/plan/nextActionRegenerationPolicy';
 import {
-  getFollowUps,
+  hydrateFollowUps,
   markFollowUpCompleted,
   updateFollowUp,
 } from '../lib/followUp/followUpStorage';
+import { hydrateGuideResults, type GuideResultRecord } from '../utils/guideResultStorage';
+import { loadProductData, saveNotificationPreferenceRecord } from '../lib/data/productDataService';
 import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
 import { evaluateFollowUp } from '../lib/followUp/followUpEngine';
-import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
-import { exportCuravonData } from '../lib/data/dataExport';
-import { deleteAllHealthData } from '../lib/data/dataDeletion';
-import { queueSyncForCurrentUser } from '../lib/sync/syncQueue';
+import {
+  requestAccountDataDeletion,
+  requestAccountDataExport,
+  toOperationalDataErrorMessage,
+} from '../lib/data/operationalDataService';
 import { collectActionOutcome, runMetaSystemCycle } from '../utils/metaSystem';
 
 interface HealthContextValue {
@@ -108,7 +124,14 @@ interface HealthContextValue {
   exportHealthData: () => void;
   smartSilenceLabel: string;
   recentConcerns: string[];
+  askHistory: AskHistoryEntry[];
+  followUps: FollowUpRecord[];
+  redFlagLogs: RedFlagLog[];
+  guideResults: GuideResultRecord[];
+  coreDataLoading: boolean;
+  coreDataError: string | null;
   refreshHealthSnapshot: () => void;
+  refreshAskHistory: () => Promise<void>;
   refreshHealthStateFromStorage: () => void;
   dueFollowUp: FollowUpRecord | null;
   submitFollowUpOutcome: (outcome: FollowUpOutcome, note?: string) => void;
@@ -124,58 +147,8 @@ const SMART_SILENCE_LABELS: Record<SmartSilencePreference, string> = {
   'minimal-notifications': 'Minimal notifications',
 };
 
-function persistProfile(profile: HealthProfile) {
-  safeWrite(HEALTH_STORAGE_KEYS.healthProfile, profile);
-  queueSyncForCurrentUser({
-    entityType: 'health_profile',
-    operationType: 'update',
-    payload: {
-      updatedAt: new Date().toISOString(),
-      primaryGoalCount: profile.primaryGoals.length,
-      sensitiveMode: profile.sensitiveMode,
-    },
-  });
-}
-
-function persistCheckins(checkins: DailyCheckIn[]) {
-  safeWrite(HEALTH_STORAGE_KEYS.dailyCheckins, checkins);
-  queueSyncForCurrentUser({
-    entityType: 'daily_checkins',
-    operationType: 'update',
-    payload: {
-      count: checkins.length,
-      latestId: checkins[0]?.id ?? null,
-      updatedAt: new Date().toISOString(),
-    },
-  });
-}
-
 function persistDailySteps(state: DailyStepsState) {
-  safeWrite(HEALTH_STORAGE_KEYS.dailySteps, state);
-}
-
-function persistNextAction(state: NextActionState | null) {
-  if (state) {
-    safeWrite(HEALTH_STORAGE_KEYS.nextActionState, state);
-    queueSyncForCurrentUser({
-      entityType: 'next_action_state',
-      operationType: 'update',
-      payload: {
-        actionId: state.actionId,
-        status: state.status,
-        updatedAt: state.updatedAt ?? new Date().toISOString(),
-      },
-    });
-  } else {
-    safeRemove(HEALTH_STORAGE_KEYS.nextActionState);
-    queueSyncForCurrentUser({
-      entityType: 'next_action_state',
-      operationType: 'delete',
-      payload: {
-        updatedAt: new Date().toISOString(),
-      },
-    });
-  }
+  saveTodaySteps(state);
 }
 
 function normalizeNextActionState(state: NextActionState | null): NextActionState | null {
@@ -232,35 +205,92 @@ export type AcceptNextActionInput = {
 };
 
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const [healthProfile, setHealthProfile] = useState<HealthProfile>(() =>
-    safeRead(HEALTH_STORAGE_KEYS.healthProfile, createDefaultHealthProfile()),
-  );
-  const [dailyCheckins, setDailyCheckins] = useState<DailyCheckIn[]>(() =>
-    safeRead<DailyCheckIn[]>(HEALTH_STORAGE_KEYS.dailyCheckins, []).map(normalizeCheckIn),
-  );
+  const { isAuthenticated, loading: authLoading } = useCuravonAuth();
+  const [healthProfile, setHealthProfile] = useState<HealthProfile>(() => createDefaultHealthProfile());
+  const [dailyCheckins, setDailyCheckins] = useState<DailyCheckIn[]>([]);
   const [dailySteps, setDailySteps] = useState<DailyStepsState>(() => loadTodaySteps());
-  const [nextActionState, setNextActionState] = useState<NextActionState | null>(() =>
-    normalizeNextActionState(
-      safeRead<NextActionState | null>(HEALTH_STORAGE_KEYS.nextActionState, null),
-    ),
-  );
+  const [nextActionState, setNextActionState] = useState<NextActionState | null>(null);
+  const [askHistory, setAskHistory] = useState<AskHistoryEntry[]>([]);
+  const [coreDataLoading, setCoreDataLoading] = useState(true);
+  const [coreDataError, setCoreDataError] = useState<string | null>(null);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showHealthBlockedSheet, setShowHealthBlockedSheet] = useState(false);
   const [showHealthAdjustSheet, setShowHealthAdjustSheet] = useState(false);
   const [showUrgentSafety, setShowUrgentSafety] = useState(false);
-  const [healthSnapshot, setHealthSnapshot] = useState<HealthSnapshot>(() => loadHealthSnapshot());
-  const [followUps, setFollowUps] = useState<FollowUpRecord[]>(() => getFollowUps());
+  const [healthSnapshot, setHealthSnapshot] = useState<HealthSnapshot>(() => createEmptyHealthSnapshot());
+  const [followUps, setFollowUps] = useState<FollowUpRecord[]>([]);
+  const [redFlagLogs, setRedFlagLogs] = useState<RedFlagLog[]>([]);
+  const [guideResults, setGuideResults] = useState<GuideResultRecord[]>([]);
 
   const todayCheckIn = getTodayCheckIn(dailyCheckins);
 
   const nextActionStateRef = useRef(nextActionState);
   const healthProfileRef = useRef(healthProfile);
+  const dailyCheckinsRef = useRef(dailyCheckins);
+  const askHistoryRef = useRef(askHistory);
+  const redFlagLogsRef = useRef(redFlagLogs);
+  const followUpsRef = useRef(followUps);
+  const guideResultsRef = useRef(guideResults);
   const todayCheckInRef = useRef(todayCheckIn);
   const hasAttemptedInitialPlanRef = useRef(false);
   const lastPlanGeneratedAtRef = useRef<number | null>(null);
   const applyNextActionFromPlanRef = useRef<
     (params: ApplyNextActionFromPlanParams) => Promise<ApplyNextActionResult>
   >(async () => ({ status: 'skipped', reason: 'not_ready' }));
+
+  const buildSnapshotInputs = useCallback((): HealthSnapshotInputs => ({
+    profile: healthProfileRef.current,
+    dailyCheckins: dailyCheckinsRef.current,
+    askHistory: askHistoryRef.current,
+    nextActionState: nextActionStateRef.current,
+    redFlags: redFlagLogsRef.current,
+    followUps: followUpsRef.current,
+    guideResults: guideResultsRef.current,
+  }), []);
+
+  const applyProductSlice = useCallback((result: Awaited<ReturnType<typeof loadProductData>>) => {
+    setFollowUps(result.followUps);
+    setRedFlagLogs(result.redFlagLogs);
+    setGuideResults(result.guideResults);
+    followUpsRef.current = result.followUps;
+    redFlagLogsRef.current = result.redFlagLogs;
+    guideResultsRef.current = result.guideResults;
+    void hydrateFollowUps().catch(() => undefined);
+    void hydrateGuideResults().catch(() => undefined);
+  }, []);
+
+  const applyCoreLoad = useCallback((result: CoreHealthDataLoadResult) => {
+    const profile = result.healthProfile;
+    const checkins = result.dailyCheckins;
+    const action = normalizeNextActionState(result.nextActionState);
+
+    setHealthProfile(profile);
+    setDailyCheckins(checkins);
+    setNextActionState(action);
+    setAskHistory(result.askHistory);
+    setCoreDataError(result.error);
+
+    healthProfileRef.current = profile;
+    dailyCheckinsRef.current = checkins;
+    nextActionStateRef.current = action;
+    askHistoryRef.current = result.askHistory;
+    todayCheckInRef.current = getTodayCheckIn(checkins);
+
+    setMetaSystemHealthContext({
+      checkins,
+      askHistory: result.askHistory,
+    });
+
+    setHealthSnapshot(recomputeHealthSnapshot({
+      profile,
+      dailyCheckins: checkins,
+      askHistory: result.askHistory,
+      nextActionState: action,
+      redFlags: redFlagLogsRef.current,
+      followUps: followUpsRef.current,
+      guideResults: guideResultsRef.current,
+    }));
+  }, []);
 
   useEffect(() => {
     nextActionStateRef.current = nextActionState;
@@ -271,37 +301,121 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, [healthProfile]);
 
   useEffect(() => {
+    dailyCheckinsRef.current = dailyCheckins;
+  }, [dailyCheckins]);
+
+  useEffect(() => {
+    askHistoryRef.current = askHistory;
+  }, [askHistory]);
+
+  useEffect(() => {
+    redFlagLogsRef.current = redFlagLogs;
+  }, [redFlagLogs]);
+
+  useEffect(() => {
+    followUpsRef.current = followUps;
+  }, [followUps]);
+
+  useEffect(() => {
+    guideResultsRef.current = guideResults;
+  }, [guideResults]);
+
+  useEffect(() => {
     todayCheckInRef.current = todayCheckIn;
   }, [todayCheckIn]);
 
   const refreshSnapshotState = useCallback(() => {
-    setHealthSnapshot(recomputeHealthSnapshot());
+    setHealthSnapshot(recomputeHealthSnapshot(buildSnapshotInputs()));
+  }, [buildSnapshotInputs]);
+
+  const refreshAskHistory = useCallback(async () => {
+    try {
+      const entries = await fetchAskHistory();
+      setAskHistory(entries);
+      askHistoryRef.current = entries;
+      refreshSnapshotState();
+      setCoreDataError(null);
+    } catch (error) {
+      setCoreDataError(toDataErrorMessage(error));
+    }
+  }, [refreshSnapshotState]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      if (!isAuthenticated) {
+        applyCoreLoad({
+          healthProfile: createDefaultHealthProfile(),
+          dailyCheckins: [],
+          nextActionState: null,
+          askHistory: [],
+          error: null,
+        });
+        applyProductSlice({
+          doctorSummaryItems: [],
+          doctorSummaryDrafts: [],
+          redFlagLogs: [],
+          followUps: [],
+          guideResults: [],
+          activityInsightStore: { insights: [], ruleGeneratedAt: null, lastAiRunAt: null, summaryHash: null },
+          notificationPreference: null,
+          userPreference: null,
+          error: null,
+        });
+        if (!cancelled) setCoreDataLoading(false);
+        return;
+      }
+
+      setCoreDataLoading(true);
+      const [result, productResult] = await Promise.all([loadCoreHealthData(), loadProductData()]);
+      if (cancelled) return;
+      applyCoreLoad(result);
+      applyProductSlice(productResult);
+      setCoreDataLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, applyCoreLoad, applyProductSlice]);
+
+  const reportPersistError = useCallback((error: unknown) => {
+    setCoreDataError(toDataErrorMessage(error));
   }, []);
+
+  const persistProfile = useCallback((profile: HealthProfile) => {
+    void saveHealthProfileRecord(profile).catch(reportPersistError);
+  }, [reportPersistError]);
+
+  const persistNextAction = useCallback((state: NextActionState | null) => {
+    void saveNextActionStateRecord(state).catch(reportPersistError);
+  }, [reportPersistError]);
 
   const refreshFollowUps = useCallback(() => {
-    setFollowUps(getFollowUps());
-  }, []);
+    void hydrateFollowUps()
+      .then((records) => {
+        setFollowUps(records);
+        followUpsRef.current = records;
+        refreshSnapshotState();
+      })
+      .catch(reportPersistError);
+  }, [refreshSnapshotState, reportPersistError]);
 
   const refreshHealthStateFromStorage = useCallback(() => {
-    const profile = safeRead(HEALTH_STORAGE_KEYS.healthProfile, createDefaultHealthProfile());
-    const checkins = safeRead<DailyCheckIn[]>(HEALTH_STORAGE_KEYS.dailyCheckins, []).map(normalizeCheckIn);
-    const steps = loadTodaySteps();
-    const action = normalizeNextActionState(
-      safeRead<NextActionState | null>(HEALTH_STORAGE_KEYS.nextActionState, null),
-    );
-
-    setHealthProfile(profile);
-    setDailyCheckins(checkins);
-    setDailySteps(steps);
-    setNextActionState(action);
-
-    healthProfileRef.current = profile;
-    nextActionStateRef.current = action;
-    todayCheckInRef.current = getTodayCheckIn(checkins);
-
-    refreshFollowUps();
-    refreshSnapshotState();
-  }, [refreshFollowUps, refreshSnapshotState]);
+    void Promise.all([loadCoreHealthData(), loadProductData()])
+      .then(([coreResult, productResult]) => {
+        applyCoreLoad(coreResult);
+        applyProductSlice(productResult);
+        setDailySteps(loadTodaySteps());
+        refreshFollowUps();
+      })
+      .catch((error) => {
+        setCoreDataError(toDataErrorMessage(error));
+      });
+  }, [applyCoreLoad, applyProductSlice, refreshFollowUps]);
 
   const [followUpNowMs, setFollowUpNowMs] = useState(() => Date.now());
 
@@ -375,16 +489,16 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         return { status: 'skipped', reason: policy.reason, action: current };
       }
 
-      const snapshot = buildHealthSnapshot();
+      const snapshot = buildHealthSnapshot(buildSnapshotInputs());
       let output;
       try {
         output = await generateCuravonNextAction({
           source: params.source,
           snapshot,
           latestCheckIn: params.latestCheckIn ?? todayCheckInRef.current,
-          askHistory: loadAskHistory(),
+          askHistory: askHistoryRef.current,
           nextActionState: current,
-          redFlagLogs: loadRedFlagLogs(),
+          redFlagLogs: redFlagLogsRef.current,
           profile: healthProfileRef.current,
           currentConcern: params.concern ?? '',
           intakeResult: params.concern
@@ -441,7 +555,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         action: resultAction,
       };
     },
-    [createFollowUpForAction],
+    [createFollowUpForAction, buildSnapshotInputs, persistNextAction],
   );
 
   useEffect(() => {
@@ -449,6 +563,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, [applyNextActionFromPlan]);
 
   useEffect(() => {
+    if (coreDataLoading || authLoading) return;
     if (hasAttemptedInitialPlanRef.current) return;
     hasAttemptedInitialPlanRef.current = true;
 
@@ -463,7 +578,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       trigger: 'initial_load',
       onlyIfPending: true,
     });
-  }, []);
+  }, [coreDataLoading, authLoading]);
 
   const addTodaySteps = useCallback(
     (amount: number) => {
@@ -507,9 +622,15 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setHealthProfile((prev) => {
       const next = { ...prev, ...patch };
       persistProfile(next);
+      if (patch.smartSilencePreference) {
+        void saveNotificationPreferenceRecord({
+          smartSilencePreference: patch.smartSilencePreference,
+          updatedAt: new Date().toISOString(),
+        }).catch(reportPersistError);
+      }
       return next;
     });
-  }, []);
+  }, [persistProfile, reportPersistError]);
 
   const addListItem = useCallback(
     (
@@ -527,7 +648,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [],
+    [persistProfile],
   );
 
   const removeListItem = useCallback(
@@ -546,7 +667,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [],
+    [persistProfile],
   );
 
   const saveCheckIn = useCallback(
@@ -566,7 +687,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       setDailyCheckins((prev) => {
         const filtered = prev.filter((c) => c.date !== today);
         const next = [entry, ...filtered];
-        persistCheckins(next);
+        void saveDailyCheckinRecord(entry).catch(reportPersistError);
         return next;
       });
 
@@ -589,12 +710,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         latestCheckIn: entry,
         onlyIfPending: false,
       });
-      addDoctorSummaryItem(createCheckInSummaryItem(entry));
+      void addDoctorSummaryItem(createCheckInSummaryItem(entry)).catch(reportPersistError);
       refreshSnapshotState();
       runMetaSystemCycle();
       setShowCheckIn(false);
     },
-    [dailySteps.steps, applyNextActionFromPlan, refreshSnapshotState, collectIgnoredPendingAction],
+    [dailySteps.steps, applyNextActionFromPlan, refreshSnapshotState, collectIgnoredPendingAction, reportPersistError],
   );
 
   const markActionDone = useCallback(() => {
@@ -607,8 +728,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
-      addDoctorSummaryItem(createNextActionSummaryItem(next));
-      setHealthSnapshot(recomputeHealthSnapshot());
+      void addDoctorSummaryItem(createNextActionSummaryItem(next)).catch(reportPersistError);
+      refreshSnapshotState();
       collectActionOutcome({
         actionId: next.actionId,
         status: 'done',
@@ -618,7 +739,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       runMetaSystemCycle();
       return next;
     });
-  }, []);
+  }, [persistNextAction, refreshSnapshotState, reportPersistError]);
 
   const markActionBlocked = useCallback((reason: HealthBlockedReason) => {
     setNextActionState((prev) => {
@@ -631,8 +752,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
-      addDoctorSummaryItem(createNextActionSummaryItem(next, { blockedReason: reason }));
-      setHealthSnapshot(recomputeHealthSnapshot());
+      void addDoctorSummaryItem(createNextActionSummaryItem(next, { blockedReason: reason })).catch(reportPersistError);
+      refreshSnapshotState();
       collectActionOutcome({
         actionId: next.actionId,
         status: 'blocked',
@@ -644,7 +765,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       return next;
     });
     setShowHealthBlockedSheet(false);
-  }, []);
+  }, [persistNextAction, refreshSnapshotState, reportPersistError]);
 
   const markActionAdjusted = useCallback((option: AdjustOption) => {
     setNextActionState((prev) => {
@@ -658,8 +779,8 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
-      addDoctorSummaryItem(createNextActionSummaryItem(next, { adjustOption: option }));
-      setHealthSnapshot(recomputeHealthSnapshot());
+      void addDoctorSummaryItem(createNextActionSummaryItem(next, { adjustOption: option })).catch(reportPersistError);
+      refreshSnapshotState();
       collectActionOutcome({
         actionId: next.actionId,
         status: 'adjusted',
@@ -671,7 +792,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       return next;
     });
     setShowHealthAdjustSheet(false);
-  }, []);
+  }, [persistNextAction, refreshSnapshotState, reportPersistError]);
 
   const acceptNextAction = useCallback(
     (input: AcceptNextActionInput): NextActionState => {
@@ -708,7 +829,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       runMetaSystemCycle();
       return next;
     },
-    [collectIgnoredPendingAction, createFollowUpForAction, refreshSnapshotState],
+    [collectIgnoredPendingAction, createFollowUpForAction, persistNextAction, refreshSnapshotState],
   );
 
   const setNextActionFromSource = useCallback(
@@ -724,9 +845,9 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
   const saveCurrentActionToSummary = useCallback(() => {
     if (!nextActionState) return;
-    addDoctorSummaryItem(createNextActionSummaryItem(nextActionState));
+    void addDoctorSummaryItem(createNextActionSummaryItem(nextActionState)).catch(reportPersistError);
     refreshSnapshotState();
-  }, [nextActionState, refreshSnapshotState]);
+  }, [nextActionState, refreshSnapshotState, reportPersistError]);
 
   const refreshPersonalizedAction = useCallback(() => {
     void applyNextActionFromPlan({
@@ -782,7 +903,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
           safetyLevel: decision.shouldEscalate ? 'urgent' : nextActionState.safetyLevel,
           updatedAt: new Date().toISOString(),
         });
-        addDoctorSummaryItem(followUpSummary);
+        void addDoctorSummaryItem(followUpSummary).catch(reportPersistError);
       }
 
       if (decision.shouldGenerateNewAction) {
@@ -802,42 +923,22 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       nextActionState,
       refreshFollowUps,
       applyNextActionFromPlan,
+      persistNextAction,
+      reportPersistError,
       refreshSnapshotState,
     ],
   );
 
   const clearHealthData = useCallback(() => {
-    const userId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
-    deleteAllHealthData(userId);
-    const fresh = createDefaultHealthProfile();
-    setHealthProfile(fresh);
-    setDailyCheckins([]);
-    setDailySteps(loadTodaySteps());
-    setNextActionState(null);
-    persistNextAction(null);
-    refreshFollowUps();
-    refreshSnapshotState();
-    hasAttemptedInitialPlanRef.current = false;
-    void applyNextActionFromPlan({
-      source: 'today',
-      trigger: 'data_reset',
-      onlyIfPending: false,
-      force: true,
-    }).finally(() => {
-      hasAttemptedInitialPlanRef.current = true;
+    void requestAccountDataDeletion({ deletionScope: 'health_data' }).catch((error) => {
+      console.error(toOperationalDataErrorMessage(error));
     });
-  }, [refreshSnapshotState, refreshFollowUps, applyNextActionFromPlan]);
+  }, []);
 
   const exportHealthData = useCallback(() => {
-    const userId = safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, 'local-anon-user');
-    const payload = exportCuravonData(userId);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `curavon-health-export-${todayDateKey()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    void requestAccountDataExport({ exportScope: 'health_records' }).catch((error) => {
+      console.error(toOperationalDataErrorMessage(error));
+    });
   }, []);
 
   const recentConcerns = dailyCheckins
@@ -890,7 +991,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         exportHealthData,
         smartSilenceLabel,
         recentConcerns,
+        askHistory,
+        followUps,
+        redFlagLogs,
+        guideResults,
+        coreDataLoading,
+        coreDataError,
         refreshHealthSnapshot: refreshSnapshotState,
+        refreshAskHistory,
         refreshHealthStateFromStorage,
         dueFollowUp,
         submitFollowUpOutcome,

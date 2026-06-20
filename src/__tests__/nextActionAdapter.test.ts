@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateCuravonNextActionSync } from '../lib/plan/nextActionAdapter';
-import { createDefaultHealthProfile } from '../utils/healthStorage';
+import { createDefaultHealthProfile } from '../utils/healthUtils';
 
 const baseProfile = createDefaultHealthProfile();
 

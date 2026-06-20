@@ -3,7 +3,7 @@ import type { RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
 import type { HealthSnapshot } from '../../types/healthSnapshot';
 import type { FollowUpOutcome } from '../followUp/followUpTypes';
-import type { GuideResultRecord } from '../../utils/guideResultStorage';
+import type { GuideResultRecord } from '../../types/guideResult';
 import { generateNextBestActionV3, generateNextBestActionV3Sync } from './planEngineV3';
 import { generateNextBestPlanActionSync } from './planEngineV2';
 import type { PlanCategory, PlanEngineInput, PlanEngineResult, PlanSafetyLevel } from './planTypes';

@@ -1,6 +1,5 @@
 import type { User } from '@supabase/supabase-js';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
-import { safeRead } from '../../utils/healthStorage';
+import { getAppShellState } from '../app/appShellState';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
 import {
   clearLocalSupabaseSession,
@@ -23,6 +22,7 @@ function mapSupabaseUser(user: User): CuravonUser {
     (typeof metadata?.full_name === 'string' && metadata.full_name) ||
     user.email?.split('@')[0] ||
     'Curavon user';
+  const shell = getAppShellState();
 
   return {
     id: user.id,
@@ -31,8 +31,8 @@ function mapSupabaseUser(user: User): CuravonUser {
     createdAt: user.created_at,
     updatedAt: user.updated_at ?? user.created_at,
     authMode: SUPABASE_MODE,
-    consentCompleted: safeRead<boolean>(APP_STORAGE_KEYS.consentComplete, false),
-    setupCompleted: safeRead<boolean>(APP_STORAGE_KEYS.setupComplete, false),
+    consentCompleted: shell.consentComplete,
+    setupCompleted: shell.setupComplete,
   };
 }
 
@@ -40,11 +40,12 @@ function asSession(
   user: CuravonUser | null,
   error: string | null = null,
 ): AuthSession {
+  const shell = getAppShellState();
   const freshUser = user
     ? {
         ...user,
-        consentCompleted: safeRead<boolean>(APP_STORAGE_KEYS.consentComplete, false),
-        setupCompleted: safeRead<boolean>(APP_STORAGE_KEYS.setupComplete, false),
+        consentCompleted: shell.consentComplete,
+        setupCompleted: shell.setupComplete,
       }
     : null;
 
@@ -211,7 +212,6 @@ export function createSupabaseAuthAdapter(): AuthAdapter {
     },
 
     async deleteLocalAccount() {
-      // Placeholder: full Supabase account deletion requires a server-side flow.
       const client = getBrowserSupabaseClient();
       if (!client) {
         throw new Error('Supabase is not configured.');

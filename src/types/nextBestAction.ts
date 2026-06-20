@@ -2,7 +2,7 @@ import type { ActionStatus, DailyCheckIn, HealthProfile, NextActionState } from 
 import type { AskHistoryEntry } from './askIntake';
 import type { DoctorSummaryItem, RedFlagLog } from './doctorSummary';
 import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
-import type { GuideResultRecord } from '../utils/guideResultStorage';
+import type { GuideResultRecord } from '../types/guideResult';
 
 export type PersonalizationSignal =
   | 'low_sleep'

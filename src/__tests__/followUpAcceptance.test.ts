@@ -1,11 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../lib/sync/syncQueue', () => ({
-  queueSyncForCurrentUser: vi.fn(),
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { scheduleFollowUpForAction } from '../lib/followUp/followUpScheduler';
-import { getFollowUps } from '../lib/followUp/followUpStorage';
+import { resetFollowUpsCacheForTests, getFollowUps } from '../lib/followUp/followUpStorage';
 import type { AcceptedActionSource } from '../types/actionLifecycle';
 import { isPreviewActionSource } from '../types/actionLifecycle';
 import { clearLocalStorage } from './testUtils';
@@ -26,6 +22,7 @@ function acceptedAskAction(actionId = 'ask-v2-demo-action') {
 describe('follow-up acceptance lifecycle', () => {
   beforeEach(() => {
     clearLocalStorage();
+    resetFollowUpsCacheForTests();
   });
 
   it('treats ask_preview as preview-only and never schedules', () => {

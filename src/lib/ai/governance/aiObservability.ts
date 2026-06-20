@@ -1,9 +1,13 @@
 import { getAIBudgetState } from './aiBudget';
-import { readDecisionTraces, readObservabilitySummary, writeObservabilitySummary } from './aiObservabilityStorage';
+import {
+  readSessionDecisionTraces,
+  readSessionObservabilitySummary,
+  writeSessionObservabilitySummary,
+} from '../../data/operationalDataService';
 import type { AIObservabilitySummary } from './aiObservabilityTypes';
 
 function summarize(): AIObservabilitySummary {
-  const traces = readDecisionTraces();
+  const traces = readSessionDecisionTraces();
   const blockReasons = new Map<string, number>();
   const taskBreakdown: Record<string, number> = {};
   const sourceBreakdown: Record<string, number> = {};
@@ -45,12 +49,12 @@ function summarize(): AIObservabilitySummary {
     sourceBreakdown,
     lastUpdated: new Date().toISOString(),
   };
-  writeObservabilitySummary(summary);
+  writeSessionObservabilitySummary(summary);
   return summary;
 }
 
 export function getAIObservabilitySummary(): AIObservabilitySummary {
-  return readObservabilitySummary() ?? summarize();
+  return readSessionObservabilitySummary() ?? summarize();
 }
 
 export function refreshAIObservabilitySummary(): AIObservabilitySummary {
@@ -59,7 +63,7 @@ export function refreshAIObservabilitySummary(): AIObservabilitySummary {
 
 export function getAISessionCostEstimate() {
   const budget = getAIBudgetState();
-  const traces = readDecisionTraces();
+  const traces = readSessionDecisionTraces();
   const estimatedTokens = traces.reduce((sum, trace) => sum + trace.estimatedTokens, 0);
   const estimatedCalls = budget.sessionCallCount;
   const highUsageWarning = estimatedCalls >= 2 || estimatedTokens > 1200;

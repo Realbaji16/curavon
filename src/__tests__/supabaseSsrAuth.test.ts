@@ -44,26 +44,7 @@ function clearSupabaseEnv() {
   resetSupabaseClientForTests();
 }
 
-const REQUIRED_RLS_TABLES = [
-  'profiles',
-  'consent_records',
-  'health_profiles',
-  'daily_checkins',
-  'ask_history',
-  'guide_results',
-  'follow_ups',
-  'next_action_state',
-  'memory_snapshots',
-  'doctor_summary_items',
-  'doctor_summary_drafts',
-  'red_flag_logs',
-  'activity_insights',
-  'ai_usage_logs',
-  'ai_decision_traces',
-  'user_preferences',
-  'data_export_requests',
-  'data_deletion_requests',
-];
+import { REQUIRED_CURAVON_TABLES } from '../lib/supabase/curavonSchemaTables';
 
 describe('Supabase SSR/auth hardening (Step 19)', () => {
   beforeEach(() => {
@@ -156,15 +137,15 @@ describe('Supabase SSR/auth hardening (Step 19)', () => {
 
   it('RLS SQL enables policies for all required tables', () => {
     const repoRoot = path.resolve(__dirname, '../..');
-    const rlsPath = path.join(repoRoot, 'docs/backend/supabase-rls-v1.sql');
+    const rlsPath = path.join(repoRoot, 'supabase/migrations/20250618100002_curavon_rls_policies.sql');
     expect(existsSync(rlsPath)).toBe(true);
 
     const rls = readFileSync(rlsPath, 'utf8');
-    for (const table of REQUIRED_RLS_TABLES) {
-      expect(rls).toContain(`public.${table} enable row level security`);
+    for (const table of REQUIRED_CURAVON_TABLES) {
+      expect(rls).toContain(`alter table public.${table} enable row level security`);
     }
     expect(rls).toContain('auth.uid() = id');
     expect(rls).toContain('auth.uid() = user_id');
-    expect(rls).not.toMatch(/public read/i);
+    expect(rls).not.toMatch(/to anon/i);
   });
 });

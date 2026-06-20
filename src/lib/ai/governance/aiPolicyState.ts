@@ -1,5 +1,3 @@
-import { APP_STORAGE_KEYS } from '../../data/storageKeys';
-import { safeRead, safeWrite } from '../../../utils/healthStorage';
 import type { AIAllowedTask, AIBlockReason } from './aiPolicyTypes';
 
 type SourceType = 'ask' | 'today' | 'guides' | 'doctor_summary' | 'followup' | 'memory';
@@ -31,58 +29,59 @@ const DEFAULT_POLICY_STATE: AIPolicyState = {
   sourceCounts: {},
 };
 
+let policyState: AIPolicyState = { ...DEFAULT_POLICY_STATE };
+
 export function getAIState(): AIPolicyState {
-  return safeRead<AIPolicyState>(APP_STORAGE_KEYS.aiPolicyState, DEFAULT_POLICY_STATE);
+  return policyState;
 }
 
 export function updateAIState(patch: Partial<AIPolicyState>) {
-  const state = getAIState();
-  safeWrite(APP_STORAGE_KEYS.aiPolicyState, { ...state, ...patch });
+  policyState = { ...policyState, ...patch };
 }
 
 export function recordAIAllowed(task: AIAllowedTask, source: SourceType) {
-  const state = getAIState();
   updateAIState({
-    sessionCallCount: state.sessionCallCount + 1,
-    dailyCallCount: state.dailyCallCount + 1,
+    sessionCallCount: policyState.sessionCallCount + 1,
+    dailyCallCount: policyState.dailyCallCount + 1,
     lastAIUsedAt: new Date().toISOString(),
-    taskCounts: { ...state.taskCounts, [task]: (state.taskCounts[task] ?? 0) + 1 },
-    sourceCounts: { ...state.sourceCounts, [source]: (state.sourceCounts[source] ?? 0) + 1 },
+    taskCounts: { ...policyState.taskCounts, [task]: (policyState.taskCounts[task] ?? 0) + 1 },
+    sourceCounts: { ...policyState.sourceCounts, [source]: (policyState.sourceCounts[source] ?? 0) + 1 },
   });
 }
 
 export function recordAIBlocked(blockReason: AIBlockReason, source: SourceType) {
-  const state = getAIState();
   updateAIState({
-    blockedCount: state.blockedCount + 1,
+    blockedCount: policyState.blockedCount + 1,
     lastBlockReason: blockReason,
-    sourceCounts: { ...state.sourceCounts, [source]: (state.sourceCounts[source] ?? 0) + 1 },
+    sourceCounts: { ...policyState.sourceCounts, [source]: (policyState.sourceCounts[source] ?? 0) + 1 },
   });
 }
 
 export function recordFallback(_task: AIAllowedTask, source: SourceType) {
-  const state = getAIState();
   updateAIState({
-    fallbackCount: state.fallbackCount + 1,
-    sourceCounts: { ...state.sourceCounts, [source]: (state.sourceCounts[source] ?? 0) + 1 },
+    fallbackCount: policyState.fallbackCount + 1,
+    sourceCounts: { ...policyState.sourceCounts, [source]: (policyState.sourceCounts[source] ?? 0) + 1 },
   });
 }
 
 export function recordSafetyOverride(source: SourceType) {
-  const state = getAIState();
   updateAIState({
-    safetyOverrideCount: state.safetyOverrideCount + 1,
-    sourceCounts: { ...state.sourceCounts, [source]: (state.sourceCounts[source] ?? 0) + 1 },
+    safetyOverrideCount: policyState.safetyOverrideCount + 1,
+    sourceCounts: { ...policyState.sourceCounts, [source]: (policyState.sourceCounts[source] ?? 0) + 1 },
   });
 }
 
 export function getAIDebugStatus() {
-  const state = getAIState();
   return {
-    aiEnabled: state.aiEnabled,
-    callsUsedThisSession: state.sessionCallCount,
-    fallbackCount: state.fallbackCount,
-    blockedCount: state.blockedCount,
-    lastBlockReason: state.lastBlockReason ?? null,
+    aiEnabled: policyState.aiEnabled,
+    callsUsedThisSession: policyState.sessionCallCount,
+    fallbackCount: policyState.fallbackCount,
+    blockedCount: policyState.blockedCount,
+    lastBlockReason: policyState.lastBlockReason ?? null,
   };
+}
+
+/** Test helper — reset in-memory policy counters between cases. */
+export function resetAIPolicyStateForTests() {
+  policyState = { ...DEFAULT_POLICY_STATE };
 }

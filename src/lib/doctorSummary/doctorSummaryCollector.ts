@@ -1,21 +1,12 @@
 import type { AskHistoryEntry } from '../../types/askIntake';
 import type { DoctorSummaryItem, RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
-import { safeRead } from '../../utils/healthStorage';
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
+import { loadCoreHealthData } from '../data/coreHealthDataService';
+import { loadProductData } from '../data/productDataService';
 import type {
   DoctorSummaryCompressionPayload,
   DoctorSummaryInput,
 } from './doctorSummaryTypes';
-
-const KEYS = {
-  profile: APP_STORAGE_KEYS.healthProfile,
-  checkins: APP_STORAGE_KEYS.dailyCheckins,
-  askHistory: APP_STORAGE_KEYS.askHistory,
-  summaryItems: APP_STORAGE_KEYS.doctorSummaryItems,
-  redFlags: APP_STORAGE_KEYS.redFlagLogs,
-  nextAction: APP_STORAGE_KEYS.nextActionState,
-};
 
 function inDateRange(iso: string, days: number): boolean {
   const t = new Date(iso).getTime();
@@ -23,33 +14,22 @@ function inDateRange(iso: string, days: number): boolean {
   return Date.now() - t <= days * 24 * 60 * 60 * 1000;
 }
 
-export function collectDoctorSummaryInput(options?: {
+export async function collectDoctorSummaryInput(options?: {
   selectedNoteIds?: string[];
   userNotes?: string[];
   dateRangeDays?: number;
-}): DoctorSummaryInput {
+}): Promise<DoctorSummaryInput> {
   const days = options?.dateRangeDays ?? 30;
-  const profile = safeRead<HealthProfile>(KEYS.profile, {
-    preferredName: '',
-    primaryGoals: [],
-    sensitiveMode: false,
-    smartSilencePreference: 'gentle-reminders',
-    conditions: [],
-    medications: [],
-    allergies: [],
-    healthNotes: [],
-    doctorQuestions: [],
-    emergencyContactName: '',
-    emergencyContactPhone: '',
-  });
-  const checkins = safeRead<DailyCheckIn[]>(KEYS.checkins, []).filter((c) => inDateRange(c.createdAt, days));
-  const askHistory = safeRead<AskHistoryEntry[]>(KEYS.askHistory, []).filter((a) => inDateRange(a.createdAt, days));
-  const summaryItems = safeRead<DoctorSummaryItem[]>(KEYS.summaryItems, []).filter((i) => inDateRange(i.createdAt, days));
+  const [core, product] = await Promise.all([loadCoreHealthData(), loadProductData()]);
+  const profile = core.healthProfile;
+  const checkins = core.dailyCheckins.filter((c) => inDateRange(c.createdAt, days));
+  const askHistory = core.askHistory.filter((a) => inDateRange(a.createdAt, days));
+  const summaryItems = product.doctorSummaryItems.filter((i) => inDateRange(i.createdAt, days));
   const selectedItems = options?.selectedNoteIds?.length
     ? summaryItems.filter((i) => options.selectedNoteIds?.includes(i.id))
     : summaryItems.filter((i) => i.includedInSummary);
-  const redFlags = safeRead<RedFlagLog[]>(KEYS.redFlags, []).filter((r) => inDateRange(r.createdAt, days));
-  const nextAction = safeRead<NextActionState | null>(KEYS.nextAction, null);
+  const redFlags = product.redFlagLogs.filter((r) => inDateRange(r.createdAt, days));
+  const nextAction = core.nextActionState;
   const guideResults = selectedItems.filter((i) => i.type === 'guided_flow');
   const nextActions = nextAction ? [nextAction] : [];
 
@@ -119,5 +99,52 @@ export function compressDoctorSummaryInput(input: DoctorSummaryInput): DoctorSum
     redFlagSummaries,
     medicationNoteSummaries,
     userQuestions,
+  };
+}
+
+/** @deprecated Sync collector inputs for legacy callers — prefer collectDoctorSummaryInput(). */
+export function collectDoctorSummaryInputFromMemory(input: {
+  profile: HealthProfile;
+  checkins: DailyCheckIn[];
+  askHistory: AskHistoryEntry[];
+  summaryItems: DoctorSummaryItem[];
+  redFlags: RedFlagLog[];
+  nextAction: NextActionState | null;
+  userNotes?: string[];
+  dateRangeDays?: number;
+}): DoctorSummaryInput {
+  const days = input.dateRangeDays ?? 30;
+  const checkins = input.checkins.filter((c) => inDateRange(c.createdAt, days));
+  const askHistory = input.askHistory.filter((a) => inDateRange(a.createdAt, days));
+  const summaryItems = input.summaryItems.filter((i) => inDateRange(i.createdAt, days));
+  const redFlags = input.redFlags.filter((r) => inDateRange(r.createdAt, days));
+  const guideResults = summaryItems.filter((i) => i.type === 'guided_flow');
+  const nextActions = input.nextAction ? [input.nextAction] : [];
+
+  const activeConcerns = [
+    ...askHistory.slice(0, 6).map((a) => a.concern),
+    ...checkins.slice(0, 6).map((c) => c.symptoms).filter(Boolean),
+  ]
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  return {
+    profileSnapshot: {
+      preferredName: input.profile.preferredName,
+      primaryGoals: input.profile.primaryGoals,
+      conditions: input.profile.conditions,
+      medications: input.profile.medications,
+      allergies: input.profile.allergies,
+      doctorQuestions: input.profile.doctorQuestions,
+    },
+    activeConcerns,
+    recentCheckIns: checkins.slice(0, 10),
+    askHistory: askHistory.slice(0, 10),
+    guideResults,
+    nextActions,
+    redFlagLogs: redFlags.slice(0, 10),
+    userNotes: input.userNotes ?? [],
+    dateRange: `Last ${days} days`,
   };
 }

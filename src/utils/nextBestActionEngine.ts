@@ -8,7 +8,7 @@ import type {
   PersonalizationSignal,
   SupportingInsightCard,
 } from '../types/nextBestAction';
-import { todayDateKey } from './healthStorage';
+import { todayDateKey } from './healthUtils';
 import { ADJUSTED_ACTIONS } from './nextActionRules';
 
 const MOOD_SUPPORT_VALUES = new Set(['Worried', 'Low', 'Irritable', 'Numb', 'Not sure']);

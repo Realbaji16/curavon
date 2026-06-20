@@ -5,7 +5,7 @@ import type {
   NextActionState,
 } from '../types/health';
 import { hasUrgentHealthLanguage } from './healthSafety';
-import { todayDateKey } from './healthStorage';
+import { todayDateKey } from './healthUtils';
 
 export interface DoctorSummaryData {
   mainConcern: string;

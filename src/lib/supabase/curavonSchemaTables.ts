@@ -1,0 +1,31 @@
+/** Authoritative Curavon application tables — keep in sync with supabase/migrations. */
+export const REQUIRED_CURAVON_TABLES = [
+  'profiles',
+  'consent_records',
+  'health_profiles',
+  'daily_checkins',
+  'ask_history',
+  'ask_intake_sessions',
+  'guide_results',
+  'health_flows',
+  'flow_actions',
+  'flow_blockers',
+  'follow_ups',
+  'next_action_state',
+  'doctor_summary_items',
+  'doctor_summary_drafts',
+  'red_flag_logs',
+  'activity_insights',
+  'notification_preferences',
+  'user_preferences',
+  'agent_events',
+  'ai_usage_logs',
+  'ai_decision_traces',
+  'data_export_requests',
+  'data_deletion_requests',
+  'care_circles',
+  'care_circle_members',
+  'care_circle_events',
+] as const;
+
+export type CuravonSchemaTable = (typeof REQUIRED_CURAVON_TABLES)[number];

@@ -33,9 +33,12 @@ import {
 } from '../types/askIntake';
 import {
   addAskHistoryEntry,
-  loadAskHistory,
   markAskHistorySaved,
 } from '../utils/askIntakeStorage';
+import {
+  createAskIntakeSession,
+  updateAskIntakeSession,
+} from '../utils/askIntakeSessionStorage';
 import {
   generateNextSafeStep,
   hasSelfHarmRedFlag,
@@ -142,7 +145,15 @@ function AskHistorySection({
 
 export function AskCuravonScreen() {
   const { setActiveTab, openDoctorSummary, openGuidesWithFlow, showToast } = useApp();
-  const { healthProfile, acceptNextAction, refreshHealthSnapshot, healthSnapshot, nextActionState } = useHealth();
+  const {
+    healthProfile,
+    acceptNextAction,
+    refreshHealthSnapshot,
+    refreshAskHistory,
+    healthSnapshot,
+    nextActionState,
+    askHistory,
+  } = useHealth();
   const { addFromAsk, logRedFlag } = useDoctorSummary();
 
   const [mode, setMode] = useState<AskMode>('landing');
@@ -151,7 +162,6 @@ export function AskCuravonScreen() {
   const [landingInput, setLandingInput] = useState('');
   const [savedToSummary, setSavedToSummary] = useState(false);
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
-  const [history, setHistory] = useState<AskHistoryEntry[]>(() => loadAskHistory());
   const [revealedHistoryIds, setRevealedHistoryIds] = useState<Set<string>>(new Set());
   const [safetyTitle, setSafetyTitle] = useState(CALM_URGENT_TITLE);
   const [safetyBody, setSafetyBody] = useState(CALM_URGENT_BODY);
@@ -159,11 +169,14 @@ export function AskCuravonScreen() {
   const [aiMissingQuestions, setAiMissingQuestions] = useState<string[]>([]);
   const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
   const [isAcceptingAction, setIsAcceptingAction] = useState(false);
+  const [intakeSessionId, setIntakeSessionId] = useState<string | null>(null);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
   const recommendedGuide = recommendGuideFlow(intake);
   const sensitive = healthProfile.sensitiveMode;
+
+  const history = askHistory;
 
   const resetToLanding = useCallback(() => {
     setMode('landing');
@@ -172,11 +185,12 @@ export function AskCuravonScreen() {
     setLandingInput('');
     setSavedToSummary(false);
     setHistoryEntryId(null);
-    setHistory(loadAskHistory());
+    void refreshAskHistory();
     setAiRefinedConcern('');
     setAiMissingQuestions([]);
     setAskFinalAction(null);
-  }, []);
+    setIntakeSessionId(null);
+  }, [refreshAskHistory]);
 
   const startIntake = (prefill = '') => {
     setIntake({ ...EMPTY_ASK_INTAKE, mainConcern: prefill || landingInput.trim() });
@@ -184,6 +198,15 @@ export function AskCuravonScreen() {
     setSavedToSummary(false);
     setHistoryEntryId(null);
     setMode('intake');
+    void createAskIntakeSession({
+      status: 'open',
+      stage: 'intake',
+      riskLevel: 'low',
+      privacyLevel: 'private',
+      payload: { source: 'ask_curavon' },
+    })
+      .then((session) => setIntakeSessionId(session.id))
+      .catch(() => setIntakeSessionId(null));
   };
 
   const finishIntake = useCallback(async () => {
@@ -194,22 +217,30 @@ export function AskCuravonScreen() {
       const guidance = selfHarm ? SELF_HARM_URGENT_BODY : CALM_URGENT_BODY;
       setSafetyTitle(selfHarm ? SELF_HARM_URGENT_TITLE : CALM_URGENT_TITLE);
       setSafetyBody(guidance);
-      logRedFlag({
+      await logRedFlag({
         source: 'Ask Curavon',
         userText: flags.filter((f) => f !== 'None of these').join(', '),
         guidanceShown: guidance,
         matchedConcern: flags.find((f) => f !== 'None of these') ?? 'urgent concern',
       });
-      const entry = addAskHistoryEntry({
+      const entry = await addAskHistoryEntry({
         concern: intake.mainConcern,
         concernType: intake.concernType || 'Not sure',
         nextStep: 'Safety guidance shown — no self-care plan generated.',
       });
       setHistoryEntryId(entry.id);
-      setHistory(loadAskHistory());
+      await refreshAskHistory();
       refreshHealthSnapshot();
       setMode('safety');
       runMetaSystemCycle();
+      if (intakeSessionId) {
+        void updateAskIntakeSession(intakeSessionId, {
+          status: 'closed',
+          stage: 'safety',
+          riskLevel: 'urgent',
+          payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
+        });
+      }
       return;
     }
 
@@ -230,15 +261,16 @@ export function AskCuravonScreen() {
     const refinedConcern = (aiResult.refinedConcern ?? '').trim() || intake.mainConcern;
     setAiRefinedConcern(refinedConcern);
     setAiMissingQuestions((aiResult.missingQuestions ?? []).slice(0, 2));
-    const entry = addAskHistoryEntry({
+    const entry = await addAskHistoryEntry({
       concern: refinedConcern,
       concernType: intake.concernType || 'Not sure',
       nextStep: nextSafeStep,
     });
+    const nextAskHistory = [entry, ...askHistory].slice(0, 20);
     collectAskCompletion();
+    await refreshAskHistory();
     refreshHealthSnapshot();
     setHistoryEntryId(entry.id);
-    setHistory(loadAskHistory());
     setMode('result');
     const plan = await generateCuravonNextAction({
         source: 'ask',
@@ -249,7 +281,7 @@ export function AskCuravonScreen() {
           redFlags: flags,
         },
         latestCheckIn: null,
-        askHistory: history,
+        askHistory: nextAskHistory,
         nextActionState,
         redFlagLogs: [],
         profile: healthProfile,
@@ -272,7 +304,14 @@ export function AskCuravonScreen() {
       });
       // Ask result is preview-only until user adds it to Today.
     runMetaSystemCycle();
-  }, [intake, nextSafeStep, logRedFlag, refreshHealthSnapshot, healthSnapshot, history, nextActionState, healthProfile]);
+    if (intakeSessionId) {
+      void updateAskIntakeSession(intakeSessionId, {
+        status: 'closed',
+        stage: 'result',
+        payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
+      });
+    }
+  }, [intake, intakeStep, intakeSessionId, nextSafeStep, logRedFlag, refreshHealthSnapshot, refreshAskHistory, healthSnapshot, askHistory, nextActionState, healthProfile]);
 
   const canContinueStep = (): boolean => {
     switch (intakeStep) {
@@ -341,9 +380,10 @@ export function AskCuravonScreen() {
       nextSafeStep: actionForSummary,
     });
     if (historyEntryId) {
-      markAskHistorySaved(historyEntryId);
-      refreshHealthSnapshot();
-      setHistory(loadAskHistory());
+      void markAskHistorySaved(historyEntryId).then(async () => {
+        await refreshAskHistory();
+        refreshHealthSnapshot();
+      });
     }
     setSavedToSummary(true);
     showToast('Saved to your doctor summary.');
@@ -401,9 +441,10 @@ export function AskCuravonScreen() {
       redFlags: [],
       nextSafeStep: entry.nextStep,
     });
-    markAskHistorySaved(entry.id);
-    refreshHealthSnapshot();
-    setHistory(loadAskHistory());
+    void markAskHistorySaved(entry.id).then(async () => {
+      await refreshAskHistory();
+      refreshHealthSnapshot();
+    });
     showToast('Saved to your doctor summary.');
   };
 

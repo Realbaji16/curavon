@@ -5,6 +5,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useEffect,
   type ReactNode,
 } from 'react';
 import type {
@@ -17,12 +18,9 @@ import type { DailyCheckIn, HealthBlockedReason, NextActionState, AdjustOption }
 import {
   addDoctorSummaryItem as persistAddItem,
   addRedFlagLog as persistAddRedFlag,
-  loadDoctorSummaryDrafts,
-  loadDoctorSummaryItems,
-  loadRedFlagLogs,
-  saveDoctorSummaryDrafts,
-  saveDoctorSummaryItems,
   clearDoctorSummaryStorage,
+  saveDoctorSummaryDraft,
+  saveDoctorSummaryItem,
 } from '../utils/doctorSummaryStorage';
 import {
   buildSummaryDocument,
@@ -39,11 +37,15 @@ import {
   formatDoctorSummaryAsPlainText,
   generateDoctorSummaryAI,
 } from '../lib/doctorSummary/doctorSummaryAI';
+import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
+import { loadProductData, toProductDataErrorMessage } from '../lib/data/productDataService';
 
 interface DoctorSummaryContextValue {
   items: DoctorSummaryItem[];
   drafts: DoctorSummaryDraft[];
   redFlagLogs: RedFlagLog[];
+  productDataLoading: boolean;
+  productDataError: string | null;
   clinicianQuestions: string[];
   setClinicianQuestions: (q: string[]) => void;
   addClinicianQuestion: (q: string) => void;
@@ -60,7 +62,7 @@ interface DoctorSummaryContextValue {
     userText: string;
     guidanceShown?: string;
     matchedConcern?: string;
-  }) => RedFlagLog;
+  }) => Promise<RedFlagLog>;
   builtSummary: ReturnType<typeof buildSummaryDocument>;
   includedCount: number;
   latestDraftDate: string | null;
@@ -84,33 +86,82 @@ export { DoctorSummaryContext };
 export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
   const { healthProfile } = useHealth();
   const { showToast } = useApp();
-  const [items, setItems] = useState<DoctorSummaryItem[]>(() => loadDoctorSummaryItems());
-  const [drafts, setDrafts] = useState<DoctorSummaryDraft[]>(() => loadDoctorSummaryDrafts());
-  const [redFlagLogs, setRedFlagLogs] = useState<RedFlagLog[]>(() => loadRedFlagLogs());
+  const { isAuthenticated, loading: authLoading } = useCuravonAuth();
+  const [items, setItems] = useState<DoctorSummaryItem[]>([]);
+  const [drafts, setDrafts] = useState<DoctorSummaryDraft[]>([]);
+  const [redFlagLogs, setRedFlagLogs] = useState<RedFlagLog[]>([]);
+  const [productDataLoading, setProductDataLoading] = useState(true);
+  const [productDataError, setProductDataError] = useState<string | null>(null);
   const [clinicianQuestions, setClinicianQuestions] = useState<string[]>([]);
   const [aiSummary, setAISummary] = useState<DoctorSummaryOutput | null>(null);
   const [aiSummaryLoading, setAISummaryLoading] = useState(false);
 
-  const refreshFromStorage = useCallback(() => {
-    setItems(loadDoctorSummaryItems());
-    setDrafts(loadDoctorSummaryDrafts());
-    setRedFlagLogs(loadRedFlagLogs());
-  }, []);
+  const applyProductLoad = useCallback(
+    (result: Awaited<ReturnType<typeof loadProductData>>) => {
+      setItems(result.doctorSummaryItems);
+      setDrafts(result.doctorSummaryDrafts);
+      setRedFlagLogs(result.redFlagLogs);
+      setProductDataError(result.error);
+    },
+    [],
+  );
 
-  const persistItems = useCallback((next: DoctorSummaryItem[]) => {
-    saveDoctorSummaryItems(next);
-    setItems(next);
-  }, []);
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      if (!isAuthenticated) {
+        applyProductLoad({
+          doctorSummaryItems: [],
+          doctorSummaryDrafts: [],
+          redFlagLogs: [],
+          followUps: [],
+          guideResults: [],
+          activityInsightStore: { insights: [], ruleGeneratedAt: null, lastAiRunAt: null, summaryHash: null },
+          notificationPreference: null,
+          userPreference: null,
+          error: null,
+        });
+        if (!cancelled) setProductDataLoading(false);
+        return;
+      }
+
+      setProductDataLoading(true);
+      const result = await loadProductData();
+      if (cancelled) return;
+      applyProductLoad(result);
+      setProductDataLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, applyProductLoad]);
+
+  const refreshFromStorage = useCallback(() => {
+    void loadProductData()
+      .then(applyProductLoad)
+      .catch((error) => setProductDataError(toProductDataErrorMessage(error)));
+  }, [applyProductLoad]);
 
   const toggleItemIncluded = useCallback(
     (id: string) => {
-      const current = loadDoctorSummaryItems();
-      const next = current.map((item) =>
-        item.id === id ? { ...item, includedInSummary: !item.includedInSummary } : item,
-      );
-      persistItems(next);
+      setItems((current) => {
+        const next = current.map((item) =>
+          item.id === id ? { ...item, includedInSummary: !item.includedInSummary } : item,
+        );
+        const updated = next.find((item) => item.id === id);
+        if (updated) {
+          void saveDoctorSummaryItem(updated).catch((error) =>
+            setProductDataError(toProductDataErrorMessage(error)),
+          );
+        }
+        return next;
+      });
     },
-    [persistItems],
+    [],
   );
 
   const addClinicianQuestion = useCallback((q: string) => {
@@ -121,16 +172,18 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
 
   const addFromCheckIn = useCallback(
     (checkIn: DailyCheckIn) => {
-      persistAddItem(createCheckInSummaryItem(checkIn));
-      refreshFromStorage();
+      void persistAddItem(createCheckInSummaryItem(checkIn))
+        .then(() => refreshFromStorage())
+        .catch((error) => setProductDataError(toProductDataErrorMessage(error)));
     },
     [refreshFromStorage],
   );
 
   const addFromFlow = useCallback(
     (input: Parameters<typeof createFlowSummaryItem>[0]) => {
-      persistAddItem(createFlowSummaryItem(input));
-      refreshFromStorage();
+      void persistAddItem(createFlowSummaryItem(input))
+        .then(() => refreshFromStorage())
+        .catch((error) => setProductDataError(toProductDataErrorMessage(error)));
     },
     [refreshFromStorage],
   );
@@ -140,41 +193,53 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
       state: NextActionState,
       extra?: { blockedReason?: HealthBlockedReason; adjustOption?: AdjustOption },
     ) => {
-      persistAddItem(createNextActionSummaryItem(state, extra));
-      refreshFromStorage();
+      void persistAddItem(createNextActionSummaryItem(state, extra))
+        .then(() => refreshFromStorage())
+        .catch((error) => setProductDataError(toProductDataErrorMessage(error)));
     },
     [refreshFromStorage],
   );
 
   const addFromAsk = useCallback(
     (input: Parameters<typeof createAskIntakeSummaryItem>[0]) => {
-      persistAddItem(createAskIntakeSummaryItem(input));
-      refreshFromStorage();
+      void persistAddItem(createAskIntakeSummaryItem(input))
+        .then(() => refreshFromStorage())
+        .catch((error) => setProductDataError(toProductDataErrorMessage(error)));
     },
     [refreshFromStorage],
   );
 
   const logRedFlag = useCallback(
-    (input: { source: string; userText: string; guidanceShown?: string; matchedConcern?: string }) => {
+    async (input: {
+      source: string;
+      userText: string;
+      guidanceShown?: string;
+      matchedConcern?: string;
+    }) => {
       const matches = findUrgentMatches(input.userText);
       const matchedConcern = input.matchedConcern ?? matches[0] ?? 'urgent language';
       const guidance = input.guidanceShown ?? URGENT_SAFETY_MESSAGE;
-      const log = persistAddRedFlag({
-        source: input.source,
-        matchedConcern,
-        userText: input.userText,
-        guidanceShown: guidance,
-      });
-      persistAddItem(
-        createRedFlagSummaryItem({
+      try {
+        const log = await persistAddRedFlag({
           source: input.source,
           matchedConcern,
           userText: input.userText,
           guidanceShown: guidance,
-        }),
-      );
-      refreshFromStorage();
-      return log;
+        });
+        await persistAddItem(
+          createRedFlagSummaryItem({
+            source: input.source,
+            matchedConcern,
+            userText: input.userText,
+            guidanceShown: guidance,
+          }),
+        );
+        refreshFromStorage();
+        return log;
+      } catch (error) {
+        setProductDataError(toProductDataErrorMessage(error));
+        throw error;
+      }
     },
     [refreshFromStorage],
   );
@@ -193,7 +258,7 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
     return builtSummary.fullText;
   }, [aiSummary, builtSummary.fullText]);
 
-  const saveCurrentDraft = useCallback(() => {
+  const saveCurrentDraft = useCallback(async () => {
     const now = new Date().toISOString();
     const draft: DoctorSummaryDraft = {
       id: drafts[0]?.id ?? `draft-${Date.now()}`,
@@ -205,9 +270,12 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
       createdAt: drafts[0]?.createdAt ?? now,
       updatedAt: now,
     };
-    const next = [draft, ...drafts.filter((d) => d.id !== draft.id)];
-    saveDoctorSummaryDrafts(next);
-    setDrafts(next);
+    try {
+      await saveDoctorSummaryDraft(draft);
+      setDrafts((prev) => [draft, ...prev.filter((d) => d.id !== draft.id)]);
+    } catch (error) {
+      setProductDataError(toProductDataErrorMessage(error));
+    }
   }, [drafts, builtSummary, items, clinicianQuestions, aiSummary, renderedSummaryText]);
 
   const generateAISummary = useCallback(async () => {
@@ -233,7 +301,7 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
   }, [generateAISummary]);
 
   const copySummary = useCallback(async () => {
-    saveCurrentDraft();
+    await saveCurrentDraft();
     try {
       await navigator.clipboard.writeText(renderedSummaryText);
       showToast('Summary copied.');
@@ -245,7 +313,7 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
   }, [renderedSummaryText, saveCurrentDraft, showToast]);
 
   const downloadSummary = useCallback(() => {
-    saveCurrentDraft();
+    void saveCurrentDraft();
     const blob = new Blob([renderedSummaryText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -257,23 +325,33 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
   }, [renderedSummaryText, saveCurrentDraft, showToast]);
 
   const saveSummary = useCallback(() => {
-    saveCurrentDraft();
+    void saveCurrentDraft();
     showToast('Summary saved.');
   }, [saveCurrentDraft, showToast]);
 
   const clearDraft = useCallback(() => {
-    saveDoctorSummaryDrafts([]);
-    setDrafts([]);
-    showToast('Draft cleared.');
+    void (async () => {
+      try {
+        const { clearDoctorSummaryDraftsRemote } = await import('../lib/data/productDataService');
+        await clearDoctorSummaryDraftsRemote();
+        setDrafts([]);
+        showToast('Draft cleared.');
+      } catch (error) {
+        setProductDataError(toProductDataErrorMessage(error));
+      }
+    })();
   }, [showToast]);
 
   const clearAllDoctorSummaryData = useCallback(() => {
-    clearDoctorSummaryStorage();
-    setItems([]);
-    setDrafts([]);
-    setRedFlagLogs([]);
-    setClinicianQuestions([]);
-    setAISummary(null);
+    void clearDoctorSummaryStorage()
+      .then(() => {
+        setItems([]);
+        setDrafts([]);
+        setRedFlagLogs([]);
+        setClinicianQuestions([]);
+        setAISummary(null);
+      })
+      .catch((error) => setProductDataError(toProductDataErrorMessage(error)));
   }, []);
 
   return (
@@ -282,6 +360,8 @@ export function DoctorSummaryProvider({ children }: { children: ReactNode }) {
         items,
         drafts,
         redFlagLogs,
+        productDataLoading,
+        productDataError,
         clinicianQuestions,
         setClinicianQuestions,
         addClinicianQuestion,

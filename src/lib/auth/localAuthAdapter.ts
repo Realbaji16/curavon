@@ -1,16 +1,13 @@
-import { APP_STORAGE_KEYS } from '../data/storageKeys';
-import { safeRead, safeRemove, safeWrite } from '../../utils/healthStorage';
 import type { AuthAdapter, AuthMode, AuthSession, CuravonUser } from './authTypes';
-
-type LocalAuthCredential = {
-  email: string;
-  /** Local demo auth only. Passwords are not production-secure. Replace with backend auth before public launch. */
-  password: string;
-  displayName: string;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-};
+import {
+  clearCurrentDemoUser,
+  clearLocalDemoAccountData,
+  getAppShellState,
+  readCurrentDemoUser,
+  readLocalDemoUsers,
+  writeCurrentDemoUser,
+  writeLocalDemoUsers,
+} from '../app/appShellState';
 
 function makeDemoUser(input: {
   email: string;
@@ -20,6 +17,7 @@ function makeDemoUser(input: {
   userId?: string;
 }): CuravonUser {
   const now = new Date().toISOString();
+  const shell = getAppShellState();
   return {
     id: input.userId ?? `demo-user-${Math.random().toString(36).slice(2, 8)}`,
     email: input.email.trim().toLowerCase(),
@@ -27,36 +25,30 @@ function makeDemoUser(input: {
     createdAt: input.createdAt ?? now,
     updatedAt: now,
     authMode: input.mode,
-    consentCompleted: safeRead<boolean>(APP_STORAGE_KEYS.consentComplete, false),
-    setupCompleted: safeRead<boolean>(APP_STORAGE_KEYS.setupComplete, false),
+    consentCompleted: shell.consentComplete,
+    setupCompleted: shell.setupComplete,
   };
 }
 
 function readCurrentUser(mode: AuthMode): CuravonUser | null {
-  const stored = safeRead<{ fullName: string; email: string } | null>(APP_STORAGE_KEYS.authDemoUser, null);
+  const stored = readCurrentDemoUser();
   if (!stored) return null;
+  const shell = getAppShellState();
   return makeDemoUser({
     email: stored.email,
     displayName: stored.fullName,
     mode,
-    userId: safeRead<string>(APP_STORAGE_KEYS.authDemoUserId, ''),
+    userId: shell.authDemoUserId ?? undefined,
   });
-}
-
-function writeCurrentUser(user: CuravonUser) {
-  safeWrite(APP_STORAGE_KEYS.authDemoUser, {
-    fullName: user.displayName,
-    email: user.email,
-  });
-  safeWrite(APP_STORAGE_KEYS.authDemoUserId, user.id);
 }
 
 function asSession(user: CuravonUser | null, mode: AuthMode, error: string | null = null): AuthSession {
+  const shell = getAppShellState();
   const freshUser = user
     ? {
         ...user,
-        consentCompleted: safeRead<boolean>(APP_STORAGE_KEYS.consentComplete, false),
-        setupCompleted: safeRead<boolean>(APP_STORAGE_KEYS.setupComplete, false),
+        consentCompleted: shell.consentComplete,
+        setupCompleted: shell.setupComplete,
       }
     : null;
   return {
@@ -69,16 +61,14 @@ function asSession(user: CuravonUser | null, mode: AuthMode, error: string | nul
 }
 
 export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapter {
-  // Local demo auth only. Passwords are not production-secure. Replace with backend auth before public launch.
   return {
     async getSession() {
       return asSession(readCurrentUser(mode), mode);
     },
 
     async signInWithEmail(email, password) {
-      // Demo-only auth behavior. Real backend authentication should replace this adapter later.
       const normalizedEmail = email.trim().toLowerCase();
-      const users = safeRead<LocalAuthCredential[]>(APP_STORAGE_KEYS.authDemoUsers, []);
+      const users = readLocalDemoUsers();
       const existing = users.find((user) => user.email === normalizedEmail);
 
       if (existing && existing.password !== password) {
@@ -98,7 +88,7 @@ export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapt
       });
 
       if (!existing) {
-        safeWrite(APP_STORAGE_KEYS.authDemoUsers, [
+        writeLocalDemoUsers([
           ...users,
           {
             email: normalizedEmail,
@@ -110,13 +100,13 @@ export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapt
           },
         ]);
       }
-      writeCurrentUser(user);
+      writeCurrentDemoUser({ fullName: user.displayName, email: user.email }, user.id);
       return asSession(user, mode);
     },
 
     async signUpWithEmail(email, password, displayName) {
       const normalizedEmail = email.trim().toLowerCase();
-      const users = safeRead<LocalAuthCredential[]>(APP_STORAGE_KEYS.authDemoUsers, []);
+      const users = readLocalDemoUsers();
       const existing = users.find((user) => user.email === normalizedEmail);
       if (existing) {
         return this.signInWithEmail(normalizedEmail, password);
@@ -127,7 +117,7 @@ export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapt
         displayName: displayName || normalizedEmail.split('@')[0] || 'Curavon member',
         mode,
       });
-      const nextUsers: LocalAuthCredential[] = [
+      writeLocalDemoUsers([
         ...users,
         {
           email: normalizedEmail,
@@ -137,21 +127,18 @@ export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapt
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
         },
-      ];
-      safeWrite(APP_STORAGE_KEYS.authDemoUsers, nextUsers);
-      writeCurrentUser(user);
+      ]);
+      writeCurrentDemoUser({ fullName: user.displayName, email: user.email }, user.id);
       return asSession(user, mode);
     },
 
     async signOut() {
-      safeRemove(APP_STORAGE_KEYS.authDemoUser);
-      safeRemove(APP_STORAGE_KEYS.authDemoUserId);
+      clearCurrentDemoUser();
     },
 
     async resetPassword(email) {
-      // Demo-only no-op reset path for local mode.
       const normalizedEmail = email.trim().toLowerCase();
-      const users = safeRead<LocalAuthCredential[]>(APP_STORAGE_KEYS.authDemoUsers, []);
+      const users = readLocalDemoUsers();
       if (!users.some((user) => user.email === normalizedEmail)) {
         throw new Error('Account not found for this email.');
       }
@@ -166,21 +153,16 @@ export function createLocalAuthAdapter(mode: AuthMode = 'local_demo'): AuthAdapt
         email: (patch.email ?? current.email).trim().toLowerCase(),
         updatedAt: new Date().toISOString(),
       };
-      writeCurrentUser(next);
+      writeCurrentDemoUser({ fullName: next.displayName, email: next.email }, next.id);
       return asSession(next, mode);
     },
 
     async deleteLocalAccount() {
       const current = readCurrentUser(mode);
       if (!current) return;
-      const users = safeRead<LocalAuthCredential[]>(APP_STORAGE_KEYS.authDemoUsers, []);
-      const nextUsers = users.filter((user) => user.userId !== current.id);
-      safeWrite(APP_STORAGE_KEYS.authDemoUsers, nextUsers);
-      safeRemove(APP_STORAGE_KEYS.authDemoUser);
-      safeRemove(APP_STORAGE_KEYS.authDemoUserId);
-      safeRemove(APP_STORAGE_KEYS.consentComplete);
-      safeRemove(APP_STORAGE_KEYS.setupComplete);
-      safeRemove(APP_STORAGE_KEYS.profileSetup);
+      const users = readLocalDemoUsers();
+      writeLocalDemoUsers(users.filter((user) => user.userId !== current.id));
+      clearLocalDemoAccountData();
     },
   };
 }

@@ -1,22 +1,26 @@
-import { APP_STORAGE_KEYS } from '../lib/data/storageKeys';
-import { safeRead, safeWrite } from './healthStorage';
+import type { GuideResultRecord } from '../types/guideResult';
+import { fetchGuideResults, saveGuideResultRecord } from '../lib/data/productDataService';
 
-export interface GuideResultRecord {
-  guideId: string;
-  guideTitle: string;
-  completedAt: string;
-  resultSummary: string;
-  safeNextStep: string;
-  safetyLevel: 'normal' | 'caution' | 'urgent';
-  sourceSignals: string[];
+export type { GuideResultRecord } from '../types/guideResult';
+
+let guideResultsCache: GuideResultRecord[] = [];
+
+export async function hydrateGuideResults(): Promise<GuideResultRecord[]> {
+  guideResultsCache = await fetchGuideResults();
+  return guideResultsCache;
+}
+
+export function resetGuideResultsCacheForTests(): void {
+  guideResultsCache = [];
 }
 
 export function loadGuideResults(): GuideResultRecord[] {
-  return safeRead<GuideResultRecord[]>(APP_STORAGE_KEYS.guideResults, []);
+  return guideResultsCache;
 }
 
 export function saveGuideResult(record: GuideResultRecord): void {
-  const existing = loadGuideResults();
-  const next = [record, ...existing].slice(0, 50);
-  safeWrite(APP_STORAGE_KEYS.guideResults, next);
+  guideResultsCache = [record, ...guideResultsCache.filter((item) => item.guideId !== record.guideId || item.completedAt !== record.completedAt)].slice(0, 50);
+  void saveGuideResultRecord(record).catch(() => {
+    /* surfaced via context refresh */
+  });
 }

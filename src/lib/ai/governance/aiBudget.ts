@@ -1,5 +1,3 @@
-import { APP_STORAGE_KEYS } from '../../data/storageKeys';
-import { safeRead, safeWrite } from '../../../utils/healthStorage';
 import type { AIAllowedTask } from './aiPolicyTypes';
 
 export const MAX_AI_CALLS_PER_SESSION = 2;
@@ -26,19 +24,14 @@ const DEFAULT_BUDGET_STATE = (): AIBudgetState => ({
   taskCalls: {},
 });
 
-function readBudget(): AIBudgetState {
-  const state = safeRead<AIBudgetState>(APP_STORAGE_KEYS.aiBudgetState, DEFAULT_BUDGET_STATE());
+let budgetState: AIBudgetState = DEFAULT_BUDGET_STATE();
+
+function normalizeBudgetState(state: AIBudgetState): AIBudgetState {
   const today = new Date().toISOString().slice(0, 10);
   if (state.dateKey !== today) {
-    const next = { ...DEFAULT_BUDGET_STATE(), sessionCallCount: state.sessionCallCount };
-    safeWrite(APP_STORAGE_KEYS.aiBudgetState, next);
-    return next;
+    return { ...DEFAULT_BUDGET_STATE(), sessionCallCount: state.sessionCallCount };
   }
   return state;
-}
-
-function writeBudget(state: AIBudgetState) {
-  safeWrite(APP_STORAGE_KEYS.aiBudgetState, state);
 }
 
 export function getTaskTokenLimit(task: AIAllowedTask): number {
@@ -55,7 +48,8 @@ export function estimateTokenCost(input: string): number {
 }
 
 export function canUseAI(task: AIAllowedTask): boolean {
-  const state = readBudget();
+  const state = normalizeBudgetState(budgetState);
+  budgetState = state;
   if (state.sessionCallCount >= MAX_AI_CALLS_PER_SESSION) return false;
   if (state.dailyCallCount >= MAX_AI_CALLS_PER_DAY_LOCAL) return false;
   const estimated = estimateTokenCost(task.replace(/_/g, ' '));
@@ -63,8 +57,8 @@ export function canUseAI(task: AIAllowedTask): boolean {
 }
 
 export function incrementAICall(task: AIAllowedTask) {
-  const state = readBudget();
-  const next: AIBudgetState = {
+  const state = normalizeBudgetState(budgetState);
+  budgetState = {
     ...state,
     dailyCallCount: state.dailyCallCount + 1,
     sessionCallCount: state.sessionCallCount + 1,
@@ -73,17 +67,21 @@ export function incrementAICall(task: AIAllowedTask) {
       [task]: (state.taskCalls[task] ?? 0) + 1,
     },
   };
-  writeBudget(next);
 }
 
 export function getAIBudgetState() {
-  return readBudget();
+  budgetState = normalizeBudgetState(budgetState);
+  return budgetState;
 }
 
 export function resetSessionBudget() {
-  const state = readBudget();
-  writeBudget({
-    ...state,
+  budgetState = {
+    ...normalizeBudgetState(budgetState),
     sessionCallCount: 0,
-  });
+  };
+}
+
+/** Test helper — reset in-memory budget counters between cases. */
+export function resetAIBudgetForTests() {
+  budgetState = DEFAULT_BUDGET_STATE();
 }
