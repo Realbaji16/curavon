@@ -147,29 +147,80 @@ export function toOperationalDataErrorMessage(error: unknown): string {
 export async function requestAccountDataExport(
   payload: Record<string, unknown> = {},
 ): Promise<DataExportRequest> {
-  return getDataAdapter().createDataExportRequest({
-    requestStatus: 'requested',
-    payload: redactPayload({
-      ...payload,
-      requestedVia: 'settings',
-      requestedAt: new Date().toISOString(),
+  const response = await fetch('/api/data/export-request', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requestType: payload.exportScope === 'doctor_summary' ? 'doctor_summary_export' : 'account_export',
     }),
   });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    request?: { id: string; status: string; requestType?: string };
+    error?: { message?: string };
+  };
+
+  if (!response.ok || !body.ok || !body.request) {
+    throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  const now = new Date().toISOString();
+  return {
+    id: body.request.id,
+    userId: '',
+    requestStatus: body.request.status,
+    requestedAt: now,
+    payload: redactPayload({
+      request_type: body.request.requestType ?? 'account_export',
+      requestedVia: 'settings',
+    }),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 export async function requestAccountDataDeletion(input: {
   deletionScope?: string;
   payload?: Record<string, unknown>;
 }): Promise<DataDeletionRequest> {
-  return getDataAdapter().createDataDeletionRequest({
-    requestStatus: 'requested',
-    deletionScope: input.deletionScope ?? 'health_data',
-    payload: redactPayload({
-      ...input.payload,
-      requestedVia: 'settings',
-      requestedAt: new Date().toISOString(),
-    }),
+  const requestType =
+    input.deletionScope === 'full_account' ? 'full_account_deletion' : 'health_data_deletion';
+
+  const response = await fetch('/api/data/deletion-request', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestType }),
   });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    request?: { id: string; status: string; requestType?: string };
+    error?: { message?: string };
+  };
+
+  if (!response.ok || !body.ok || !body.request) {
+    throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  const now = new Date().toISOString();
+  return {
+    id: body.request.id,
+    userId: '',
+    requestStatus: body.request.status,
+    deletionScope: requestType === 'full_account_deletion' ? 'full_account' : 'health_data',
+    requestedAt: now,
+    payload: redactPayload({
+      request_type: body.request.requestType ?? requestType,
+      requestedVia: 'settings',
+      account_deleted: false,
+      ...input.payload,
+    }),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 /** Test helper — reset in-memory operational telemetry between cases. */

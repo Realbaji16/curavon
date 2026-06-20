@@ -184,6 +184,27 @@ export async function softDeleteUserRows(table: SupabaseDataTable): Promise<void
   }
 }
 
+export async function softDeleteOwnedRow(table: SupabaseDataTable, id: string): Promise<boolean> {
+  const client = requireClient();
+  const userId = await requireSupabaseUserId();
+  const deletedAt = new Date().toISOString();
+
+  const { data, error } = await client
+    .from(table)
+    .update({ deleted_at: deletedAt, updated_at: deletedAt })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    throw new SupabaseDataError('query_failed', error.message);
+  }
+
+  return Boolean(data?.id);
+}
+
 export async function hardDeleteUserRows(table: SupabaseDataTable): Promise<void> {
   const client = requireClient();
   const userId = await requireSupabaseUserId();

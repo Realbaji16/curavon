@@ -45,9 +45,11 @@ import {
   saveSupabaseHealthProfile,
   saveSupabaseNextActionState,
   saveSupabaseRedFlagLog,
+  softDeleteOwnedRow,
   SupabaseDataError,
   upsertSinglePayload,
 } from './supabaseDataClient';
+import { createDefaultHealthProfile } from '../../utils/healthUtils';
 
 function newId(): string {
   return crypto.randomUUID();
@@ -698,6 +700,66 @@ export function createSupabaseDataAdapter(): DataAdapter {
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Insert failed');
         return mapDataDeletionRequestRow(data as Record<string, unknown>, userId);
+      }),
+
+    deleteHealthFlow: (flowId) =>
+      runDataOp(async () => {
+        const client = requireClient();
+        const userId = await requireSupabaseUserId();
+        const deletedAt = new Date().toISOString();
+
+        const { data: flow, error: flowError } = await client
+          .from('health_flows')
+          .select('id')
+          .eq('id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (flowError) throw new SupabaseDataError('query_failed', flowError.message);
+        if (!flow) throw new SupabaseDataError('query_failed', 'Health flow not found.');
+
+        const { error: updateError } = await client
+          .from('health_flows')
+          .update({ deleted_at: deletedAt, updated_at: deletedAt, status: 'deleted' })
+          .eq('id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+        if (updateError) throw new SupabaseDataError('query_failed', updateError.message);
+
+        await client
+          .from('flow_actions')
+          .update({ deleted_at: deletedAt, updated_at: deletedAt })
+          .eq('flow_id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+
+        await client
+          .from('flow_blockers')
+          .update({ deleted_at: deletedAt, updated_at: deletedAt })
+          .eq('flow_id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+
+        return { flowId, status: 'deleted' };
+      }),
+
+    deleteDoctorSummary: (summaryId) =>
+      runDataOp(async () => {
+        const deletedItem = await softDeleteOwnedRow('doctor_summary_items', summaryId);
+        if (deletedItem) {
+          return { summaryId, deletedKind: 'item' as const };
+        }
+        const deletedDraft = await softDeleteOwnedRow('doctor_summary_drafts', summaryId);
+        if (deletedDraft) {
+          return { summaryId, deletedKind: 'draft' as const };
+        }
+        throw new SupabaseDataError('query_failed', 'Doctor summary record not found.');
+      }),
+
+    deleteHealthProfile: () =>
+      runDataOp(async () => {
+        await saveSupabaseHealthProfile(createDefaultHealthProfile());
+        return { status: 'cleared' };
       }),
 
     createCareCircle: (input) =>
