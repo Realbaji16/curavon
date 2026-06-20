@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:pilot-gate": "vitest run src/__tests__/pilotGate.test.ts src/__tests__/pilotEnvHardening.test.ts",
+    "test:safety": "vitest run src/__tests__/redFlags.test.ts src/__tests__/healthSafety.test.ts src/__tests__/healthFlowLifecycle.test.ts src/__tests__/aiIntakeRoute.test.ts src/__tests__/aiFlowProposalRoute.test.ts src/__tests__/planGuards.test.ts",
+    "test:privacy": "vitest run src/__tests__/privacyEnforcement.test.ts src/__tests__/dataPrivacyRoutes.test.ts src/__tests__/safeAnalytics.test.ts src/__tests__/noDirectLocalStorage.test.ts src/__tests__/pilotEnvHardening.test.ts"
   },
   "engines": {
     "node": ">=20"
