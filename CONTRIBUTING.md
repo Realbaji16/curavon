@@ -49,7 +49,7 @@ All three should pass unless your PR explicitly documents why not (rare).
 
 - [ ] No `fetch` / direct OpenAI calls from `screens/` or `components/`
 - [ ] New AI usage goes through `lib/ai/orchestrator` and governance guards
-- [ ] Missing `NEXT_PUBLIC_OPENAI_API_KEY` still produces a safe fallback
+- [ ] Missing server `OPENAI_API_KEY` still produces a safe fallback (no browser AI key)
 - [ ] Context passed to models is **compressed**, not full raw health dumps
 - [ ] No storage of raw prompts or raw model responses in `localStorage`
 - [ ] Plan changes route through `nextActionAdapter` / plan guards

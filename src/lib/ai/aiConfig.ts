@@ -1,4 +1,4 @@
-import { readPublicEnv } from '../env/publicEnv';
+import { getServerAIConfig } from '../server/aiConfig';
 
 export interface AIConfig {
   provider: 'openai-compatible';
@@ -7,14 +7,19 @@ export interface AIConfig {
   enabled: boolean;
 }
 
+const DEFAULT_MODEL = 'gpt-4o-mini';
+
+/** AI config for the current runtime. Browser bundles are always disabled. */
 export function getAIConfig(): AIConfig {
-  const apiKey =
-    readPublicEnv('NEXT_PUBLIC_OPENAI_API_KEY', 'VITE_OPENAI_API_KEY') ??
-    undefined;
-  return {
-    provider: 'openai-compatible',
-    model: 'gpt-4o-mini',
-    apiKey,
-    enabled: Boolean(apiKey),
-  };
+  if (typeof window !== 'undefined') {
+    return {
+      provider: 'openai-compatible',
+      model: DEFAULT_MODEL,
+      enabled: false,
+    };
+  }
+
+  return getServerAIConfig();
 }
+
+export { getServerAIConfig };

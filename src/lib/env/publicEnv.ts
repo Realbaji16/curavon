@@ -29,8 +29,8 @@ function readNextPublicEnvStatic(name: string): string | undefined {
     case 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY':
       value = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
       break;
-    case 'NEXT_PUBLIC_OPENAI_API_KEY':
-      value = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    case 'NEXT_PUBLIC_APP_ENV':
+      value = process.env.NEXT_PUBLIC_APP_ENV;
       break;
     default:
       value = typeof process !== 'undefined' ? process.env[name] : undefined;
