@@ -16,6 +16,7 @@ import {
   patchAppShellState,
 } from '../lib/app/appShellState';
 import { saveHealthProfileRecord } from '../lib/data/coreHealthDataService';
+import { trackSafeEvent } from '../lib/observability/safeAnalytics';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 
 export type { DemoAuthUser, ProfileSetupData } from '../types/appShell';
@@ -265,6 +266,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setupComplete: true,
         profileSetup: persistedProfile,
       }));
+      trackSafeEvent('profile_completed', {
+        status: 'completed',
+        privacy_level: setup.sensitiveMode ? 'sensitive' : 'private',
+      });
+      if (setup.sensitiveMode) {
+        trackSafeEvent('sensitive_mode_enabled', {
+          privacy_level: 'sensitive',
+          status: 'enabled',
+        });
+      }
     },
     [],
   );

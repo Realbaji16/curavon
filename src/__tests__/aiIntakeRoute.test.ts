@@ -155,4 +155,33 @@ describe('AI intake route (Fix 7)', () => {
     expect(body.error?.code).toBe('safety_blocked');
     expect(serialized).not.toContain(rawInput);
   });
+
+  const urgentRouteCases = [
+    'I cannot breathe',
+    'I fainted this morning',
+    'I want to harm myself',
+    'My partner is threatening me right now',
+  ];
+
+  it.each(urgentRouteCases)('blocks urgent safety input: %s', async (input) => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'false';
+
+    const { status, body } = await postIntake({ input });
+    expect(status).toBe(422);
+    expect(body.safety.allowed).toBe(false);
+    expect(body.safety.riskLevel).toBe('urgent');
+    expect(body.error?.code).toBe('safety_blocked');
+  });
+
+  it('does not block negated safe phrasing on the intake route', async () => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'false';
+
+    const { status, body } = await postIntake({ input: 'I do not have chest pain, just mild fatigue' });
+    expect(status).toBe(200);
+    expect(body.safety.allowed).toBe(true);
+  });
 });

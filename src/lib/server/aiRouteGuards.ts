@@ -1,8 +1,15 @@
 import { getConfiguredAuthMode } from '../auth/authConfig';
-import { detectUrgentConcern } from '../../utils/healthSafety';
+import { detectRedFlags } from '../health/redFlags';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { hasSupabasePublicConfig } from '../supabase/supabaseEnv';
 import type { AIIntakeRiskLevel, AIIntakeSafety, IntakeRequestBody } from './aiIntakeTypes';
+import type {
+  FlowProposalRequestBody,
+  ParsedFlowProposalInput,
+  ParsedSummaryInput,
+  ProposedActionPreview,
+  SummaryRequestBody,
+} from './aiServerTypes';
 
 export type AuthGuardFailure = {
   ok: false;
@@ -107,7 +114,7 @@ export function parseIntakeRequestBody(body: unknown): BodyGuardResult {
 }
 
 export function assessIntakeSafety(input: string): AIIntakeSafety {
-  const urgent = detectUrgentConcern(input);
+  const urgent = detectRedFlags(input);
 
   if (urgent.hasUrgent) {
     return {
@@ -161,4 +168,133 @@ export function defaultSafetyForError(riskLevel: AIIntakeRiskLevel = 'low'): AII
     allowed: false,
     riskLevel,
   };
+}
+
+type RouteBodyFailure = {
+  ok: false;
+  status: 400;
+  code: 'invalid_body' | 'empty_input';
+  message: string;
+};
+
+function parsePrivacyLevel(value: unknown): 'standard' | 'sensitive' {
+  if (value === 'sensitive') return 'sensitive';
+  return 'standard';
+}
+
+function parseProposedAction(value: unknown): ProposedActionPreview | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.title !== 'string' || !record.title.trim()) return null;
+  if (typeof record.instruction !== 'string' || !record.instruction.trim()) return null;
+  const safetyLevel =
+    record.safetyLevel === 'urgent' || record.safetyLevel === 'caution' ? record.safetyLevel : 'normal';
+  return {
+    title: record.title.trim(),
+    instruction: record.instruction.trim(),
+    reason: typeof record.reason === 'string' ? record.reason.trim() : 'Organize notes before next steps.',
+    category: typeof record.category === 'string' ? record.category.trim() : 'general',
+    safetyLevel,
+  };
+}
+
+export function parseFlowProposalBody(
+  body: unknown,
+): { ok: true; data: ParsedFlowProposalInput } | RouteBodyFailure {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'invalid_body',
+      message: 'Request body must be a JSON object.',
+    };
+  }
+
+  const record = body as FlowProposalRequestBody;
+  const privacyLevel = parsePrivacyLevel(record.privacyLevel);
+
+  if (typeof record.askIntakeSessionId === 'string' && record.askIntakeSessionId.trim()) {
+    return {
+      ok: true,
+      data: { kind: 'session', askIntakeSessionId: record.askIntakeSessionId.trim(), privacyLevel },
+    };
+  }
+
+  if (typeof record.guideResultId === 'string' && record.guideResultId.trim()) {
+    return {
+      ok: true,
+      data: { kind: 'guide', guideResultId: record.guideResultId.trim(), privacyLevel },
+    };
+  }
+
+  if (record.concernSummary !== null && typeof record.concernSummary === 'object' && !Array.isArray(record.concernSummary)) {
+    const summary = record.concernSummary as Record<string, unknown>;
+    const concernType = typeof summary.concernType === 'string' ? summary.concernType.trim() : '';
+    const timeline = typeof summary.timeline === 'string' ? summary.timeline.trim() : '';
+    const goal = typeof summary.goal === 'string' ? summary.goal.trim() : undefined;
+    const proposedAction = parseProposedAction(record.proposedAction);
+
+    let safetyCheckText = '';
+    if (record.safetyResult !== null && typeof record.safetyResult === 'object' && !Array.isArray(record.safetyResult)) {
+      const safety = record.safetyResult as Record<string, unknown>;
+      if (typeof safety.safetyCheckText === 'string') {
+        safetyCheckText = safety.safetyCheckText.trim();
+      }
+    }
+    if (!safetyCheckText && typeof summary.safetyCheckText === 'string') {
+      safetyCheckText = summary.safetyCheckText.trim();
+    }
+
+    if (!concernType || !timeline || !proposedAction || !safetyCheckText) {
+      return {
+        ok: false,
+        status: 400,
+        code: 'invalid_body',
+        message:
+          'Structured flow proposals require concernSummary, proposedAction, and safetyCheckText for server safety review.',
+      };
+    }
+
+    return {
+      ok: true,
+      data: {
+        kind: 'structured',
+        concernSummary: { concernType, timeline, goal },
+        proposedAction,
+        safetyCheckText,
+        privacyLevel,
+      },
+    };
+  }
+
+  return {
+    ok: false,
+    status: 400,
+    code: 'invalid_body',
+    message:
+      'Provide askIntakeSessionId, guideResultId, or structured concernSummary with proposedAction.',
+  };
+}
+
+export function parseSummaryBody(body: unknown): { ok: true; data: ParsedSummaryInput } | RouteBodyFailure {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'invalid_body',
+      message: 'Request body must be a JSON object.',
+    };
+  }
+
+  const record = body as SummaryRequestBody;
+  if (typeof record.healthFlowId !== 'string' || !record.healthFlowId.trim()) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'empty_input',
+      message: 'Field "healthFlowId" must be a non-empty string.',
+    };
+  }
+
+  return { ok: true, data: { healthFlowId: record.healthFlowId.trim() } };
 }

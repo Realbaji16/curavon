@@ -16,8 +16,6 @@ import { useScreenBack } from '../hooks/useScreenBack';
 import {
   CALM_URGENT_BODY,
   CALM_URGENT_TITLE,
-  SELF_HARM_URGENT_BODY,
-  SELF_HARM_URGENT_TITLE,
 } from '../utils/healthSafety';
 import {
   ASK_GOAL_OPTIONS,
@@ -40,9 +38,12 @@ import {
   updateAskIntakeSession,
 } from '../utils/askIntakeSessionStorage';
 import {
+  collectIntakeSafetyText,
+  detectIntakeRedFlags,
+  effectiveIntakeRedFlagSelections,
   generateNextSafeStep,
   hasSelfHarmRedFlag,
-  hasUrgentRedFlags,
+  hasUrgentIntakeSignals,
   MENTAL_HEALTH_SAFETY_MESSAGE,
   recommendGuideFlow,
   WATCH_POINTS,
@@ -52,6 +53,16 @@ import { collectAskCompletion, runMetaSystemCycle } from '../utils/metaSystem';
 import { runAIOrchestrator } from '../lib/ai/orchestrator/aiOrchestrator';
 import { generateCuravonNextAction } from '../lib/plan/nextActionAdapter';
 import type { PlanAction } from '../lib/plan/planTypes';
+import {
+  activateHealthFlowWithAction,
+  buildAskDraftFlowPayload,
+  buildAskSafetyBlockedPayload,
+  createAskDraftHealthFlow,
+  createAskSafetyBlockedFlow,
+  mapPlanSafetyToRiskLevel,
+  resolveAskPrivacyLevel,
+} from '../lib/data/healthFlowService';
+import { trackSafeEvent } from '../lib/observability/safeAnalytics';
 
 type AskMode = 'landing' | 'intake' | 'safety' | 'result';
 
@@ -60,12 +71,7 @@ function formatHistoryDate(iso: string) {
 }
 
 function effectiveRedFlags(intake: AskIntakeData): string[] {
-  const flags = [...intake.redFlags];
-  const other = intake.redFlagOther.trim();
-  if (other && !flags.includes('None of these')) {
-    flags.push(other);
-  }
-  return flags;
+  return effectiveIntakeRedFlagSelections(intake);
 }
 
 function AskFitShell({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -170,6 +176,7 @@ export function AskCuravonScreen() {
   const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
   const [isAcceptingAction, setIsAcceptingAction] = useState(false);
   const [intakeSessionId, setIntakeSessionId] = useState<string | null>(null);
+  const [draftHealthFlowId, setDraftHealthFlowId] = useState<string | null>(null);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
@@ -190,6 +197,7 @@ export function AskCuravonScreen() {
     setAiMissingQuestions([]);
     setAskFinalAction(null);
     setIntakeSessionId(null);
+    setDraftHealthFlowId(null);
   }, [refreshAskHistory]);
 
   const startIntake = (prefill = '') => {
@@ -202,7 +210,7 @@ export function AskCuravonScreen() {
       status: 'open',
       stage: 'intake',
       riskLevel: 'low',
-      privacyLevel: 'private',
+      privacyLevel: resolveAskPrivacyLevel(sensitive),
       payload: { source: 'ask_curavon' },
     })
       .then((session) => setIntakeSessionId(session.id))
@@ -211,18 +219,53 @@ export function AskCuravonScreen() {
 
   const finishIntake = useCallback(async () => {
     const flags = effectiveRedFlags(intake);
+    const safetyDetection = detectIntakeRedFlags(intake);
 
-    if (hasUrgentRedFlags(flags)) {
-      const selfHarm = hasSelfHarmRedFlag(flags);
-      const guidance = selfHarm ? SELF_HARM_URGENT_BODY : CALM_URGENT_BODY;
-      setSafetyTitle(selfHarm ? SELF_HARM_URGENT_TITLE : CALM_URGENT_TITLE);
+    if (hasUrgentIntakeSignals(intake)) {
+      const guidance = safetyDetection.body;
+      setSafetyTitle(safetyDetection.title);
       setSafetyBody(guidance);
+      const matchedConcern =
+        safetyDetection.matches[0]?.label ??
+        flags.find((f) => f !== 'None of these') ??
+        'urgent concern';
       await logRedFlag({
         source: 'Ask Curavon',
-        userText: flags.filter((f) => f !== 'None of these').join(', '),
+        userText: flags.filter((f) => f !== 'None of these').join(', ') || intake.mainConcern,
         guidanceShown: guidance,
-        matchedConcern: flags.find((f) => f !== 'None of these') ?? 'urgent concern',
+        matchedConcern,
       });
+      try {
+        const privacyLevel = resolveAskPrivacyLevel(sensitive);
+        const safetyFlow = await createAskSafetyBlockedFlow({
+          privacyLevel,
+          payload: buildAskSafetyBlockedPayload({
+            redFlagCategories: safetyDetection.categories,
+            selfHarm: safetyDetection.selfHarm,
+            immediateSafety: safetyDetection.immediateSafety,
+            intakeSessionId,
+          }),
+        });
+        setDraftHealthFlowId(null);
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            flowId: safetyFlow.id,
+            status: 'closed',
+            stage: 'safety',
+            riskLevel: 'urgent',
+            payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
+          });
+        }
+      } catch {
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            status: 'closed',
+            stage: 'safety',
+            riskLevel: 'urgent',
+            payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
+          });
+        }
+      }
       const entry = await addAskHistoryEntry({
         concern: intake.mainConcern,
         concernType: intake.concernType || 'Not sure',
@@ -233,14 +276,6 @@ export function AskCuravonScreen() {
       refreshHealthSnapshot();
       setMode('safety');
       runMetaSystemCycle();
-      if (intakeSessionId) {
-        void updateAskIntakeSession(intakeSessionId, {
-          status: 'closed',
-          stage: 'safety',
-          riskLevel: 'urgent',
-          payload: { outcome: 'red_flag', stepCount: intakeStep + 1 },
-        });
-      }
       return;
     }
 
@@ -302,16 +337,62 @@ export function AskCuravonScreen() {
         aiReasoned: plan.aiReasoned,
         fallbackUsed: plan.fallbackUsed,
       });
+      try {
+        const privacyLevel = resolveAskPrivacyLevel(sensitive);
+        const riskLevel = mapPlanSafetyToRiskLevel(plan.safetyLevel);
+        const draftFlow = await createAskDraftHealthFlow({
+          title: plan.title,
+          riskLevel,
+          privacyLevel,
+          payload: buildAskDraftFlowPayload({
+            concernType: intake.concernType || 'Not sure',
+            goal: intake.goal,
+            timeline: intake.timeline,
+            intakeSessionId,
+            askHistoryEntryId: entry.id,
+            actionPreview: {
+              actionId: plan.actionId,
+              title: plan.title,
+              category: plan.category,
+              safetyLevel: plan.safetyLevel,
+            },
+          }),
+        });
+        setDraftHealthFlowId(draftFlow.id);
+        trackSafeEvent('ask_submitted', {
+          privacy_level: privacyLevel,
+          risk_level: riskLevel,
+          status: 'completed',
+          route_name: 'ask_curavon',
+        });
+        trackSafeEvent('flow_created', {
+          flow_id: draftFlow.id,
+          privacy_level: privacyLevel,
+          risk_level: riskLevel,
+          status: 'awaiting_user_approval',
+        });
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            flowId: draftFlow.id,
+            status: 'closed',
+            stage: 'result',
+            riskLevel,
+            payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
+          });
+        }
+      } catch {
+        setDraftHealthFlowId(null);
+        if (intakeSessionId) {
+          void updateAskIntakeSession(intakeSessionId, {
+            status: 'closed',
+            stage: 'result',
+            payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
+          });
+        }
+      }
       // Ask result is preview-only until user adds it to Today.
     runMetaSystemCycle();
-    if (intakeSessionId) {
-      void updateAskIntakeSession(intakeSessionId, {
-        status: 'closed',
-        stage: 'result',
-        payload: { outcome: 'completed', stepCount: ASK_INTAKE_STEP_COUNT },
-      });
-    }
-  }, [intake, intakeStep, intakeSessionId, nextSafeStep, logRedFlag, refreshHealthSnapshot, refreshAskHistory, healthSnapshot, askHistory, nextActionState, healthProfile]);
+  }, [intake, intakeStep, intakeSessionId, nextSafeStep, logRedFlag, refreshHealthSnapshot, refreshAskHistory, healthSnapshot, askHistory, nextActionState, healthProfile, sensitive]);
 
   const canContinueStep = (): boolean => {
     switch (intakeStep) {
@@ -392,25 +473,54 @@ export function AskCuravonScreen() {
   const markAsNextAction = () => {
     if (isAcceptingAction) return;
     setIsAcceptingAction(true);
-    try {
-      const actionText = askFinalAction?.actionText || nextSafeStep;
-      acceptNextAction({
-        actionText,
-        acceptanceSource: 'ask_promoted',
-        actionId: askFinalAction?.id ? `ask-v2-${askFinalAction.id}` : undefined,
-        title: askFinalAction?.title,
-        category: askFinalAction?.category,
-        safetyLevel: askFinalAction?.safetyLevel,
-        reason: askFinalAction?.reason,
-        sourceLabel: 'Ask Curavon',
-        sourceSignals: askFinalAction?.sourceSignals,
-        followUpContext: historyEntryId ? { entryId: historyEntryId } : undefined,
-      });
-      showToast('Added to Today.');
-      setActiveTab('home');
-    } finally {
-      setIsAcceptingAction(false);
-    }
+    void (async () => {
+      try {
+        const actionText = askFinalAction?.actionText || nextSafeStep;
+        const stableActionId = askFinalAction?.id ? `ask-v2-${askFinalAction.id}` : undefined;
+        const healthFlowId = draftHealthFlowId ?? undefined;
+        let flowActionId: string | undefined;
+
+        if (draftHealthFlowId) {
+          const { action } = await activateHealthFlowWithAction({
+            flowId: draftHealthFlowId,
+            instruction: actionText,
+            reason: askFinalAction?.reason,
+            category: askFinalAction?.category,
+            safetyLevel: mapPlanSafetyToRiskLevel(askFinalAction?.safetyLevel),
+            actionId: stableActionId,
+            privacyLevel: resolveAskPrivacyLevel(sensitive),
+          });
+          flowActionId = action.id;
+        }
+
+        trackSafeEvent('flow_activated', {
+          flow_id: draftHealthFlowId ?? healthFlowId,
+          privacy_level: resolveAskPrivacyLevel(sensitive),
+          status: 'active',
+          action_status: 'pending',
+        });
+
+        acceptNextAction({
+          actionText,
+          acceptanceSource: 'ask_promoted',
+          actionId: stableActionId,
+          title: askFinalAction?.title,
+          category: askFinalAction?.category,
+          safetyLevel: askFinalAction?.safetyLevel,
+          reason: askFinalAction?.reason,
+          sourceLabel: 'Ask Curavon',
+          sourceSignals: askFinalAction?.sourceSignals,
+          healthFlowId,
+          flowActionId,
+          privacyLevel: resolveAskPrivacyLevel(sensitive),
+          followUpContext: historyEntryId ? { entryId: historyEntryId } : undefined,
+        });
+        showToast('Added to Today.');
+        setActiveTab('home');
+      } finally {
+        setIsAcceptingAction(false);
+      }
+    })();
   };
 
   const startRelatedGuide = () => {
@@ -453,7 +563,7 @@ export function AskCuravonScreen() {
   };
 
   if (mode === 'safety') {
-    const showMentalHealth = hasSelfHarmRedFlag(redFlags);
+    const showMentalHealth = hasSelfHarmRedFlag(redFlags, collectIntakeSafetyText(intake));
     return (
       <AskFitShell className="ask-fit-shell--safety">
         <div className="screen ask-safety-screen ask-screen-no-scroll">

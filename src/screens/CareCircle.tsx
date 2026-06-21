@@ -7,6 +7,7 @@ import {
   Heart,
   Search,
   Shield,
+  Lock,
   Sparkles,
   Stethoscope,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { useScreenBack } from '../hooks/useScreenBack';
 import { fadeUp, staggerContainer, tapScale } from '../motion/variants';
 import { CALM_URGENT_TITLE, detectUrgentConcern } from '../utils/healthSafety';
 import { collectFlowBehavior, runMetaSystemCycle } from '../utils/metaSystem';
+import { CARE_CIRCLE_LOCKED_COPY } from '../lib/privacy/careCirclePrivacy';
 import { generateCuravonNextAction } from '../lib/plan/nextActionAdapter';
 import { saveGuideResult } from '../utils/guideResultStorage';
 import type { PlanAction } from '../lib/plan/planTypes';
@@ -1000,6 +1002,10 @@ export function CareCircleScreen() {
               Follow simple paths to organize what&apos;s happening, learn what matters, and choose
               one safer next step.
             </p>
+            <div className="guides-trust-note">
+              <Lock size={15} aria-hidden="true" />
+              <span>{CARE_CIRCLE_LOCKED_COPY}</span>
+            </div>
             <div className="guides-trust-note">
               <Shield size={15} aria-hidden="true" />
               <span>Guided support — not a diagnosis.</span>

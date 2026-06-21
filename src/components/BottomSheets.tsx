@@ -102,7 +102,9 @@ export function ShareSheet() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3>Share with care circle</h3>
-            <p className="sheet-desc">Coming soon in this build.</p>
+            <p className="sheet-desc">
+              Care Circle sharing is permission-based and not enabled for health details yet.
+            </p>
             <button type="button" className="btn btn-secondary btn-glass" onClick={() => setShowShareSheet(false)}>
               Close
             </button>

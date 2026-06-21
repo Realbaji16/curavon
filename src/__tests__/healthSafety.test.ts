@@ -5,11 +5,13 @@ describe('healthSafety detectUrgentConcern', () => {
   const urgentCases = [
     ['I have chest pain', 'chest pain'],
     ['I am having trouble breathing', 'trouble breathing'],
-    ["I can't breathe", "can't breathe"],
+    ["I can't breathe", 'trouble breathing'],
     ['I am fainting', 'fainting'],
+    ['I fainted this morning', 'fainting'],
+    ['my face is drooping', 'face drooping'],
     ['worst headache of my life', 'worst headache'],
     ['face drooping on one side', 'face drooping'],
-    ['sudden weakness on one side', 'sudden weakness'],
+    ['sudden weakness on one side', 'face drooping'],
     ['heavy bleeding that will not stop', 'heavy bleeding'],
     ['I want to harm myself', 'suicidal'],
     ['I feel suicidal', 'suicidal'],
@@ -36,6 +38,10 @@ describe('healthSafety detectUrgentConcern', () => {
     'I feel tired today',
     'I want to prepare for a doctor visit',
     'I have mild stress from work',
+    'I do not have chest pain',
+    'No trouble breathing',
+    'I am not suicidal',
+    'I did not faint',
   ];
 
   it.each(safeCases)('does not flag safe text: %s', (text) => {
@@ -43,12 +49,7 @@ describe('healthSafety detectUrgentConcern', () => {
     expect(detectUrgentConcern(text).hasUrgent).toBe(false);
   });
 
-  it('documents negation false-positive limitation for substring matching', () => {
-    expect(detectUrgentConcern('I do not have chest pain').hasUrgent).toBe(true);
-  });
-
-  it('documents phrasing gaps for face drooping and fainted', () => {
-    expect(detectUrgentConcern('my face is drooping').hasUrgent).toBe(false);
-    expect(detectUrgentConcern('I fainted').hasUrgent).toBe(false);
+  it('does not flag historical chest pain when currently negated', () => {
+    expect(detectUrgentConcern('I had chest pain last year but not now').hasUrgent).toBe(false);
   });
 });

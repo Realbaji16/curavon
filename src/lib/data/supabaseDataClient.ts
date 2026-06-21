@@ -1,7 +1,34 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityInsightStore } from '../../types/activityInsights';
 import type { DoctorSummaryDraft, DoctorSummaryItem, RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
+
+let clientOverride: SupabaseClient | null = null;
+let userIdOverride: string | null = null;
+
+/** Route/test helper — run adapter ops with a non-browser Supabase client. */
+export async function runWithSupabaseDataContext<T>(
+  client: SupabaseClient,
+  userId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const previousClient = clientOverride;
+  const previousUserId = userIdOverride;
+  clientOverride = client;
+  userIdOverride = userId;
+  try {
+    return await fn();
+  } finally {
+    clientOverride = previousClient;
+    userIdOverride = previousUserId;
+  }
+}
+
+export function resetSupabaseDataContextForTests(): void {
+  clientOverride = null;
+  userIdOverride = null;
+}
 
 export type SupabaseDataTable =
   | 'profiles'
@@ -51,7 +78,7 @@ type PayloadRow = {
 };
 
 export function requireClient() {
-  const client = getBrowserSupabaseClient();
+  const client = clientOverride ?? getBrowserSupabaseClient();
   if (!client) {
     throw new SupabaseDataError('not_configured', 'Supabase is not configured.');
   }
@@ -59,6 +86,8 @@ export function requireClient() {
 }
 
 export async function getSupabaseUserId(): Promise<string | null> {
+  if (userIdOverride) return userIdOverride;
+
   const client = getBrowserSupabaseClient();
   if (!client) return null;
 
@@ -68,6 +97,8 @@ export async function getSupabaseUserId(): Promise<string | null> {
 }
 
 export async function requireSupabaseUserId(): Promise<string> {
+  if (userIdOverride) return userIdOverride;
+
   const userId = await getSupabaseUserId();
   if (!userId) {
     throw new SupabaseDataError('not_authenticated', 'Sign in to your Curavon account first.');
@@ -151,6 +182,27 @@ export async function softDeleteUserRows(table: SupabaseDataTable): Promise<void
   if (error) {
     throw new SupabaseDataError('query_failed', error.message);
   }
+}
+
+export async function softDeleteOwnedRow(table: SupabaseDataTable, id: string): Promise<boolean> {
+  const client = requireClient();
+  const userId = await requireSupabaseUserId();
+  const deletedAt = new Date().toISOString();
+
+  const { data, error } = await client
+    .from(table)
+    .update({ deleted_at: deletedAt, updated_at: deletedAt })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    throw new SupabaseDataError('query_failed', error.message);
+  }
+
+  return Boolean(data?.id);
 }
 
 export async function hardDeleteUserRows(table: SupabaseDataTable): Promise<void> {

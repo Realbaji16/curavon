@@ -33,6 +33,8 @@ import {
   todayDateKey,
 } from '../utils/healthUtils';
 import { setMetaSystemHealthContext } from '../lib/meta/metaSystemContext';
+import { trackSafeEvent } from '../lib/observability/safeAnalytics';
+import { reportSafeError } from '../lib/observability/errorReporter';
 import { ADJUSTED_ACTIONS } from '../utils/nextActionRules';
 import { stepsBandToCount } from '../utils/stepsUtils';
 import {
@@ -86,6 +88,12 @@ import {
   requestAccountDataExport,
   toOperationalDataErrorMessage,
 } from '../lib/data/operationalDataService';
+import {
+  persistFlowActionAdjusted,
+  persistFlowActionBlocked,
+  persistFlowActionDone,
+  shouldPersistHealthFlowLifecycle,
+} from '../lib/data/healthFlowService';
 import { collectActionOutcome, runMetaSystemCycle } from '../utils/metaSystem';
 
 interface HealthContextValue {
@@ -198,6 +206,9 @@ export type AcceptNextActionInput = {
   sourceLabel?: string;
   sourceSignals?: string[];
   scheduleFollowUp?: boolean;
+  healthFlowId?: string;
+  flowActionId?: string;
+  privacyLevel?: NextActionState['privacyLevel'];
   followUpContext?: {
     entryId?: string;
     guideId?: string;
@@ -384,6 +395,10 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
   const reportPersistError = useCallback((error: unknown) => {
     setCoreDataError(toDataErrorMessage(error));
+    reportSafeError(error, {
+      route_name: 'health_context',
+      error_code: 'persist_failed',
+    });
   }, []);
 
   const persistProfile = useCallback((profile: HealthProfile) => {
@@ -622,9 +637,23 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     setHealthProfile((prev) => {
       const next = { ...prev, ...patch };
       persistProfile(next);
+      if (patch.sensitiveMode === true) {
+        trackSafeEvent('sensitive_mode_enabled', {
+          privacy_level: 'sensitive',
+          status: 'enabled',
+        });
+      }
       if (patch.smartSilencePreference) {
         void saveNotificationPreferenceRecord({
           smartSilencePreference: patch.smartSilencePreference,
+          sensitive_preview: false,
+          updatedAt: new Date().toISOString(),
+        }).catch(reportPersistError);
+      }
+      if (patch.sensitiveMode !== undefined) {
+        void saveNotificationPreferenceRecord({
+          sensitive_preview: false,
+          sensitiveMode: patch.sensitiveMode,
           updatedAt: new Date().toISOString(),
         }).catch(reportPersistError);
       }
@@ -728,6 +757,9 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
+      if (shouldPersistHealthFlowLifecycle(next)) {
+        void persistFlowActionDone(next.flowActionId, next).catch(reportPersistError);
+      }
       void addDoctorSummaryItem(createNextActionSummaryItem(next)).catch(reportPersistError);
       refreshSnapshotState();
       collectActionOutcome({
@@ -735,6 +767,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         status: 'done',
         category: next.category,
         source: next.source,
+      });
+      trackSafeEvent('action_done', {
+        action_status: 'done',
+        flow_id: next.healthFlowId,
+        privacy_level: next.privacyLevel,
+        risk_level: next.safetyLevel === 'urgent' ? 'urgent' : next.safetyLevel === 'caution' ? 'medium' : 'low',
       });
       runMetaSystemCycle();
       return next;
@@ -752,6 +790,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
+      if (shouldPersistHealthFlowLifecycle(next)) {
+        void persistFlowActionBlocked({
+          flowId: next.healthFlowId,
+          flowActionId: next.flowActionId,
+          reason,
+          state: next,
+        }).catch(reportPersistError);
+      }
       void addDoctorSummaryItem(createNextActionSummaryItem(next, { blockedReason: reason })).catch(reportPersistError);
       refreshSnapshotState();
       collectActionOutcome({
@@ -760,6 +806,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: next.category,
         source: next.source,
         reasonCode: reason,
+      });
+      trackSafeEvent('action_blocked', {
+        action_status: 'blocked',
+        blocked_reason: reason,
+        flow_id: next.healthFlowId,
+        privacy_level: next.privacyLevel,
       });
       runMetaSystemCycle();
       return next;
@@ -779,6 +831,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       persistNextAction(next);
+      if (shouldPersistHealthFlowLifecycle(prev)) {
+        void persistFlowActionAdjusted({
+          flowId: prev.healthFlowId!,
+          flowActionId: prev.flowActionId!,
+          option,
+          state: prev,
+        }).catch(reportPersistError);
+      }
       void addDoctorSummaryItem(createNextActionSummaryItem(next, { adjustOption: option })).catch(reportPersistError);
       refreshSnapshotState();
       collectActionOutcome({
@@ -787,6 +847,12 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: next.category,
         source: next.source,
         reasonCode: option,
+      });
+      trackSafeEvent('action_adjusted', {
+        action_status: 'adjusted',
+        blocked_reason: option,
+        flow_id: next.healthFlowId,
+        privacy_level: next.privacyLevel,
       });
       runMetaSystemCycle();
       return next;
@@ -813,6 +879,9 @@ export function HealthProvider({ children }: { children: ReactNode }) {
         category: input.category ?? 'general',
         safetyLevel: input.safetyLevel ?? 'normal',
         actionId,
+        healthFlowId: input.healthFlowId,
+        flowActionId: input.flowActionId,
+        privacyLevel: input.privacyLevel,
         status: 'pending',
         updatedAt: new Date().toISOString(),
       };

@@ -19,6 +19,11 @@ import type {
   HealthFlow,
   NotificationPreference,
 } from './dataTypes';
+import { mergeDefaultSharingRules } from '../privacy/careCirclePrivacy';
+import {
+  redactPrivacyPayload,
+  sanitizeAgentEventSummary,
+} from '../privacy/privacyRedaction';
 import {
   readSinglePayload,
   readSupabaseActivityInsights,
@@ -45,9 +50,11 @@ import {
   saveSupabaseHealthProfile,
   saveSupabaseNextActionState,
   saveSupabaseRedFlagLog,
+  softDeleteOwnedRow,
   SupabaseDataError,
   upsertSinglePayload,
 } from './supabaseDataClient';
+import { createDefaultHealthProfile } from '../../utils/healthUtils';
 
 function newId(): string {
   return crypto.randomUUID();
@@ -278,6 +285,21 @@ export function createSupabaseDataAdapter(): DataAdapter {
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Insert failed');
         return mapAskIntakeSessionRow(data as Record<string, unknown>);
+      }),
+
+    getAskIntakeSession: (id) =>
+      runDataOp(async () => {
+        const client = requireClient();
+        const userId = await requireSupabaseUserId();
+        const { data, error } = await client
+          .from('ask_intake_sessions')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (error) throw new SupabaseDataError('query_failed', error.message);
+        return data ? mapAskIntakeSessionRow(data as Record<string, unknown>) : null;
       }),
 
     updateAskIntakeSession: (id, input) =>
@@ -608,9 +630,9 @@ export function createSupabaseDataAdapter(): DataAdapter {
             flow_id: input.flowId ?? null,
             event_type: input.eventType,
             source: input.source ?? 'app',
-            summary: input.summary ?? null,
+            summary: sanitizeAgentEventSummary(input.summary),
             status: input.status ?? 'recorded',
-            payload: input.payload ?? {},
+            payload: redactPrivacyPayload(input.payload ?? {}),
             occurred_at: input.occurredAt ?? new Date().toISOString(),
           })
           .select('*')
@@ -685,6 +707,66 @@ export function createSupabaseDataAdapter(): DataAdapter {
         return mapDataDeletionRequestRow(data as Record<string, unknown>, userId);
       }),
 
+    deleteHealthFlow: (flowId) =>
+      runDataOp(async () => {
+        const client = requireClient();
+        const userId = await requireSupabaseUserId();
+        const deletedAt = new Date().toISOString();
+
+        const { data: flow, error: flowError } = await client
+          .from('health_flows')
+          .select('id')
+          .eq('id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .maybeSingle();
+        if (flowError) throw new SupabaseDataError('query_failed', flowError.message);
+        if (!flow) throw new SupabaseDataError('query_failed', 'Health flow not found.');
+
+        const { error: updateError } = await client
+          .from('health_flows')
+          .update({ deleted_at: deletedAt, updated_at: deletedAt, status: 'deleted' })
+          .eq('id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+        if (updateError) throw new SupabaseDataError('query_failed', updateError.message);
+
+        await client
+          .from('flow_actions')
+          .update({ deleted_at: deletedAt, updated_at: deletedAt })
+          .eq('flow_id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+
+        await client
+          .from('flow_blockers')
+          .update({ deleted_at: deletedAt, updated_at: deletedAt })
+          .eq('flow_id', flowId)
+          .eq('user_id', userId)
+          .is('deleted_at', null);
+
+        return { flowId, status: 'deleted' };
+      }),
+
+    deleteDoctorSummary: (summaryId) =>
+      runDataOp(async () => {
+        const deletedItem = await softDeleteOwnedRow('doctor_summary_items', summaryId);
+        if (deletedItem) {
+          return { summaryId, deletedKind: 'item' as const };
+        }
+        const deletedDraft = await softDeleteOwnedRow('doctor_summary_drafts', summaryId);
+        if (deletedDraft) {
+          return { summaryId, deletedKind: 'draft' as const };
+        }
+        throw new SupabaseDataError('query_failed', 'Doctor summary record not found.');
+      }),
+
+    deleteHealthProfile: () =>
+      runDataOp(async () => {
+        await saveSupabaseHealthProfile(createDefaultHealthProfile());
+        return { status: 'cleared' };
+      }),
+
     createCareCircle: (input) =>
       runDataOp(async () => {
         const client = requireClient();
@@ -733,12 +815,18 @@ export function createSupabaseDataAdapter(): DataAdapter {
             member_user_id: input.memberUserId ?? null,
             invite_email: input.inviteEmail ?? null,
             permission_level: input.permissionLevel ?? 'metadata_only',
-            sharing_rules: input.sharingRules ?? {},
+            sharing_rules: mergeDefaultSharingRules(input.sharingRules),
             status: 'pending',
           })
           .select('*')
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Insert failed');
+        void import('../observability/safeAnalytics').then(({ trackSafeEvent }) => {
+          trackSafeEvent('care_circle_invite_created', {
+            status: 'pending',
+            request_status: 'created',
+          });
+        });
         return mapCareCircleMemberRow(data as Record<string, unknown>);
       }),
 

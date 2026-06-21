@@ -1,5 +1,10 @@
 import type { AIDecisionTrace, AIObservabilitySummary } from '../ai/governance/aiObservabilityTypes';
 import type { AIStage } from '../ai/orchestrator/orchestratorTypes';
+import {
+  buildSafeAgentEventPayload,
+  redactPrivacyPayload,
+} from '../privacy/privacyRedaction';
+import { trackSafeEvent } from '../observability/safeAnalytics';
 import type {
   CreateAiUsageLogInput,
   DataDeletionRequest,
@@ -9,41 +14,9 @@ import { DataAuthError, DataUnavailableError } from './dataErrors';
 import { getDataAdapter } from './getDataAdapter';
 
 const MAX_SESSION_TRACES = 100;
-const SENSITIVE_PAYLOAD_KEYS = new Set([
-  'prompt',
-  'rawprompt',
-  'userinput',
-  'symptoms',
-  'medications',
-  'medication',
-  'medicationnames',
-  'doctorsummary',
-  'body',
-  'notes',
-  'usernotes',
-  'concern',
-  'currentconcern',
-  'compressedsnapshot',
-  'healthtext',
-  'summarybody',
-]);
 
 let sessionTraces: AIDecisionTrace[] = [];
 let sessionObservabilitySummary: AIObservabilitySummary | null = null;
-
-function redactPayload(payload: Record<string, unknown> | undefined): Record<string, unknown> {
-  if (!payload) return {};
-  const safe: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    if (SENSITIVE_PAYLOAD_KEYS.has(key.toLowerCase())) continue;
-    if (typeof value === 'string' && value.length > 160) {
-      safe[key] = `[redacted:${value.length}chars]`;
-      continue;
-    }
-    safe[key] = value;
-  }
-  return safe;
-}
 
 function sanitizeDecisionTrace(trace: AIDecisionTrace): AIDecisionTrace {
   return {
@@ -84,7 +57,7 @@ export function appendDecisionTrace(trace: AIDecisionTrace) {
 }
 
 export function recordSafeAiUsageLog(input: CreateAiUsageLogInput) {
-  const payload = redactPayload(input.payload);
+  const payload = redactPrivacyPayload(input.payload);
   persistAdapterCall(async () => {
     await getDataAdapter().createAiUsageLog({
       ...input,
@@ -116,11 +89,12 @@ export function recordOrchestratorAgentEvent(entry: {
       source: entry.source,
       summary,
       status: entry.fallbackUsed ? 'fallback' : entry.aiUsed ? 'completed' : 'skipped',
-      payload: redactPayload({
+      payload: buildSafeAgentEventPayload({
+        eventType: 'orchestrator_step',
         stage: entry.stage,
-        moduleSelected: entry.moduleSelected,
+        status: entry.fallbackUsed ? 'fallback' : entry.aiUsed ? 'completed' : 'skipped',
+        moduleVersion: entry.moduleSelected,
         cache: entry.cache,
-        reason: entry.reason.length > 200 ? `${entry.reason.slice(0, 200)}…` : entry.reason,
       }),
       occurredAt: new Date().toISOString(),
     });
@@ -147,29 +121,95 @@ export function toOperationalDataErrorMessage(error: unknown): string {
 export async function requestAccountDataExport(
   payload: Record<string, unknown> = {},
 ): Promise<DataExportRequest> {
-  return getDataAdapter().createDataExportRequest({
-    requestStatus: 'requested',
-    payload: redactPayload({
-      ...payload,
-      requestedVia: 'settings',
-      requestedAt: new Date().toISOString(),
+  const response = await fetch('/api/data/export-request', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requestType: payload.exportScope === 'doctor_summary' ? 'doctor_summary_export' : 'account_export',
     }),
   });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    request?: { id: string; status: string; requestType?: string };
+    error?: { message?: string };
+  };
+
+  if (!response.ok || !body.ok || !body.request) {
+    throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  trackSafeEvent(
+    body.request.requestType === 'doctor_summary_export'
+      ? 'summary_export_requested'
+      : 'data_export_requested',
+    {
+      request_status: body.request.status,
+      status: 'pending',
+    },
+  );
+
+  const now = new Date().toISOString();
+  return {
+    id: body.request.id,
+    userId: '',
+    requestStatus: body.request.status,
+    requestedAt: now,
+    payload: redactPrivacyPayload({
+      request_type: body.request.requestType ?? 'account_export',
+      requestedVia: 'settings',
+    }),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 export async function requestAccountDataDeletion(input: {
   deletionScope?: string;
   payload?: Record<string, unknown>;
 }): Promise<DataDeletionRequest> {
-  return getDataAdapter().createDataDeletionRequest({
-    requestStatus: 'requested',
-    deletionScope: input.deletionScope ?? 'health_data',
-    payload: redactPayload({
-      ...input.payload,
-      requestedVia: 'settings',
-      requestedAt: new Date().toISOString(),
-    }),
+  const requestType =
+    input.deletionScope === 'full_account' ? 'full_account_deletion' : 'health_data_deletion';
+
+  const response = await fetch('/api/data/deletion-request', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestType }),
   });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    request?: { id: string; status: string; requestType?: string };
+    error?: { message?: string };
+  };
+
+  if (!response.ok || !body.ok || !body.request) {
+    throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  trackSafeEvent('data_deletion_requested', {
+    request_status: body.request.status,
+    status: 'pending',
+  });
+
+  const now = new Date().toISOString();
+  return {
+    id: body.request.id,
+    userId: '',
+    requestStatus: body.request.status,
+    deletionScope: requestType === 'full_account_deletion' ? 'full_account' : 'health_data',
+    requestedAt: now,
+    payload: redactPrivacyPayload({
+      request_type: body.request.requestType ?? requestType,
+      requestedVia: 'settings',
+      account_deleted: false,
+      ...input.payload,
+    }),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 /** Test helper — reset in-memory operational telemetry between cases. */
@@ -180,7 +220,7 @@ export function resetOperationalDataForTests() {
 
 /** Exported for static redaction tests. */
 export function redactTelemetryPayload(payload: Record<string, unknown> | undefined): Record<string, unknown> {
-  return redactPayload(payload);
+  return redactPrivacyPayload(payload);
 }
 
 export type SafeAiUsageLogInput = CreateAiUsageLogInput;

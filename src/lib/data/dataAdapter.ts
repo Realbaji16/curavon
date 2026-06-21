@@ -59,6 +59,7 @@ export interface DataAdapter {
   createAskHistoryItem(input: CreateAskHistoryItemInput): Promise<AskHistoryItem>;
 
   createAskIntakeSession(input: CreateAskIntakeSessionInput): Promise<AskIntakeSession>;
+  getAskIntakeSession(id: string): Promise<AskIntakeSession | null>;
   updateAskIntakeSession(id: string, input: UpdateAskIntakeSessionInput): Promise<AskIntakeSession>;
 
   createGuideResult(input: CreateGuideResultInput): Promise<GuideResult>;
@@ -109,6 +110,9 @@ export interface DataAdapter {
 
   createDataExportRequest(input: CreateDataExportRequestInput): Promise<DataExportRequest>;
   createDataDeletionRequest(input: CreateDataDeletionRequestInput): Promise<DataDeletionRequest>;
+  deleteHealthFlow(flowId: string): Promise<{ flowId: string; status: string }>;
+  deleteDoctorSummary(summaryId: string): Promise<{ summaryId: string; deletedKind: 'item' | 'draft' }>;
+  deleteHealthProfile(): Promise<{ status: string }>;
 
   createCareCircle(input: CreateCareCircleInput): Promise<CareCircle>;
   listCareCircles(): Promise<CareCircle[]>;
@@ -124,6 +128,7 @@ export const DATA_ADAPTER_METHODS = [
   'listAskHistory',
   'createAskHistoryItem',
   'createAskIntakeSession',
+  'getAskIntakeSession',
   'updateAskIntakeSession',
   'createGuideResult',
   'getGuideResult',
@@ -160,6 +165,9 @@ export const DATA_ADAPTER_METHODS = [
   'createAiDecisionTrace',
   'createDataExportRequest',
   'createDataDeletionRequest',
+  'deleteHealthFlow',
+  'deleteDoctorSummary',
+  'deleteHealthProfile',
   'createCareCircle',
   'listCareCircles',
   'createCareCircleInvite',
