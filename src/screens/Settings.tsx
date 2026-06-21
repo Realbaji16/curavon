@@ -10,7 +10,13 @@ import { clearAskHistory } from '../utils/askIntakeStorage';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import { clearLocalDemoAccountData } from '../lib/app/appShellState';
 import { DELETION_CONFIRMATION_COPY } from '../lib/data/dataDeletionConfirm';
-import { OPERATIONAL_DATA_MESSAGES } from '../lib/data/operationalDataService';
+import {
+  OPERATIONAL_DATA_MESSAGES,
+  requestAccountDataDeletion,
+  requestAccountDeletion,
+  requestHealthProfileDeletion,
+  toOperationalDataErrorMessage,
+} from '../lib/data/operationalDataService';
 import { ActivityInsightsSection } from '../components/ActivityInsightsSection';
 
 const SMART_SILENCE_OPTIONS: { id: SmartSilencePreference; label: string }[] = [
@@ -35,6 +41,7 @@ export function SettingsScreen() {
     clearHealthData,
     exportHealthData,
     refreshAskHistory,
+    refreshHealthStateFromStorage,
     smartSilenceLabel,
     nextActionState,
   } = useHealth();
@@ -48,18 +55,33 @@ export function SettingsScreen() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletionBusy, setDeletionBusy] = useState(false);
 
   const primaryGoalsLabel =
     healthProfile.primaryGoals.length > 0 ? healthProfile.primaryGoals.join(' · ') : 'Not set';
 
-  const handleDeleteHealthData = () => {
+  const handleDeleteHealthData = async () => {
     if (!confirmClear) {
       setConfirmClear(true);
       return;
     }
-    clearHealthData();
-    showToast(OPERATIONAL_DATA_MESSAGES.deletionSubmitted);
-    setConfirmClear(false);
+    if (deletionBusy) return;
+    setDeletionBusy(true);
+    try {
+      if (isSupabaseMode) {
+        await requestAccountDataDeletion({ deletionScope: 'health_data' });
+        await requestHealthProfileDeletion().catch(() => undefined);
+        refreshHealthStateFromStorage();
+      } else {
+        clearHealthData();
+      }
+      showToast(OPERATIONAL_DATA_MESSAGES.deletionSubmitted);
+      setConfirmClear(false);
+    } catch (error) {
+      showToast(toOperationalDataErrorMessage(error));
+    } finally {
+      setDeletionBusy(false);
+    }
   };
 
   const handleCheckDataHealth = () => {
@@ -83,12 +105,25 @@ export function SettingsScreen() {
       setConfirmDeleteAll(true);
       return;
     }
-    await deleteLocalAccount();
-    clearLocalDemoAccountData({ clearHealthData: true });
-    clearHealthData();
-    clearAuthShellState();
-    showToast('Account deletion request submitted');
-    setConfirmDeleteAll(false);
+    if (deletionBusy) return;
+    setDeletionBusy(true);
+    try {
+      if (isSupabaseMode) {
+        await requestAccountDeletion();
+      }
+      await deleteLocalAccount();
+      clearLocalDemoAccountData({ clearHealthData: true });
+      if (!isSupabaseMode) {
+        clearHealthData();
+      }
+      clearAuthShellState();
+      showToast(OPERATIONAL_DATA_MESSAGES.accountDeleted);
+      setConfirmDeleteAll(false);
+    } catch (error) {
+      showToast(toOperationalDataErrorMessage(error));
+    } finally {
+      setDeletionBusy(false);
+    }
   };
 
   return (
@@ -130,6 +165,11 @@ export function SettingsScreen() {
           </p>
         </div>
         <div className="settings-actions-list" style={{ marginTop: 12 }}>
+          <p className="settings-data-note" style={{ marginBottom: 4 }}>
+            Account deletion removes your Curavon profile and health data from Supabase immediately
+            where supported. The Authentication user may remain until server admin deletion is
+            configured. Signing out does not delete your account.
+          </p>
           <button
             type="button"
             className="btn btn-secondary btn-glass"
@@ -146,7 +186,12 @@ export function SettingsScreen() {
               ? DELETION_CONFIRMATION_COPY.local_account_only.confirmLabel
               : 'Delete local account'}
           </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteAccountAndData}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            disabled={deletionBusy}
+            onClick={handleDeleteAccountAndData}
+          >
             {confirmDeleteAll
               ? DELETION_CONFIRMATION_COPY.account_and_health_data.confirmLabel
               : 'Delete account and health data'}
@@ -328,7 +373,7 @@ export function SettingsScreen() {
           They are not a diagnosis.
         </p>
         <p className="settings-data-note">
-          Delete health data submits a deletion request for your account. Processing may take time.
+          Delete health data submits a deletion request for your account. You may see a pending deletion status while it is processed; this is not the same as signing out.
         </p>
         <p className="settings-data-note">
           When Curavon notices an urgent red flag, it may save a short safety note in Doctor Summary so you can review it later or prepare for a clinician conversation. This is not diagnosis or emergency monitoring.
@@ -359,7 +404,12 @@ export function SettingsScreen() {
           >
             Clear Ask history
           </button>
-          <button type="button" className="btn btn-secondary btn-glass" onClick={handleDeleteHealthData}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-glass"
+            disabled={deletionBusy}
+            onClick={handleDeleteHealthData}
+          >
             {confirmClear ? 'Tap again to request health data deletion' : 'Request health data deletion'}
           </button>
         </div>

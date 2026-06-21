@@ -1192,31 +1192,6 @@
   color: var(--text-soft);
 }
 
-.settings-account-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.settings-account-row {
-  margin: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  color: var(--text-body);
-}
-
-.settings-account-row strong {
-  font-size: 0.82rem;
-  color: var(--text-title);
-}
-
-.settings-actions-list {
-  display: grid;
-  gap: 10px;
-}
-
 .phone-chrome {
   position: absolute;
   inset: 0;

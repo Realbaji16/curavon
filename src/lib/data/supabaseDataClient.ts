@@ -3,6 +3,7 @@ import type { ActivityInsightStore } from '../../types/activityInsights';
 import type { DoctorSummaryDraft, DoctorSummaryItem, RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
+import { applyNotDeleted, type ReadQueryOptions } from './supabaseSoftDelete';
 
 let clientOverride: SupabaseClient | null = null;
 let userIdOverride: string | null = null;
@@ -91,9 +92,12 @@ export async function getSupabaseUserId(): Promise<string | null> {
   const client = getBrowserSupabaseClient();
   if (!client) return null;
 
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) return null;
-  return data.user.id;
+  const {
+    data: { session },
+    error,
+  } = await client.auth.getSession();
+  if (error || !session?.user) return null;
+  return session.user.id;
 }
 
 export async function requireSupabaseUserId(): Promise<string> {
@@ -108,15 +112,18 @@ export async function requireSupabaseUserId(): Promise<string> {
 
 export async function readSinglePayload<T>(
   table: SupabaseDataTable,
+  options?: ReadQueryOptions,
 ): Promise<T | null> {
   const client = requireClient();
   const userId = await requireSupabaseUserId();
 
-  const { data, error } = await client
-    .from(table)
-    .select('payload')
-    .eq('user_id', userId)
-    .is('deleted_at', null)
+  const query = applyNotDeleted(
+    client.from(table).select('payload').eq('user_id', userId),
+    table,
+    options,
+  );
+
+  const { data, error } = await query
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -215,16 +222,20 @@ export async function hardDeleteUserRows(table: SupabaseDataTable): Promise<void
   }
 }
 
-export async function readPayloadList<T>(table: SupabaseDataTable): Promise<T[]> {
+export async function readPayloadList<T>(
+  table: SupabaseDataTable,
+  options?: ReadQueryOptions,
+): Promise<T[]> {
   const client = requireClient();
   const userId = await requireSupabaseUserId();
 
-  const { data, error } = await client
-    .from(table)
-    .select('payload')
-    .eq('user_id', userId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+  const query = applyNotDeleted(
+    client.from(table).select('payload').eq('user_id', userId),
+    table,
+    options,
+  );
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     throw new SupabaseDataError('query_failed', error.message);
@@ -393,7 +404,9 @@ export async function saveSupabaseUserPreferences(preferences: Record<string, un
   await upsertSinglePayload('user_preferences', preferences);
 }
 
-export async function readSupabaseAiUsageLogs(): Promise<
+export async function readSupabaseAiUsageLogs(
+  options?: ReadQueryOptions,
+): Promise<
   Array<{
     id: string;
     taskName: string;
@@ -407,12 +420,16 @@ export async function readSupabaseAiUsageLogs(): Promise<
   const client = requireClient();
   const userId = await requireSupabaseUserId();
 
-  const { data, error } = await client
-    .from('ai_usage_logs')
-    .select('id, task_name, model, status, estimated_tokens, occurred_at, payload')
-    .eq('user_id', userId)
-    .is('deleted_at', null)
-    .order('occurred_at', { ascending: false });
+  const query = applyNotDeleted(
+    client
+      .from('ai_usage_logs')
+      .select('id, task_name, model, status, estimated_tokens, occurred_at, payload')
+      .eq('user_id', userId),
+    'ai_usage_logs',
+    options,
+  );
+
+  const { data, error } = await query.order('occurred_at', { ascending: false });
 
   if (error) {
     throw new SupabaseDataError('query_failed', error.message);
@@ -479,3 +496,5 @@ export async function appendSupabaseAiDecisionTrace(
     throw new SupabaseDataError('query_failed', error.message);
   }
 }
+
+export { type ReadQueryOptions } from './supabaseSoftDelete';

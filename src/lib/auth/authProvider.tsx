@@ -10,7 +10,16 @@ import {
 import { createAuthAdapter } from './authAdapter';
 import { CuravonAuthContext } from './authContext';
 import type { AuthMode, AuthSession } from './authTypes';
+import { mapSupabaseClientSession } from './supabaseAuthAdapter';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
+
+const SUPABASE_AUTH_EVENTS = new Set([
+  'INITIAL_SESSION',
+  'SIGNED_IN',
+  'SIGNED_OUT',
+  'TOKEN_REFRESHED',
+  'USER_UPDATED',
+]);
 
 export function CuravonAuthProvider({
   children,
@@ -28,35 +37,60 @@ export function CuravonAuthProvider({
     error: null,
   }));
 
-  const refresh = useCallback(async () => {
-    setSession((prev) => ({ ...prev, loading: true }));
-    const next = await adapter.getSession();
+  const applySession = useCallback((next: AuthSession) => {
     setSession(next);
-  }, [adapter]);
+  }, []);
 
   useEffect(() => {
-    // One-shot localStorage session hydration; adapter read is async and cannot run during render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    let bootstrapFallbackId: ReturnType<typeof setTimeout> | undefined;
 
-  useEffect(() => {
-    if (mode !== 'supabase') return;
-    const client = getBrowserSupabaseClient();
-    if (!client) return;
-
-    const {
-      data: { subscription },
-    } = client.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        void refresh();
+    const finishBootstrap = (next: AuthSession) => {
+      if (cancelled) return;
+      if (bootstrapFallbackId) {
+        clearTimeout(bootstrapFallbackId);
+        bootstrapFallbackId = undefined;
       }
-    });
+      applySession(next);
+    };
+
+    const bootstrap = async () => {
+      if (mode !== 'supabase') {
+        finishBootstrap(await adapter.getSession());
+        return;
+      }
+
+      const client = getBrowserSupabaseClient();
+      if (!client) {
+        finishBootstrap(await adapter.getSession());
+        return;
+      }
+
+      bootstrapFallbackId = setTimeout(() => {
+        void adapter.getSession().then((next) => {
+          finishBootstrap(next);
+        });
+      }, 3000);
+
+      const {
+        data: { subscription },
+      } = client.auth.onAuthStateChange((event, supabaseSession) => {
+        if (cancelled || !SUPABASE_AUTH_EVENTS.has(event)) return;
+        finishBootstrap(mapSupabaseClientSession(supabaseSession));
+      });
+
+      unsubscribe = () => subscription.unsubscribe();
+    };
+
+    void bootstrap();
 
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
+      if (bootstrapFallbackId) clearTimeout(bootstrapFallbackId);
+      unsubscribe?.();
     };
-  }, [mode, refresh]);
+  }, [adapter, applySession, mode]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -80,8 +114,9 @@ export function CuravonAuthProvider({
 
   const signOut = useCallback(async () => {
     await adapter.signOut();
-    await refresh();
-  }, [adapter, refresh]);
+    const next = await adapter.getSession();
+    setSession(next);
+  }, [adapter]);
 
   const resetPassword = useCallback(
     async (email: string) => {
@@ -100,8 +135,9 @@ export function CuravonAuthProvider({
 
   const deleteLocalAccount = useCallback(async () => {
     await adapter.deleteLocalAccount();
-    await refresh();
-  }, [adapter, refresh]);
+    const next = await adapter.getSession();
+    setSession(next);
+  }, [adapter]);
 
   return (
     <CuravonAuthContext.Provider

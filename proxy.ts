@@ -1,14 +1,15 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-function shouldProtectAppRoutes(): boolean {
+export function shouldProtectAppRoutes(): boolean {
   if (process.env.NEXT_PUBLIC_AUTH_MODE !== 'supabase') return false;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
   return Boolean(url && key);
 }
 
-export async function middleware(request: NextRequest) {
+/** Next.js 16 proxy — protects /app when Supabase auth is configured. */
+export async function proxy(request: NextRequest) {
   if (!shouldProtectAppRoutes()) {
     return NextResponse.next();
   }

@@ -18,6 +18,7 @@ describe('nextActionAdapter generateCuravonNextActionSync', () => {
     expect(result.safetyLevel).toBe('urgent');
     expect(result.actionText.toLowerCase()).not.toMatch(/take two slow breaths|hydrate/);
     expect(result.selectedBy).toBe('rules');
+    expect(result.planEngineReason).toBe('canonical_v3');
   });
 
   it('routes medication concerns toward prepare-safe language', () => {
@@ -54,5 +55,6 @@ describe('nextActionAdapter generateCuravonNextActionSync', () => {
     expect(result.title.trim().length).toBeGreaterThan(3);
     expect(`${result.actionText} ${result.reason}`.toLowerCase()).not.toMatch(/you have|diagnosis|treatment plan/);
     expect(result.selectedBy === 'rules' || result.fallbackUsed).toBe(true);
+    expect(result.planEngineReason).toBe('canonical_v3');
   });
 });

@@ -64,7 +64,7 @@ Use when pilot safety, privacy, or stability requires **immediate reduction of e
 
 1. Execute **L3**.
 2. Deploy maintenance message: *"Curavon pilot is temporarily unavailable while we review a safety update."*
-3. Block `/app` at edge or middleware if needed.
+3. Block `/app` at edge or proxy if needed.
 4. Revoke exposed keys immediately (OpenAI, Supabase service role if leaked).
 5. Notify all pilot users with plain-language summary (no health details in email).
 

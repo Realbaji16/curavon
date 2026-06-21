@@ -53,8 +53,10 @@ import {
   softDeleteOwnedRow,
   SupabaseDataError,
   upsertSinglePayload,
+  hardDeleteUserRows,
 } from './supabaseDataClient';
-import { createDefaultHealthProfile } from '../../utils/healthUtils';
+import { applyNotDeleted } from './supabaseSoftDelete';
+import { purgeSupabaseAccountData } from './accountDataPurge';
 
 function newId(): string {
   return crypto.randomUUID();
@@ -291,13 +293,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('ask_intake_sessions')
-          .select('*')
-          .eq('id', id)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .maybeSingle();
+        const { data, error } = await applyNotDeleted(
+          client.from('ask_intake_sessions').select('*').eq('id', id).eq('user_id', userId),
+          'ask_intake_sessions',
+        ).maybeSingle();
         if (error) throw new SupabaseDataError('query_failed', error.message);
         return data ? mapAskIntakeSessionRow(data as Record<string, unknown>) : null;
       }),
@@ -315,12 +314,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
         if (input.moduleVersion !== undefined) patch.module_version = input.moduleVersion;
         if (input.payload !== undefined) patch.payload = input.payload;
 
-        const { data, error } = await client
-          .from('ask_intake_sessions')
-          .update(patch)
-          .eq('id', id)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
+        const { data, error } = await applyNotDeleted(
+          client.from('ask_intake_sessions').update(patch).eq('id', id).eq('user_id', userId),
+          'ask_intake_sessions',
+        )
           .select('*')
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Update failed');
@@ -350,13 +347,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('guide_results')
-          .select('id, payload')
-          .eq('id', id)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .maybeSingle();
+        const { data, error } = await applyNotDeleted(
+          client.from('guide_results').select('id, payload').eq('id', id).eq('user_id', userId),
+          'guide_results',
+        ).maybeSingle();
         if (error) throw new SupabaseDataError('query_failed', error.message);
         if (!data?.payload) return null;
         return {
@@ -370,12 +364,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('health_flows')
-          .select('*')
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false });
+        const { data, error } = await applyNotDeleted(
+          client.from('health_flows').select('*').eq('user_id', userId),
+          'health_flows',
+        ).order('created_at', { ascending: false });
         if (error) throw new SupabaseDataError('query_failed', error.message);
         return (data ?? []).map((row) => mapHealthFlowRow(row as Record<string, unknown>));
       }),
@@ -384,13 +376,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('health_flows')
-          .select('*')
-          .eq('id', id)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .maybeSingle();
+        const { data, error } = await applyNotDeleted(
+          client.from('health_flows').select('*').eq('id', id).eq('user_id', userId),
+          'health_flows',
+        ).maybeSingle();
         if (error) throw new SupabaseDataError('query_failed', error.message);
         return data ? mapHealthFlowRow(data as Record<string, unknown>) : null;
       }),
@@ -429,12 +418,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
         if (input.title !== undefined) patch.title = input.title;
         if (input.payload !== undefined) patch.payload = input.payload;
 
-        const { data, error } = await client
-          .from('health_flows')
-          .update(patch)
-          .eq('id', id)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
+        const { data, error } = await applyNotDeleted(
+          client.from('health_flows').update(patch).eq('id', id).eq('user_id', userId),
+          'health_flows',
+        )
           .select('*')
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Update failed');
@@ -445,13 +432,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('flow_actions')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('flow_id', flowId)
-          .is('deleted_at', null)
-          .order('action_order', { ascending: true });
+        const { data, error } = await applyNotDeleted(
+          client.from('flow_actions').select('*').eq('user_id', userId).eq('flow_id', flowId),
+          'flow_actions',
+        ).order('action_order', { ascending: true });
         if (error) throw new SupabaseDataError('query_failed', error.message);
         return (data ?? []).map((row) => mapFlowActionRow(row as Record<string, unknown>));
       }),
@@ -489,12 +473,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
         if (input.riskLevel !== undefined) patch.risk_level = input.riskLevel;
         if (input.payload !== undefined) patch.payload = input.payload;
 
-        const { data, error } = await client
-          .from('flow_actions')
-          .update(patch)
-          .eq('id', id)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
+        const { data, error } = await applyNotDeleted(
+          client.from('flow_actions').update(patch).eq('id', id).eq('user_id', userId),
+          'flow_actions',
+        )
           .select('*')
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Update failed');
@@ -528,13 +510,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('flow_blockers')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('flow_id', flowId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false });
+        const { data, error } = await applyNotDeleted(
+          client.from('flow_blockers').select('*').eq('user_id', userId).eq('flow_id', flowId),
+          'flow_blockers',
+        ).order('created_at', { ascending: false });
         if (error) throw new SupabaseDataError('query_failed', error.message);
         return (data ?? []).map((row) => mapFlowBlockerRow(row as Record<string, unknown>));
       }),
@@ -713,13 +692,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
         const userId = await requireSupabaseUserId();
         const deletedAt = new Date().toISOString();
 
-        const { data: flow, error: flowError } = await client
-          .from('health_flows')
-          .select('id')
-          .eq('id', flowId)
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .maybeSingle();
+        const { data: flow, error: flowError } = await applyNotDeleted(
+          client.from('health_flows').select('id').eq('id', flowId).eq('user_id', userId),
+          'health_flows',
+        ).maybeSingle();
         if (flowError) throw new SupabaseDataError('query_failed', flowError.message);
         if (!flow) throw new SupabaseDataError('query_failed', 'Health flow not found.');
 
@@ -763,8 +739,19 @@ export function createSupabaseDataAdapter(): DataAdapter {
 
     deleteHealthProfile: () =>
       runDataOp(async () => {
-        await saveSupabaseHealthProfile(createDefaultHealthProfile());
-        return { status: 'cleared' };
+        await hardDeleteUserRows('health_profiles');
+        return { status: 'deleted' };
+      }),
+
+    deleteAccountAndUserData: () =>
+      runDataOp(async () => {
+        const result = await purgeSupabaseAccountData();
+        return {
+          status: 'deleted',
+          profileDeleted: result.profileDeleted,
+          authUserDeleted: false,
+          failedTables: result.failedTables,
+        };
       }),
 
     createCareCircle: (input) =>
@@ -790,12 +777,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
       runDataOp(async () => {
         const client = requireClient();
         const userId = await requireSupabaseUserId();
-        const { data, error } = await client
-          .from('care_circles')
-          .select('*')
-          .eq('owner_id', userId)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false });
+        const { data, error } = await applyNotDeleted(
+          client.from('care_circles').select('*').eq('owner_id', userId),
+          'care_circles',
+        ).order('created_at', { ascending: false });
         if (error) throw new SupabaseDataError('query_failed', error.message);
         return (data ?? []).map((row) => mapCareCircleRow(row as Record<string, unknown>));
       }),
@@ -841,12 +826,10 @@ export function createSupabaseDataAdapter(): DataAdapter {
         if (input.memberUserId !== undefined) patch.member_user_id = input.memberUserId;
         if (input.inviteEmail !== undefined) patch.invite_email = input.inviteEmail;
 
-        const { data, error } = await client
-          .from('care_circle_members')
-          .update(patch)
-          .eq('id', id)
-          .eq('owner_id', userId)
-          .is('deleted_at', null)
+        const { data, error } = await applyNotDeleted(
+          client.from('care_circle_members').update(patch).eq('id', id).eq('owner_id', userId),
+          'care_circle_members',
+        )
           .select('*')
           .single();
         if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Update failed');

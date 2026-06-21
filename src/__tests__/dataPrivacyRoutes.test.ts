@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   handleDeleteFlowPost,
   handleDeleteHealthProfilePost,
+  handleDeleteAccountPost,
   handleDeleteSummaryPost,
   handleDeletionRequestPost,
   handleExportRequestPost,
@@ -31,6 +32,7 @@ const mockAdapter = {
   deleteHealthFlow: vi.fn(),
   deleteDoctorSummary: vi.fn(),
   deleteHealthProfile: vi.fn(),
+  deleteAccountAndUserData: vi.fn(),
 };
 
 function configureSupabaseEnv() {
@@ -42,6 +44,10 @@ function configureSupabaseEnv() {
 function mockAuthenticatedUser(userId = 'user-test-123') {
   vi.mocked(createSupabaseServerClient).mockResolvedValue({
     auth: {
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: userId } } },
+        error: null,
+      }),
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: userId } },
         error: null,
@@ -77,7 +83,13 @@ describe('data privacy routes', () => {
     });
     mockAdapter.deleteHealthFlow.mockResolvedValue({ flowId: 'flow-1', status: 'deleted' });
     mockAdapter.deleteDoctorSummary.mockResolvedValue({ summaryId: 'summary-1', deletedKind: 'item' });
-    mockAdapter.deleteHealthProfile.mockResolvedValue({ status: 'cleared' });
+    mockAdapter.deleteHealthProfile.mockResolvedValue({ status: 'deleted' });
+    mockAdapter.deleteAccountAndUserData.mockResolvedValue({
+      status: 'deleted',
+      profileDeleted: true,
+      authUserDeleted: false,
+      failedTables: [],
+    });
   });
 
   afterEach(() => {
@@ -88,6 +100,7 @@ describe('data privacy routes', () => {
     configureSupabaseEnv();
     vi.mocked(createSupabaseServerClient).mockResolvedValue({
       auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
         getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
     } as never);
@@ -220,9 +233,23 @@ describe('data privacy routes', () => {
 
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
-    expect(body.status).toBe('cleared');
+    expect(body.status).toBe('deleted');
     expect(mockAdapter.deleteHealthProfile).toHaveBeenCalled();
     expect(JSON.stringify(body)).not.toContain('auth');
+  });
+
+  it('delete-account purges account data and profiles row', async () => {
+    mockAuthenticatedUser();
+
+    const { status, body } = await handleDeleteAccountPost(
+      new Request('http://localhost/api/data/delete-account', { method: 'POST' }),
+    );
+
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.profileDeleted).toBe(true);
+    expect(mockAdapter.deleteAccountAndUserData).toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain('symptoms');
   });
 
   it('privacy route handlers do not import localStorage modules', () => {

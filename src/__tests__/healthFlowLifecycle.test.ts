@@ -256,6 +256,13 @@ describe('healthFlow lifecycle service', () => {
     expect(hasUrgentIntakeSignals(intake)).toBe(true);
   });
 
+  it('AskCuravon routes intake completion through server flow-proposal client', () => {
+    const source = readFileSync(ASK_CURAVON_PATH, 'utf8');
+    expect(source).toMatch(/postFlowProposal/);
+    expect(source).not.toMatch(/runAIOrchestrator/);
+    expect(source).not.toMatch(/generateCuravonNextAction/);
+  });
+
   it('health flow lifecycle files do not import localStorage modules', () => {
     const localStorageImport = /\bfrom\s+['"].*localStorage|healthStorage|storageKeys/;
     expect(localStorageImport.test(readFileSync(HEALTH_FLOW_SERVICE_PATH, 'utf8'))).toBe(false);

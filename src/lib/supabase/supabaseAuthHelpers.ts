@@ -30,3 +30,29 @@ export async function clearLocalSupabaseSession(client: SupabaseClient): Promise
     // ignore — best-effort local cleanup
   }
 }
+
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
+
+/** Prevent indefinite blank UI when Supabase auth network calls hang. */
+export async function withAuthSessionTimeout<T>(
+  task: Promise<T>,
+  timeoutMs = AUTH_SESSION_TIMEOUT_MS,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('auth_timeout'));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+export function isAuthSessionTimeout(error: unknown): boolean {
+  return error instanceof Error && error.message === 'auth_timeout';
+}

@@ -10,6 +10,7 @@
 @import './screens/doctor-summary.css';
 @import './screens/full-flow.css';
 @import './screens/activity-insights.css';
+@import './screens/settings.css';
 
 /* Legacy unmigrated styles — remove sections as they move into src/styles/ */
 @import '../App.css';

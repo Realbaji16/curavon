@@ -1,12 +1,18 @@
+/**
+ * Plan Engine v3 — canonical runtime engine for next-action generation.
+ *
+ * AI may synthesize wording for an allowed candidate/primitive only; it must not
+ * invent new action categories or bypass boundary checks. On failure, v3 falls
+ * back to deterministic safe candidates — never to deprecated planEngineV2.
+ *
+ * @see docs/decisions/0003-plan-engine-v3-canonical.md
+ */
 import { detectUrgentConcern } from '../../utils/healthSafety';
 import { recordSafeAiUsageLog } from '../data/operationalDataService';
 import { buildSafePlanCandidates } from './planCandidates';
-import {
-  generateNextBestPlanAction,
-  generateNextBestPlanActionSync,
-} from './planEngineV2';
 import { synthesizeNextBestAction } from './planActionSynthesis';
 import { DISALLOWED_ACTION_LABELS } from './planActionBoundaries';
+import { getPlanV3CacheEntry, setPlanV3CacheEntry } from './planEngineV3Cache';
 import { fallbackRankCandidate, isUrgentFromContext } from './planGuards';
 import type {
   PlanAction,
@@ -18,7 +24,6 @@ import type {
   PlanSynthesisInput,
 } from './planTypes';
 
-const PLAN_V3_CACHE = new Map<string, PlanEngineV3Result>();
 const ENGINE_VERSION = 'v3';
 
 type V3UsageLog = {
@@ -263,7 +268,8 @@ function deterministicResult(
 
 export async function generateNextBestActionV3(input: PlanEngineInput): Promise<PlanEngineV3Result> {
   const cacheKey = makeInputKey(input);
-  const cached = PLAN_V3_CACHE.get(cacheKey);
+  // Session cache: TTL-limited, boundary-checked on read — never authoritative over urgent actions.
+  const cached = getPlanV3CacheEntry(cacheKey, input);
   if (cached) {
     logV3Usage({
       task: 'next_action_v3',
@@ -297,7 +303,6 @@ export async function generateNextBestActionV3(input: PlanEngineInput): Promise<
       candidates: [],
       safetyOverride: true,
     };
-    PLAN_V3_CACHE.set(cacheKey, result);
     logV3Usage({
       task: 'next_action_v3',
       timestamp: new Date().toISOString(),
@@ -319,7 +324,7 @@ export async function generateNextBestActionV3(input: PlanEngineInput): Promise<
 
   if (!complex && (candidates.length === 1 || isSimpleTodayRefresh(input))) {
     const result = deterministicResult(input, candidates, sourceSignals);
-    PLAN_V3_CACHE.set(cacheKey, result);
+    setPlanV3CacheEntry(cacheKey, input, result);
     logV3Usage({
       task: 'next_action_v3',
       timestamp: new Date().toISOString(),
@@ -353,7 +358,7 @@ export async function generateNextBestActionV3(input: PlanEngineInput): Promise<
         safetyOverride: false,
         synthesis,
       };
-      PLAN_V3_CACHE.set(cacheKey, result);
+      setPlanV3CacheEntry(cacheKey, input, result);
       logV3Usage({
         task: 'next_action_v3',
         timestamp: new Date().toISOString(),
@@ -367,25 +372,18 @@ export async function generateNextBestActionV3(input: PlanEngineInput): Promise<
     }
   }
 
-  try {
-    const v2 = await generateNextBestPlanAction(input);
-    const result: PlanEngineV3Result = { ...v2, synthesis: undefined };
-    PLAN_V3_CACHE.set(cacheKey, result);
-    logV3Usage({
-      task: 'next_action_v3',
-      timestamp: new Date().toISOString(),
-      cacheHit: false,
-      fallbackUsed: v2.action.fallbackUsed,
-      aiSynthesized: false,
-      boundaryValidated: true,
-      safetyOverride: v2.safetyOverride,
-    });
-    return result;
-  } catch {
-    const result = deterministicResult(input, candidates, sourceSignals);
-    PLAN_V3_CACHE.set(cacheKey, result);
-    return result;
-  }
+  const result = deterministicResult(input, candidates, sourceSignals);
+  setPlanV3CacheEntry(cacheKey, input, result);
+  logV3Usage({
+    task: 'next_action_v3',
+    timestamp: new Date().toISOString(),
+    cacheHit: false,
+    fallbackUsed: true,
+    aiSynthesized: false,
+    boundaryValidated: true,
+    safetyOverride: false,
+  });
+  return result;
 }
 
 export function generateNextBestActionV3Sync(input: PlanEngineInput): PlanEngineV3Result {
@@ -411,12 +409,13 @@ export function generateNextBestActionV3Sync(input: PlanEngineInput): PlanEngine
     };
   }
 
-  try {
-    const v2 = generateNextBestPlanActionSync(input);
-    return { ...v2 };
-  } catch {
-    const sourceSignals = deriveSourceSignals(input);
-    const candidates = buildSafePlanCandidates(input);
+  const sourceSignals = deriveSourceSignals(input);
+  const candidates = buildSafePlanCandidates(input);
+  const complex = isComplexPlanningContext(input, candidates);
+
+  if (!complex && (candidates.length === 1 || isSimpleTodayRefresh(input))) {
     return deterministicResult(input, candidates, sourceSignals);
   }
+
+  return deterministicResult(input, candidates, sourceSignals);
 }

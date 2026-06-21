@@ -1,3 +1,9 @@
+/**
+ * @deprecated Legacy plan engine — do not import from runtime app paths.
+ * Retained for migration reference and compatibility tests only.
+ * Canonical engine: planEngineV3.ts via nextActionAdapter.ts
+ * @see docs/decisions/0003-plan-engine-v3-canonical.md
+ */
 import { detectUrgentConcern } from '../../utils/healthSafety';
 import { buildSafePlanCandidates } from './planCandidates';
 import { buildPlanReasoningPrompt, PLAN_REASONING_SYSTEM_PROMPT } from './planReasoningPrompt';
