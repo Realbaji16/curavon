@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isFetchFailure, isRecoverableAuthError } from '../lib/supabase/supabaseAuthHelpers';
+import {
+  isAuthSessionTimeout,
+  isFetchFailure,
+  isRecoverableAuthError,
+  withAuthSessionTimeout,
+} from '../lib/supabase/supabaseAuthHelpers';
 
 describe('supabaseAuthHelpers', () => {
   it('detects fetch failures', () => {
@@ -16,5 +21,12 @@ describe('supabaseAuthHelpers', () => {
         name: 'AuthApiError',
       }),
     ).toBe(true);
+  });
+
+  it('times out hung auth session calls', async () => {
+    await expect(
+      withAuthSessionTimeout(new Promise(() => undefined), 20),
+    ).rejects.toThrow('auth_timeout');
+    expect(isAuthSessionTimeout(new Error('auth_timeout'))).toBe(true);
   });
 });

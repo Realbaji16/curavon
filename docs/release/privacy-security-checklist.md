@@ -14,7 +14,7 @@ For engineering + privacy reviewer sign-off before private pilot.
 |---|--------|------|----------|
 | 1.1 | Pilot uses Supabase auth only | ☐ | env config |
 | 1.2 | Local demo auth blocked outside dev/test | ☐ | `pilotEnvHardening.test.ts` |
-| 1.3 | `/app` requires authentication | ☐ | middleware / gate |
+| 1.3 | `/app` requires authentication | ☐ | proxy / gate |
 | 1.4 | Protected API routes return 401 unauthenticated | ☐ | route tests |
 
 ---

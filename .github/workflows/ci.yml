@@ -22,6 +22,12 @@ jobs:
 
       - run: npm test
 
+      - run: npm run test:pilot-gate
+
+      - run: npm run test:safety
+
+      - run: npm run test:privacy
+
       - run: npm run build
         env:
           APP_ENV: test

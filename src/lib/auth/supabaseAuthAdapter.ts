@@ -1,11 +1,13 @@
-import type { User } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { getAppShellState } from '../app/appShellState';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
 import {
   clearLocalSupabaseSession,
   isFetchFailure,
+  isAuthSessionTimeout,
   isRecoverableAuthError,
   SUPABASE_NETWORK_ERROR_MESSAGE,
+  withAuthSessionTimeout,
 } from '../supabase/supabaseAuthHelpers';
 import { syncSupabaseProfileRow } from '../supabase/profileSync';
 import type { AuthAdapter, AuthMode, AuthSession, CuravonUser } from './authTypes';
@@ -70,14 +72,20 @@ async function syncProfileRow(user: User): Promise<void> {
   }
 }
 
+export function mapSupabaseClientSession(session: Session | null): AuthSession {
+  if (!session?.user) return asSession(null);
+  void syncProfileRow(session.user);
+  return asSession(mapSupabaseUser(session.user));
+}
+
 async function loadAuthenticatedSession(
   client: NonNullable<ReturnType<typeof getBrowserSupabaseClient>>,
 ): Promise<AuthSession> {
   try {
     const {
-      data: { user },
+      data: { session },
       error,
-    } = await client.auth.getUser();
+    } = await withAuthSessionTimeout(client.auth.getSession());
 
     if (error) {
       if (isRecoverableAuthError(error) || isFetchFailure(error)) {
@@ -89,12 +97,9 @@ async function loadAuthenticatedSession(
       return asSession(null, error.message);
     }
 
-    if (!user) return asSession(null);
-
-    await syncProfileRow(user);
-    return asSession(mapSupabaseUser(user));
+    return mapSupabaseClientSession(session);
   } catch (error) {
-    if (isFetchFailure(error)) {
+    if (isAuthSessionTimeout(error) || isFetchFailure(error)) {
       await clearLocalSupabaseSession(client);
       if (process.env.NODE_ENV === 'development') {
         console.warn('Curavon Supabase auth unreachable; cleared local session.', error);

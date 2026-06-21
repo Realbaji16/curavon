@@ -13,12 +13,12 @@ Curavon uses **layered protection** without over-building routing:
 | Path | Access | Notes |
 |------|--------|-------|
 | `/` | Public | Renders mobile shell; auth flow when needed |
-| `/app` | Protected (Supabase mode) | Same shell; middleware requires Supabase session |
+| `/app` | Protected (Supabase mode) | Same shell; `proxy.ts` requires Supabase session |
 | `/api/health` | Public | Safe status JSON only |
 | `/api/auth/session` | Public | Safe session probe; no secrets |
 | Future `/privacy`, `/terms` | Public | Marketing/legal outside app shell |
 
-## Why middleware is lightweight
+## Why proxy is lightweight
 
 - Curavon remains **app-first**; internal navigation is not URL-based yet
 - `local_demo` must not redirect (no Supabase cookies)
@@ -29,7 +29,7 @@ Curavon uses **layered protection** without over-building routing:
 
 - Only runs when `NEXT_PUBLIC_AUTH_MODE=supabase` and public Supabase env exists
 - Matcher: `/app/:path*` — excludes static assets and API routes
-- Missing Supabase env → middleware no-op → `local_demo` behavior
+- Missing Supabase env → proxy no-op → `local_demo` behavior
 - Unauthenticated on `/app` → redirect to `/` (client AuthGate handles sign-in)
 
 ## Deferred (future steps)
@@ -37,8 +37,8 @@ Curavon uses **layered protection** without over-building routing:
 - Protect additional routes (`/app/settings`, etc.) when URL routing expands
 - Server-side session requirement for sensitive API routes
 - Marketing site split from app subdomain/path
-- Optional middleware refresh token rotation tuning
+- Optional proxy refresh token rotation tuning
 
 ## local_demo
 
-No middleware enforcement. Device-local auth and storage unchanged.
+No proxy enforcement. Device-local auth and storage unchanged.

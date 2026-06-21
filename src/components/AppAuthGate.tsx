@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useApp } from '../context/useApp';
 import { useHealth } from '../context/useHealth';
@@ -14,6 +14,7 @@ import { LazyDoctorSummaryOverlay } from './LazyDoctorSummaryOverlay';
 import { Toast } from './ScreenHeader';
 import { PhoneChrome } from './PhoneChrome';
 import { softPageTransition } from '../motion/variants';
+import { RouteLoadingFallback } from './RouteLoadingFallback';
 import type { ThemePreset } from '../theme/themes';
 import { getThemeCssVars } from '../theme/themeStyles';
 
@@ -57,13 +58,24 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
   const { healthProfile } = useHealth();
   const { isAuthenticated, loading: authLoading } = useCuravonAuth();
   const sensitiveMode = healthProfile.sensitiveMode;
+  const [authWaitExpired, setAuthWaitExpired] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading) {
+      setAuthWaitExpired(false);
+      return;
+    }
+    const timeoutId = setTimeout(() => setAuthWaitExpired(true), 12_000);
+    return () => clearTimeout(timeoutId);
+  }, [authLoading]);
 
   const cloudMood = onboardingComplete ? moodForTab(activeTab) : 'onboarding';
+  const waitingOnSession = (authLoading && !authWaitExpired) || !shellHydrated;
 
-  if (authLoading || !shellHydrated) {
+  if (waitingOnSession) {
     return (
       <PhoneFrameShell cloudMood="onboarding" theme={theme}>
-        <div className="auth-loading-shell" aria-busy="true" aria-label="Loading session" />
+        <RouteLoadingFallback message="Loading your session…" />
       </PhoneFrameShell>
     );
   }

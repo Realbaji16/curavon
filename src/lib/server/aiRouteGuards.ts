@@ -64,6 +64,15 @@ export async function requireAuthenticatedSupabaseUser(): Promise<AuthGuardResul
   }
 
   const {
+    data: { session },
+    error: sessionError,
+  } = await client.auth.getSession();
+
+  if (!sessionError && session?.user) {
+    return { ok: true, userId: session.user.id };
+  }
+
+  const {
     data: { user },
     error,
   } = await client.auth.getUser();

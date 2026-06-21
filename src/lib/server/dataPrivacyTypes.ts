@@ -37,4 +37,6 @@ export const PRIVACY_ROUTE_MESSAGES = {
   flowDeleted: 'Health flow deleted.',
   summaryDeleted: 'Doctor summary deleted.',
   profileCleared: 'Health profile cleared.',
+  accountDeleted: 'Account and health data deleted.',
+  accountDeleteFailed: 'Account deletion could not be completed. Try again while signed in.',
 } as const;

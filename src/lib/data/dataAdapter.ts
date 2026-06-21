@@ -113,6 +113,12 @@ export interface DataAdapter {
   deleteHealthFlow(flowId: string): Promise<{ flowId: string; status: string }>;
   deleteDoctorSummary(summaryId: string): Promise<{ summaryId: string; deletedKind: 'item' | 'draft' }>;
   deleteHealthProfile(): Promise<{ status: string }>;
+  deleteAccountAndUserData(): Promise<{
+    status: string;
+    profileDeleted: boolean;
+    authUserDeleted: boolean;
+    failedTables?: string[];
+  }>;
 
   createCareCircle(input: CreateCareCircleInput): Promise<CareCircle>;
   listCareCircles(): Promise<CareCircle[]>;
@@ -168,6 +174,7 @@ export const DATA_ADAPTER_METHODS = [
   'deleteHealthFlow',
   'deleteDoctorSummary',
   'deleteHealthProfile',
+  'deleteAccountAndUserData',
   'createCareCircle',
   'listCareCircles',
   'createCareCircleInvite',

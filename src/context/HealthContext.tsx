@@ -63,6 +63,7 @@ import {
   toDataErrorMessage,
   type CoreHealthDataLoadResult,
 } from '../lib/data/coreHealthDataService';
+import { DataAuthError } from '../lib/data/dataErrors';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import {
   generateCuravonNextAction,
@@ -395,6 +396,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
   const reportPersistError = useCallback((error: unknown) => {
     setCoreDataError(toDataErrorMessage(error));
+    if (error instanceof DataAuthError) return;
     reportSafeError(error, {
       route_name: 'health_context',
       error_code: 'persist_failed',
@@ -402,12 +404,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const persistProfile = useCallback((profile: HealthProfile) => {
+    if (!isAuthenticated) return;
     void saveHealthProfileRecord(profile).catch(reportPersistError);
-  }, [reportPersistError]);
+  }, [isAuthenticated, reportPersistError]);
 
   const persistNextAction = useCallback((state: NextActionState | null) => {
+    if (!isAuthenticated) return;
     void saveNextActionStateRecord(state).catch(reportPersistError);
-  }, [reportPersistError]);
+  }, [isAuthenticated, reportPersistError]);
 
   const refreshFollowUps = useCallback(() => {
     void hydrateFollowUps()
@@ -578,6 +582,10 @@ export function HealthProvider({ children }: { children: ReactNode }) {
   }, [applyNextActionFromPlan]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      hasAttemptedInitialPlanRef.current = false;
+      return;
+    }
     if (coreDataLoading || authLoading) return;
     if (hasAttemptedInitialPlanRef.current) return;
     hasAttemptedInitialPlanRef.current = true;
@@ -593,7 +601,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       trigger: 'initial_load',
       onlyIfPending: true,
     });
-  }, [coreDataLoading, authLoading]);
+  }, [coreDataLoading, authLoading, isAuthenticated]);
 
   const addTodaySteps = useCallback(
     (amount: number) => {

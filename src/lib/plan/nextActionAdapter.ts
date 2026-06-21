@@ -1,3 +1,9 @@
+/**
+ * Single runtime entry for next-action generation. Plan Engine v3 is canonical —
+ * do not import planEngineV2 from screens, contexts, or other runtime modules.
+ *
+ * @see docs/decisions/0003-plan-engine-v3-canonical.md
+ */
 import type { AskHistoryEntry } from '../../types/askIntake';
 import type { RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
@@ -5,10 +11,11 @@ import type { HealthSnapshot } from '../../types/healthSnapshot';
 import type { FollowUpOutcome } from '../followUp/followUpTypes';
 import type { GuideResultRecord } from '../../types/guideResult';
 import { generateNextBestActionV3, generateNextBestActionV3Sync } from './planEngineV3';
-import { generateNextBestPlanActionSync } from './planEngineV2';
 import type { PlanCategory, PlanEngineInput, PlanEngineResult, PlanSafetyLevel } from './planTypes';
 
 export type NextActionSource = 'today' | 'ask' | 'guides' | 'followup';
+
+export type PlanEngineFailureReason = 'canonical_v3' | 'plan_engine_unavailable' | 'safe_fallback';
 
 export interface CuravonNextActionInput {
   source: NextActionSource;
@@ -46,6 +53,7 @@ export interface CuravonNextActionOutput {
   fallbackUsed: boolean;
   actionId: string;
   safetyOverride: boolean;
+  planEngineReason: PlanEngineFailureReason;
 }
 
 function sourceLabel(source: NextActionSource): string {
@@ -105,9 +113,40 @@ function toPlanEngineInput(input: CuravonNextActionInput): PlanEngineInput {
   };
 }
 
-function mapPlanResult(result: PlanEngineResult, source: NextActionSource): CuravonNextActionOutput {
+function isUrgentExistingAction(state: NextActionState): boolean {
+  return state.safetyLevel === 'urgent' || state.category === 'escalate';
+}
+
+function outputFromExistingState(
+  state: NextActionState,
+  source: NextActionSource,
+  planEngineReason: PlanEngineFailureReason,
+): CuravonNextActionOutput {
+  return {
+    title: state.title ?? "Today's next step",
+    actionText: state.currentAction,
+    reason: state.reason ?? 'Keeping your current step while planning is unavailable.',
+    category: (state.category ?? 'stabilize') as PlanCategory,
+    safetyLevel: state.safetyLevel ?? 'normal',
+    relatedGuide: state.relatedGuide,
+    relatedGuideFlowId: state.relatedGuideFlowId ?? relatedGuideFlowId(state.relatedGuide),
+    followUpPrompt: state.followUpPrompt ?? 'How did this step go: done, blocked, or adjust?',
+    watchFor: state.watchFor ?? 'Any noticeable change in how you feel.',
+    sourceSignals: state.sourceSignals ?? [],
+    selectedBy: state.selectedBy ?? 'rules',
+    aiReasoned: state.aiReasoned ?? false,
+    fallbackUsed: true,
+    actionId: state.actionId ?? `plan-v3-preserved-${source}`,
+    safetyOverride: isUrgentExistingAction(state),
+    planEngineReason,
+  };
+}
+
+function mapPlanResult(
+  result: PlanEngineResult,
+  source: NextActionSource,
+): CuravonNextActionOutput {
   const prefix = source === 'ask' ? 'ask' : source === 'guides' ? 'guide' : source === 'followup' ? 'fup' : 'plan';
-  const engineTag = result.action.aiSynthesized ? 'v3' : 'v2';
   return {
     title: result.action.title,
     actionText: result.action.actionText,
@@ -122,12 +161,13 @@ function mapPlanResult(result: PlanEngineResult, source: NextActionSource): Cura
     selectedBy: result.action.selectedBy,
     aiReasoned: result.action.aiReasoned,
     fallbackUsed: result.action.fallbackUsed,
-    actionId: `${prefix}-${engineTag}-${result.action.id}`,
+    actionId: `${prefix}-v3-${result.action.id}`,
     safetyOverride: result.safetyOverride,
+    planEngineReason: 'canonical_v3',
   };
 }
 
-function fallbackOutput(): CuravonNextActionOutput {
+function conservativeSafeFallback(): CuravonNextActionOutput {
   return {
     title: 'Keep today simple',
     actionText: 'Take one gentle stabilizing step: hydrate, pause briefly, and write one short note.',
@@ -142,9 +182,23 @@ function fallbackOutput(): CuravonNextActionOutput {
     selectedBy: 'rules',
     aiReasoned: false,
     fallbackUsed: true,
-    actionId: 'plan-v2-fallback-safe',
+    actionId: 'plan-v3-safe-fallback',
     safetyOverride: false,
+    planEngineReason: 'safe_fallback',
   };
+}
+
+function resolveEngineFailure(
+  input: CuravonNextActionInput,
+  reason: PlanEngineFailureReason,
+): CuravonNextActionOutput {
+  const current = input.nextActionState;
+  if (current?.currentAction?.trim()) {
+    if (isUrgentExistingAction(current) || current.status === 'pending') {
+      return outputFromExistingState(current, input.source, reason);
+    }
+  }
+  return { ...conservativeSafeFallback(), planEngineReason: reason === 'plan_engine_unavailable' ? reason : 'safe_fallback' };
 }
 
 export function toNextActionStateFromAdapter(
@@ -174,6 +228,7 @@ export function toNextActionStateFromAdapter(
   };
 }
 
+/** Async runtime path — v3 only; never falls back to deprecated v2. */
 export async function generateCuravonNextAction(
   input: CuravonNextActionInput,
 ): Promise<CuravonNextActionOutput> {
@@ -181,15 +236,11 @@ export async function generateCuravonNextAction(
     const result = await generateNextBestActionV3(toPlanEngineInput(input));
     return mapPlanResult(result, input.source);
   } catch {
-    try {
-      const result = generateNextBestActionV3Sync(toPlanEngineInput(input));
-      return mapPlanResult(result, input.source);
-    } catch {
-      return fallbackOutput();
-    }
+    return resolveEngineFailure(input, 'plan_engine_unavailable');
   }
 }
 
+/** Sync runtime path — v3 only; never falls back to deprecated v2. */
 export function generateCuravonNextActionSync(
   input: CuravonNextActionInput,
 ): CuravonNextActionOutput {
@@ -197,11 +248,6 @@ export function generateCuravonNextActionSync(
     const result = generateNextBestActionV3Sync(toPlanEngineInput(input));
     return mapPlanResult(result, input.source);
   } catch {
-    try {
-      const result = generateNextBestPlanActionSync(toPlanEngineInput(input));
-      return mapPlanResult(result, input.source);
-    } catch {
-      return fallbackOutput();
-    }
+    return resolveEngineFailure(input, 'plan_engine_unavailable');
   }
 }

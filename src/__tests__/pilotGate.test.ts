@@ -27,6 +27,7 @@ const REQUIRED_API_ROUTES = [
   'app/api/data/delete-flow/route.ts',
   'app/api/data/delete-summary/route.ts',
   'app/api/data/delete-health-profile/route.ts',
+  'app/api/data/delete-account/route.ts',
 ];
 
 const REQUIRED_SAFETY_TESTS = [
@@ -104,6 +105,13 @@ describe('private pilot launch gate (automated)', () => {
     expect(envExample).toMatch(/NEXT_PUBLIC_AUTH_MODE/);
   });
 
+  it('proxy auth file exists for /app protection', () => {
+    const proxySource = readRepoFile('proxy.ts');
+    expect(proxySource).toMatch(/export async function proxy/);
+    expect(proxySource).toMatch(/matcher:\s*\['\/app\/:path\*'\]/);
+    expect(existsSync(path.join(REPO_ROOT, 'middleware.ts'))).toBe(false);
+  });
+
   it('source scan finds no NEXT_PUBLIC_OPENAI_API_KEY pattern', () => {
     for (const relativePath of SECRET_SCAN_PATHS) {
       const content = readRepoFile(relativePath);
@@ -137,11 +145,14 @@ describe('private pilot launch gate (automated)', () => {
     }
   });
 
-  it('CI workflow runs lint, test, and build', () => {
+  it('CI workflow runs lint, test, pilot-gate, safety, privacy, and build', () => {
     const ci = readRepoFile('.github/workflows/ci.yml');
     expect(ci).toMatch(/npm ci/);
     expect(ci).toMatch(/npm run lint/);
     expect(ci).toMatch(/npm test/);
+    expect(ci).toMatch(/npm run test:pilot-gate/);
+    expect(ci).toMatch(/npm run test:safety/);
+    expect(ci).toMatch(/npm run test:privacy/);
     expect(ci).toMatch(/npm run build/);
   });
 

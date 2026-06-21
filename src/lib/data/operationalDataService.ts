@@ -110,11 +110,14 @@ export const OPERATIONAL_DATA_MESSAGES = {
   unavailable: 'Your request could not be recorded. Try again soon.',
   exportSubmitted: 'Export request submitted. We will notify you when it is ready.',
   deletionSubmitted: 'Deletion request submitted. Your account team will process it.',
+  accountDeleted: 'Account and health data deleted from Curavon.',
 } as const;
 
 export function toOperationalDataErrorMessage(error: unknown): string {
   if (error instanceof DataAuthError) return OPERATIONAL_DATA_MESSAGES.auth;
-  if (error instanceof DataUnavailableError) return OPERATIONAL_DATA_MESSAGES.unavailable;
+  if (error instanceof DataUnavailableError) {
+    return error.message || OPERATIONAL_DATA_MESSAGES.unavailable;
+  }
   return OPERATIONAL_DATA_MESSAGES.unavailable;
 }
 
@@ -162,6 +165,62 @@ export async function requestAccountDataExport(
     }),
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+export async function requestHealthProfileDeletion(): Promise<{ status: string }> {
+  const response = await fetch('/api/data/delete-health-profile', {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  const body = (await response.json()) as {
+    ok?: boolean;
+    status?: string;
+    error?: { message?: string };
+  };
+
+  if (!response.ok || !body.ok) {
+    throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  return { status: body.status ?? 'deleted' };
+}
+
+export async function requestAccountDeletion(): Promise<{
+  profileDeleted: boolean;
+  authUserDeleted: boolean;
+}> {
+  const response = await fetch('/api/data/delete-account', {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  let body: {
+    ok?: boolean;
+    profileDeleted?: boolean;
+    authUserDeleted?: boolean;
+    error?: { message?: string };
+  } = {};
+
+  try {
+    body = (await response.json()) as typeof body;
+  } catch {
+    throw new DataUnavailableError(OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  if (!response.ok || !body.ok) {
+    throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  trackSafeEvent('data_deletion_requested', {
+    request_status: 'completed',
+    status: 'deleted',
+  });
+
+  return {
+    profileDeleted: body.profileDeleted === true,
+    authUserDeleted: body.authUserDeleted === true,
   };
 }
 

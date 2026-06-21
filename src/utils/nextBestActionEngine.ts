@@ -1,4 +1,4 @@
-// Legacy next-action path. Do not use for new generation. Route through Plan Engine v2 via nextActionAdapter.
+// Legacy next-action path. Do not use for new generation — route through nextActionAdapter (Plan Engine v3).
 import type { AdjustOption, DailyCheckIn, HealthBlockedReason, NextActionState } from '../types/health';
 import type {
   ActionSourceChip,
