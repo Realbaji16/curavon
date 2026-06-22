@@ -1,0 +1,7 @@
+# Curavon Supabase project (remote)
+# Use: npx supabase login && npx supabase link --project-ref mprfgqnmtobbqycvtatd && npx supabase db push
+
+project_id = "mprfgqnmtobbqycvtatd"
+
+[db]
+major_version = 15

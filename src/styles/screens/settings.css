@@ -116,3 +116,68 @@
 .settings-screen .settings-account-row strong {
   color: var(--text-body-readable);
 }
+
+.settings-profile-context {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.settings-field-label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.settings-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-chip-row--stacked {
+  flex-direction: column;
+}
+
+.settings-chip {
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.45);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-body-readable);
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-chip-row--stacked .settings-chip {
+  border-radius: 14px;
+}
+
+.settings-chip--active {
+  border-color: var(--brand-teal-border);
+  background: rgba(43, 179, 163, 0.12);
+  color: var(--brand-teal-deep);
+}
+
+.settings-text-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.settings-input {
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  min-height: 42px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}

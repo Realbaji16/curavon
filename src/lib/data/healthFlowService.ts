@@ -6,6 +6,7 @@ import type {
   HealthFlow,
 } from './dataTypes';
 import { getDataAdapter } from './getDataAdapter';
+import { DataValidationError } from './dataErrors';
 import type { AdjustOption, HealthBlockedReason, NextActionState } from '../../types/health';
 import { ADJUSTED_ACTIONS } from '../../utils/nextActionRules';
 import { blockedReasonLabel, adjustedOptionLabel } from '../../utils/nextBestActionEngine';
@@ -163,17 +164,24 @@ export async function activateHealthFlowWithAction(input: {
 export async function persistFlowActionDone(
   flowActionId: string,
   state: Pick<NextActionState, 'currentAction' | 'reason' | 'category'>,
-): Promise<FlowAction> {
-  return getDataAdapter().updateFlowActionStatus(flowActionId, {
-    status: 'done',
-    payload: {
-      instruction: state.currentAction,
-      reason: state.reason,
-      category: state.category,
-      responseReason: 'done',
-      completedAt: new Date().toISOString(),
-    },
-  });
+): Promise<FlowAction | null> {
+  try {
+    return await getDataAdapter().updateFlowActionStatus(flowActionId, {
+      status: 'done',
+      payload: {
+        instruction: state.currentAction,
+        reason: state.reason,
+        category: state.category,
+        responseReason: 'done',
+        completedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DataValidationError) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function persistFlowActionBlocked(input: {

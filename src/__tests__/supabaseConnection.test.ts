@@ -92,6 +92,8 @@ describe('Supabase connection (Step 18)', () => {
     const required = [
       'supabase/migrations/20250618100001_curavon_app_schema.sql',
       'supabase/migrations/20250618100002_curavon_rls_policies.sql',
+      'supabase/migrations/20250618100003_curavon_auth_profile_trigger.sql',
+      'supabase/migrations/20250618100004_curavon_table_grants.sql',
       'docs/runbooks/supabase-migrations.md',
       'docs/backend/supabase-schema-v1.sql',
       'docs/backend/supabase-rls-v1.sql',

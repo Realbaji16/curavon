@@ -24,6 +24,7 @@ Migrations run in order from `supabase/migrations/`:
 2. `20250618100001_curavon_app_schema.sql`
 3. `20250618100002_curavon_rls_policies.sql`
 4. `20250618100003_curavon_auth_profile_trigger.sql`
+5. `20250618100004_curavon_table_grants.sql` — **required** on projects with opt-in Data API table exposure (fixes `42501 permission denied`)
 
 ### Option B — SQL Editor
 

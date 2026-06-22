@@ -55,7 +55,7 @@ function PhoneFrameShell({
 
 export function AppAuthGate({ children }: { children: ReactNode }) {
   const { onboardingComplete, setupComplete, activeTab, theme, shellHydrated } = useApp();
-  const { healthProfile } = useHealth();
+  const { healthProfile, coreDataLoading } = useHealth();
   const { isAuthenticated, loading: authLoading } = useCuravonAuth();
   const sensitiveMode = healthProfile.sensitiveMode;
   const [authWaitExpired, setAuthWaitExpired] = useState(false);
@@ -71,8 +71,9 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
 
   const cloudMood = onboardingComplete ? moodForTab(activeTab) : 'onboarding';
   const waitingOnSession = (authLoading && !authWaitExpired) || !shellHydrated;
+  const waitingOnProfileSync = isAuthenticated && !setupComplete && coreDataLoading;
 
-  if (waitingOnSession) {
+  if (waitingOnSession || waitingOnProfileSync) {
     return (
       <PhoneFrameShell cloudMood="onboarding" theme={theme}>
         <RouteLoadingFallback message="Loading your session…" />

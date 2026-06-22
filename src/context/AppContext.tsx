@@ -15,6 +15,13 @@ import {
   getAppShellState,
   patchAppShellState,
 } from '../lib/app/appShellState';
+import {
+  readOnboardingSeen,
+  readPersistedAppShell,
+  writeOnboardingSeen,
+  writePersistedAppShell,
+} from '../lib/app/appShellPersistence';
+import { APP_SHELL_SYNC_EVENT, healthProfileFromProfileSetup } from '../lib/app/profileSetupSync';
 import { saveHealthProfileRecord } from '../lib/data/coreHealthDataService';
 import { trackSafeEvent } from '../lib/observability/safeAnalytics';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
@@ -62,6 +69,14 @@ function normalizeProfileSetup(
       primaryGoals: data.primaryGoals,
       smartSilencePreference: data.smartSilencePreference,
       sensitiveMode: data.sensitiveMode ?? false,
+      ageRange: 'ageRange' in data ? data.ageRange : '',
+      sex: 'sex' in data ? data.sex : '',
+      pregnancyStatus: 'pregnancyStatus' in data ? data.pregnancyStatus : '',
+      stateOrRegion: 'stateOrRegion' in data ? data.stateOrRegion : '',
+      languageStyle: 'languageStyle' in data ? data.languageStyle : '',
+      conditions: 'conditions' in data && data.conditions ? [...data.conditions] : [],
+      allergies: 'allergies' in data && data.allergies ? [...data.allergies] : [],
+      medications: 'medications' in data && data.medications ? [...data.medications] : [],
     };
   }
   const legacyGoal = 'primaryGoal' in data && typeof data.primaryGoal === 'string' ? data.primaryGoal : '';
@@ -105,6 +120,8 @@ interface AppContextValue extends AppState {
   completeAuthConsent: () => void;
   completeProfileSetup: (setup: ProfileSetupData & { sensitiveMode: boolean }) => void;
   /** Clears consent/setup shell state after canonical signOut. Does not write auth credentials. */
+  /** Restore saved consent/setup for a returning account (e.g. right after sign-in). */
+  hydrateShellForUser: (userId: string) => boolean;
   clearAuthShellState: () => void;
   /** @deprecated Use signOut() from useCuravonAuth plus clearAuthShellState(). */
   signOutDemo: () => void;
@@ -162,18 +179,75 @@ export { AppContext };
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useCuravonAuth();
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?.id ?? null;
   const [shellHydrated, setShellHydrated] = useState(false);
   const screenBackHandlerRef = useRef<(() => void) | null>(null);
   const [screenBackVisible, setScreenBackVisible] = useState(false);
 
   const [state, setState] = useState<AppState>(() => createShellState());
 
+  const syncReactStateFromShellStore = useCallback(() => {
+    const shell = getAppShellState();
+    setState((s) => ({
+      ...s,
+      onboardingComplete: shell.onboardingSeen,
+      consentComplete: shell.consentComplete,
+      setupComplete: shell.setupComplete,
+      profileSetup: normalizeProfileSetup(shell.profileSetup),
+    }));
+  }, []);
+
+  const persistShellForCurrentUser = useCallback(() => {
+    const userId = userIdRef.current;
+    if (!userId) return;
+    const shell = getAppShellState();
+    writePersistedAppShell(userId, {
+      onboardingSeen: shell.onboardingSeen,
+      consentComplete: shell.consentComplete,
+      setupComplete: shell.setupComplete,
+      profileSetup: shell.profileSetup,
+    });
+  }, []);
+
+  const hydrateShellForUser = useCallback(
+    (userId: string): boolean => {
+      const persisted = readPersistedAppShell(userId);
+      if (persisted) {
+        patchAppShellState({
+          onboardingSeen: persisted.onboardingSeen || readOnboardingSeen(),
+          consentComplete: persisted.consentComplete,
+          setupComplete: persisted.setupComplete,
+          profileSetup: persisted.profileSetup,
+        });
+        syncReactStateFromShellStore();
+      }
+      return getAppShellState().setupComplete;
+    },
+    [syncReactStateFromShellStore],
+  );
+
   useEffect(() => {
+    const onboardingSeen = readOnboardingSeen();
+    if (onboardingSeen) {
+      patchAppShellState({ onboardingSeen: true });
+    }
     // Client-only in-memory shell hydration; cannot run during SSR render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState(createShellStateFromStore());
+    setState(createShellStateFromStore({ onboardingComplete: onboardingSeen || getAppShellState().onboardingSeen }));
     setShellHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    hydrateShellForUser(user.id);
+  }, [user?.id, hydrateShellForUser]);
+
+  useEffect(() => {
+    const onShellSync = () => syncReactStateFromShellStore();
+    window.addEventListener(APP_SHELL_SYNC_EVENT, onShellSync);
+    return () => window.removeEventListener(APP_SHELL_SYNC_EVENT, onShellSync);
+  }, [syncReactStateFromShellStore]);
 
   const authDemoUser =
     !authLoading && user ? { fullName: user.displayName, email: user.email } : null;
@@ -202,13 +276,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeOnboarding = useCallback((data: OnboardingData) => {
+    writeOnboardingSeen();
     patchAppShellState({ onboardingSeen: true });
     setState((s) => ({
       ...s,
       onboardingComplete: true,
       onboardingData: data,
     }));
-  }, []);
+    persistShellForCurrentUser();
+  }, [persistShellForCurrentUser]);
 
   const setAuthDemoUser = useCallback((user: DemoAuthUser) => {
     // Legacy auth display mirror only. Canonical auth source is CuravonAuthProvider.
@@ -234,7 +310,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const completeAuthConsent = useCallback(() => {
     patchAppShellState({ consentComplete: true });
     setState((s) => ({ ...s, consentComplete: true }));
-  }, []);
+    persistShellForCurrentUser();
+  }, [persistShellForCurrentUser]);
 
   const completeProfileSetup = useCallback(
     (setup: ProfileSetupData & { sensitiveMode: boolean }) => {
@@ -243,29 +320,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         primaryGoals: setup.primaryGoals,
         smartSilencePreference: setup.smartSilencePreference,
         sensitiveMode: setup.sensitiveMode,
+        ageRange: setup.ageRange,
+        sex: setup.sex,
+        pregnancyStatus: setup.pregnancyStatus,
+        stateOrRegion: setup.stateOrRegion,
+        languageStyle: setup.languageStyle,
+        conditions: setup.conditions,
+        allergies: setup.allergies,
+        medications: setup.medications,
       };
       patchAppShellState({
         profileSetup: persistedProfile,
         setupComplete: true,
+        consentComplete: true,
       });
-      void saveHealthProfileRecord({
-        preferredName: setup.preferredName,
-        primaryGoals: setup.primaryGoals,
-        sensitiveMode: setup.sensitiveMode,
-        smartSilencePreference: setup.smartSilencePreference,
-        conditions: [],
-        medications: [],
-        allergies: [],
-        healthNotes: [],
-        doctorQuestions: [],
-        emergencyContactName: '',
-        emergencyContactPhone: '',
-      });
+      void saveHealthProfileRecord(healthProfileFromProfileSetup(setup));
       setState((s) => ({
         ...s,
         setupComplete: true,
+        consentComplete: true,
         profileSetup: persistedProfile,
       }));
+      persistShellForCurrentUser();
       trackSafeEvent('profile_completed', {
         status: 'completed',
         privacy_level: setup.sensitiveMode ? 'sensitive' : 'private',
@@ -277,7 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [],
+    [persistShellForCurrentUser],
   );
 
   const resetToOnboarding = useCallback(() => {
@@ -329,6 +405,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAuthDemoUser,
         completeAuthConsent,
         completeProfileSetup,
+        hydrateShellForUser,
         clearAuthShellState,
         signOutDemo,
         resetToOnboarding,

@@ -68,9 +68,10 @@ export interface NextBestActionRecommendation {
 export interface SupportingInsightCard {
   id: string;
   title: string;
+  subtitle?: string;
   lines: string[];
   actionLabel?: string;
-  actionTarget?: 'checkin' | 'guides' | 'summary' | 'profile';
+  actionTarget?: 'checkin' | 'guides' | 'summary' | 'profile' | 'ask';
 }
 
 export interface PersonalizationMemorySnapshot {

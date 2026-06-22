@@ -1,5 +1,7 @@
 // Legacy next-action path. Do not use for new generation — route through nextActionAdapter (Plan Engine v3).
 import type { AdjustOption, DailyCheckIn, HealthBlockedReason, NextActionState } from '../types/health';
+import type { HealthSnapshot } from '../types/healthSnapshot';
+import { AGE_RANGE_OPTIONS, LANGUAGE_STYLE_OPTIONS } from '../constants/lightProfileOptions';
 import type {
   ActionSourceChip,
   NextBestActionPlan,
@@ -75,11 +77,19 @@ function collectSearchText(memory: PersonalizationMemorySnapshot): string {
     .slice(0, 5)
     .map((a) => `${a.concern} ${a.nextStep} ${a.concernType}`)
     .join(' ');
-  const guideText = memory.doctorSummaryItems
-    .slice(0, 20)
-    .map((i) => `${i.title} ${i.content} ${i.tags.join(' ')}`)
+  const guideText = memory.guideResults
+    .slice(0, 5)
+    .map((g) => `${g.guideTitle} ${g.resultSummary} ${g.safeNextStep}`)
     .join(' ');
-  return `${checkinText} ${askText} ${guideText}`.toLowerCase();
+  const profileText = [
+    ...memory.healthProfile.conditions,
+    ...memory.healthProfile.medications,
+    ...memory.healthProfile.allergies,
+    ...memory.healthProfile.healthNotes,
+    ...memory.healthProfile.doctorQuestions,
+    ...memory.healthProfile.primaryGoals,
+  ].join(' ');
+  return `${checkinText} ${askText} ${guideText} ${profileText}`.toLowerCase();
 }
 
 function toSourceChips(
@@ -451,61 +461,355 @@ function buildPatternLines(memory: PersonalizationMemorySnapshot): string[] {
   return lines.slice(0, 2);
 }
 
-function buildSupportingInsights(
-  memory: PersonalizationMemorySnapshot,
-  signals: PersonalizationSignal[],
-): SupportingInsightCard[] {
-  const cards: SupportingInsightCard[] = [];
+function truncateText(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1)}…`;
+}
 
-  const noticedLines = signals.slice(0, 2).map(humanSignal);
-  if (noticedLines.length) {
-    cards.push({
-      id: 'curavon-noticed',
-      title: 'Curavon noticed',
-      lines: noticedLines,
-    });
+function formatCheckInDateLabel(dateKey: string): string {
+  const today = todayDateKey();
+  if (dateKey === today) return 'today';
+  const parsed = new Date(`${dateKey}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateKey;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatCheckInInsightLines(checkIn: DailyCheckIn): string[] {
+  const lines = [
+    `Sleep: ${checkIn.sleepQuality} · Energy: ${checkIn.energyLevel}`,
+    `Stress: ${checkIn.stressLevel} · Mood: ${checkIn.mood}`,
+  ];
+  if (checkIn.symptoms.trim()) {
+    lines.push(`Symptoms: ${truncateText(checkIn.symptoms, 88)}`);
   }
+  if (checkIn.notes.trim()) {
+    lines.push(`Note: ${truncateText(checkIn.notes, 88)}`);
+  }
+  if (checkIn.painLevel > 0) {
+    lines.push(`Pain level: ${checkIn.painLevel}/10`);
+  }
+  return lines.slice(0, 3);
+}
 
-  cards.push({
-    id: 'recent-pattern',
-    title: 'Recent pattern',
-    lines: buildPatternLines(memory),
-    actionLabel: memory.dailyCheckins.length ? undefined : "Start today's check-in",
-    actionTarget: memory.dailyCheckins.length ? undefined : 'checkin',
-  });
+function buildCheckInContextCard(memory: PersonalizationMemorySnapshot): SupportingInsightCard | null {
+  const today = todayDateKey();
+  const todayCheckIn = memory.dailyCheckins.find((entry) => entry.date === today);
+  const latest = latestCheckIn(memory);
 
-  cards.push({
-    id: 'doctor-ready-summary',
-    title: 'Doctor-ready summary',
-    lines: [
-      `${memory.doctorSummaryItems.filter((i) => i.includedInSummary).length} items currently included.`,
-    ],
-    actionLabel: 'Open summary',
-    actionTarget: 'summary',
-  });
-
-  if (signals.includes('profile_incomplete')) {
-    cards[1] = {
-      id: 'profile-incomplete',
-      title: 'Help Curavon remember what matters',
-      lines: ['Add one condition, medication, allergy, or health note to improve personalization.'],
-      actionLabel: 'Update Health Profile',
-      actionTarget: 'profile',
+  if (todayCheckIn) {
+    return {
+      id: 'today-checkin',
+      title: 'Check-in context',
+      subtitle: 'What you logged today — used to shape your next step',
+      lines: formatCheckInInsightLines(todayCheckIn),
     };
   }
 
-  return cards.slice(0, 3);
+  if (latest) {
+    return {
+      id: 'recent-checkin',
+      title: 'Recent check-in context',
+      subtitle: `Last entry ${formatCheckInDateLabel(latest.date)} — informs your next step`,
+      lines: formatCheckInInsightLines(latest),
+    };
+  }
+
+  return null;
+}
+
+function buildProfileInsightCard(
+  memory: PersonalizationMemorySnapshot,
+  signals: PersonalizationSignal[],
+): SupportingInsightCard | null {
+  const { healthProfile } = memory;
+  const lines: string[] = [];
+
+  if (healthProfile.primaryGoals.length) {
+    lines.push(`Goals: ${healthProfile.primaryGoals.slice(0, 3).join(', ')}`);
+  }
+  if (healthProfile.ageRange) {
+    const ageLabel =
+      AGE_RANGE_OPTIONS.find((o) => o.id === healthProfile.ageRange)?.label ?? healthProfile.ageRange;
+    lines.push(`Age range: ${ageLabel}`);
+  }
+  if (healthProfile.languageStyle) {
+    const styleLabel =
+      LANGUAGE_STYLE_OPTIONS.find((o) => o.id === healthProfile.languageStyle)?.label ??
+      healthProfile.languageStyle;
+    lines.push(`Language style: ${styleLabel}`);
+  }
+  if (healthProfile.stateOrRegion.trim()) {
+    lines.push(`Region: ${healthProfile.stateOrRegion.trim()}`);
+  }
+  if (healthProfile.conditions.length) {
+    const preview = healthProfile.conditions.slice(0, 2).join(', ');
+    lines.push(
+      `Conditions: ${preview}${healthProfile.conditions.length > 2 ? '…' : ''}`,
+    );
+  }
+  if (healthProfile.medications.length) {
+    lines.push(`Medications tracked: ${healthProfile.medications.length}`);
+  }
+  if (healthProfile.allergies.length) {
+    lines.push(`Allergies noted: ${healthProfile.allergies.slice(0, 2).join(', ')}`);
+  }
+  if (healthProfile.healthNotes.length) {
+    lines.push(`Health notes saved: ${healthProfile.healthNotes.length}`);
+  }
+  if (healthProfile.doctorQuestions.length) {
+    lines.push(`Clinician questions: ${healthProfile.doctorQuestions.length}`);
+  }
+
+  if (lines.length) {
+    const name = healthProfile.preferredName.trim();
+    return {
+      id: 'profile-context',
+      title: name ? `${name}'s health context` : 'Your health profile',
+      subtitle: 'Profile data that informs recommendations',
+      lines: lines.slice(0, 3),
+    };
+  }
+
+  if (signals.includes('profile_incomplete')) {
+    return {
+      id: 'profile-incomplete',
+      title: 'Profile has room to grow',
+      subtitle: 'More detail can sharpen your next best action',
+      lines: ['Conditions, medications, and notes help Curavon choose safer, more relevant steps.'],
+    };
+  }
+
+  return null;
+}
+
+function buildAskInsightCard(memory: PersonalizationMemorySnapshot): SupportingInsightCard | null {
+  const recentAsk = [...memory.askHistory].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  if (!recentAsk) return null;
+
+  const lines = [truncateText(recentAsk.concern, 110)];
+  if (recentAsk.nextStep.trim()) {
+    lines.push(`Next step discussed: ${truncateText(recentAsk.nextStep, 96)}`);
+  }
+
+  return {
+    id: 'recent-ask',
+    title: 'Recent Ask Curavon concern',
+    subtitle: recentAsk.concernType || 'Context from Ask Curavon',
+    lines,
+  };
+}
+
+function buildGuideInsightCard(
+  memory: PersonalizationMemorySnapshot,
+  snapshot?: HealthSnapshot | null,
+): SupportingInsightCard | null {
+  const recentGuide = [...memory.guideResults].sort((a, b) =>
+    b.completedAt.localeCompare(a.completedAt),
+  )[0];
+
+  if (recentGuide) {
+    const summary = recentGuide.resultSummary.trim() || recentGuide.safeNextStep.trim();
+    return {
+      id: 'recent-guide',
+      title: 'Recent guide context',
+      subtitle: recentGuide.guideTitle,
+      lines: summary ? [truncateText(summary, 120)] : ['A guided flow you completed recently.'],
+    };
+  }
+
+  const guideTitles = snapshot?.guideActivity.recentGuideTitles ?? [];
+  if (guideTitles.length) {
+    return {
+      id: 'guide-activity',
+      title: 'Guide activity',
+      subtitle: 'Flows that shaped recent recommendations',
+      lines: guideTitles.slice(0, 2).map((title) => `Completed: ${title}`),
+    };
+  }
+
+  return null;
+}
+
+function buildFollowUpInsightCard(memory: PersonalizationMemorySnapshot): SupportingInsightCard | null {
+  const dueSoon = memory.followUps
+    .filter((record) => record.status === 'pending' || record.status === 'snoozed')
+    .sort((a, b) => a.dueAt.localeCompare(b.dueAt))[0];
+
+  if (!dueSoon) return null;
+
+  return {
+    id: 'follow-up-due',
+    title: 'Follow-up context',
+    subtitle: dueSoon.linkedActionTitle,
+    lines: [truncateText(dueSoon.prompt, 120)],
+  };
+}
+
+function buildActionProgressCard(memory: PersonalizationMemorySnapshot): SupportingInsightCard | null {
+  const action = memory.nextActionState;
+  if (!action || action.status === 'pending') return null;
+
+  const lines: string[] = [];
+  if (action.status === 'done') {
+    lines.push(`Completed: ${truncateText(action.currentAction, 96)}`);
+  } else if (action.status === 'blocked') {
+    lines.push(`Blocked: ${action.blockedLabel ?? 'Something got in the way'}`);
+  } else if (action.status === 'adjusted') {
+    lines.push(`Adjusted step: ${truncateText(action.currentAction, 96)}`);
+    if (action.adjustLabel) lines.push(`Adjustment: ${action.adjustLabel}`);
+  }
+  if (action.reason.trim()) {
+    lines.push(truncateText(action.reason, 96));
+  }
+
+  return {
+    id: 'action-status',
+    title: 'Next action history',
+    subtitle: action.title || 'How your last step resolved',
+    lines: lines.slice(0, 3),
+  };
+}
+
+function buildDoctorSummaryInsightCard(memory: PersonalizationMemorySnapshot): SupportingInsightCard | null {
+  const included = memory.doctorSummaryItems.filter((item) => item.includedInSummary);
+  if (!included.length) {
+    return {
+      id: 'doctor-ready-summary',
+      title: 'Doctor-ready summary',
+      subtitle: 'Nothing included yet',
+      lines: ['Saved actions, Ask notes, and check-ins appear here when you add them to summary.'],
+    };
+  }
+
+  const recentItems = [...included]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 2);
+
+  return {
+    id: 'doctor-ready-summary',
+    title: 'Doctor-ready summary',
+    subtitle: `${included.length} item${included.length === 1 ? '' : 's'} included`,
+    lines: recentItems.map(
+      (item) => `${item.source}: ${truncateText(item.title, 64)}`,
+    ),
+  };
+}
+
+function buildSafetyInsightCard(memory: PersonalizationMemorySnapshot): SupportingInsightCard | null {
+  const recentFlag = [...memory.redFlagLogs]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .find((log) => inLastDays(log.createdAt, 14));
+
+  if (!recentFlag) return null;
+
+  return {
+    id: 'recent-safety-note',
+    title: 'Recent safety note',
+    subtitle: recentFlag.source,
+    lines: [
+      truncateText(recentFlag.matchedConcern, 96),
+      truncateText(recentFlag.guidanceShown, 96),
+    ].filter(Boolean),
+  };
+}
+
+function buildSignalsInsightCard(
+  signals: PersonalizationSignal[],
+  snapshot?: HealthSnapshot | null,
+): SupportingInsightCard | null {
+  const lines: string[] = [];
+
+  if (snapshot?.activeConcerns.unresolvedAskConcerns.length) {
+    lines.push(
+      ...snapshot.activeConcerns.unresolvedAskConcerns
+        .slice(0, 2)
+        .map((concern) => `Open concern: ${truncateText(concern, 88)}`),
+    );
+  }
+  if (snapshot?.activeConcerns.repeatingSymptoms.length) {
+    lines.push(
+      `Repeating symptoms: ${snapshot.activeConcerns.repeatingSymptoms.slice(0, 2).join(', ')}`,
+    );
+  }
+
+  const signalLines = signals.slice(0, 3).map(humanSignal);
+  for (const line of signalLines) {
+    if (lines.length >= 3) break;
+    if (!lines.includes(line)) lines.push(line);
+  }
+
+  if (!lines.length) return null;
+
+  return {
+    id: 'curavon-noticed',
+    title: 'Curavon noticed',
+    subtitle: 'Signals feeding your next best action',
+    lines: lines.slice(0, 3),
+  };
+}
+
+function buildSupportingInsights(
+  memory: PersonalizationMemorySnapshot,
+  signals: PersonalizationSignal[],
+  snapshot?: HealthSnapshot | null,
+): SupportingInsightCard[] {
+  const candidates: Array<{ priority: number; card: SupportingInsightCard }> = [];
+
+  const checkInCard = buildCheckInContextCard(memory);
+  if (checkInCard) candidates.push({ priority: 100, card: checkInCard });
+
+  const safetyCard = buildSafetyInsightCard(memory);
+  if (safetyCard) candidates.push({ priority: 95, card: safetyCard });
+
+  const followUpCard = buildFollowUpInsightCard(memory);
+  if (followUpCard) candidates.push({ priority: 90, card: followUpCard });
+
+  const profileCard = buildProfileInsightCard(memory, signals);
+  if (profileCard) candidates.push({ priority: 85, card: profileCard });
+
+  const askCard = buildAskInsightCard(memory);
+  if (askCard) {
+    const recentAsk = [...memory.askHistory].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    const priority = recentAsk && inLastDays(recentAsk.createdAt, 7) ? 86 : 82;
+    candidates.push({ priority, card: askCard });
+  }
+
+  const actionCard = buildActionProgressCard(memory);
+  if (actionCard) {
+    const actionPriority = memory.nextActionState?.status === 'pending' ? 80 : 88;
+    candidates.push({ priority: actionPriority, card: actionCard });
+  }
+
+  const guideCard = buildGuideInsightCard(memory, snapshot);
+  if (guideCard) candidates.push({ priority: 78, card: guideCard });
+
+  candidates.push({
+    priority: 72,
+    card: buildDoctorSummaryInsightCard(memory),
+  });
+
+  const signalsCard = buildSignalsInsightCard(signals, snapshot);
+  if (signalsCard) candidates.push({ priority: 65, card: signalsCard });
+
+  return candidates
+    .sort((a, b) => b.priority - a.priority)
+    .filter((entry, index, all) => all.findIndex((item) => item.card.id === entry.card.id) === index)
+    .slice(0, 4)
+    .map((entry) => entry.card);
 }
 
 export function buildNextBestActionPlan(
   memory: PersonalizationMemorySnapshot,
+  snapshot?: HealthSnapshot | null,
 ): NextBestActionPlan {
   const signals = derivePersonalizationSignals(memory);
   const recommendation = buildRecommendation({ signals, memory });
   return {
     recommendation,
     signals,
-    supportingInsights: buildSupportingInsights(memory, signals),
+    supportingInsights: buildSupportingInsights(memory, signals, snapshot),
     patternLines: buildPatternLines(memory),
   };
 }

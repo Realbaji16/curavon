@@ -172,6 +172,7 @@ export function AskCuravonScreen() {
   const [isAcceptingAction, setIsAcceptingAction] = useState(false);
   const [intakeSessionId, setIntakeSessionId] = useState<string | null>(null);
   const [draftHealthFlowId, setDraftHealthFlowId] = useState<string | null>(null);
+  const [isFinishingIntake, setIsFinishingIntake] = useState(false);
 
   const redFlags = effectiveRedFlags(intake);
   const nextSafeStep = generateNextSafeStep(intake);
@@ -213,6 +214,9 @@ export function AskCuravonScreen() {
   };
 
   const finishIntake = useCallback(async () => {
+    if (isFinishingIntake) return;
+    setIsFinishingIntake(true);
+    try {
     const flags = effectiveRedFlags(intake);
     const safeStepPreview = generateNextSafeStep(intake);
     const privacyLevel = mapAskPrivacyForServer(sensitive);
@@ -240,12 +244,16 @@ export function AskCuravonScreen() {
           guidanceShown: escalation.body,
           matchedConcern,
         });
-        const entry = await addAskHistoryEntry({
-          concern: intake.mainConcern,
-          concernType: intake.concernType || 'Not sure',
-          nextStep: 'Safety guidance shown — no self-care plan generated.',
-        });
-        setHistoryEntryId(entry.id);
+        try {
+          const entry = await addAskHistoryEntry({
+            concern: intake.mainConcern,
+            concernType: intake.concernType || 'Not sure',
+            nextStep: 'Safety guidance shown — no self-care plan generated.',
+          });
+          setHistoryEntryId(entry.id);
+        } catch {
+          setHistoryEntryId(null);
+        }
         if (intakeSessionId) {
           void updateAskIntakeSession(intakeSessionId, {
             flowId: proposalResult.data.flowId,
@@ -267,12 +275,19 @@ export function AskCuravonScreen() {
         return;
       }
 
-      if (proposalResult.status === 503 || proposalResult.code === 'ai_unavailable') {
-        showToast('Planning is temporarily unavailable. Please try again in a few minutes.');
+      if (proposalResult.code === 'data_permission') {
+        showToast(
+          'Database setup incomplete: run Supabase migration 20250618100004 (table grants), then try again.',
+        );
         return;
       }
 
-      showToast('Could not prepare your next step. Please try again soon.');
+      if (proposalResult.status === 503 || proposalResult.code === 'ai_unavailable' || proposalResult.code === 'data_unavailable') {
+        showToast(proposalResult.message || 'Planning is temporarily unavailable. Please try again in a few minutes.');
+        return;
+      }
+
+      showToast(proposalResult.message || 'Could not prepare your next step. Please try again soon.');
       return;
     }
 
@@ -280,15 +295,19 @@ export function AskCuravonScreen() {
     const refinedConcern = intake.mainConcern.trim();
     setAiRefinedConcern('');
     setAiMissingQuestions([]);
-    const entry = await addAskHistoryEntry({
-      concern: refinedConcern,
-      concernType: intake.concernType || 'Not sure',
-      nextStep: proposedAction.instruction,
-    });
+    try {
+      const entry = await addAskHistoryEntry({
+        concern: refinedConcern,
+        concernType: intake.concernType || 'Not sure',
+        nextStep: proposedAction.instruction,
+      });
+      setHistoryEntryId(entry.id);
+    } catch {
+      setHistoryEntryId(null);
+    }
     collectAskCompletion();
     await refreshAskHistory();
     refreshHealthSnapshot();
-    setHistoryEntryId(entry.id);
     setAskFinalAction({
       id: flowId,
       title: proposedAction.title,
@@ -328,10 +347,16 @@ export function AskCuravonScreen() {
     }
     setMode('result');
     runMetaSystemCycle();
+    } catch {
+      showToast('Could not prepare your next step. Please try again soon.');
+    } finally {
+      setIsFinishingIntake(false);
+    }
   }, [
     intake,
     intakeStep,
     intakeSessionId,
+    isFinishingIntake,
     logRedFlag,
     refreshHealthSnapshot,
     refreshAskHistory,
@@ -426,16 +451,20 @@ export function AskCuravonScreen() {
         let flowActionId: string | undefined;
 
         if (draftHealthFlowId) {
-          const { action } = await activateHealthFlowWithAction({
-            flowId: draftHealthFlowId,
-            instruction: actionText,
-            reason: askFinalAction?.reason,
-            category: askFinalAction?.category,
-            safetyLevel: mapPlanSafetyToRiskLevel(askFinalAction?.safetyLevel),
-            actionId: stableActionId,
-            privacyLevel: resolveAskPrivacyLevel(sensitive),
-          });
-          flowActionId = action.id;
+          try {
+            const { action } = await activateHealthFlowWithAction({
+              flowId: draftHealthFlowId,
+              instruction: actionText,
+              reason: askFinalAction?.reason,
+              category: askFinalAction?.category,
+              safetyLevel: mapPlanSafetyToRiskLevel(askFinalAction?.safetyLevel),
+              actionId: stableActionId,
+              privacyLevel: resolveAskPrivacyLevel(sensitive),
+            });
+            flowActionId = action.id;
+          } catch {
+            // Still promote to Today if health-flow activation fails.
+          }
         }
 
         trackSafeEvent('flow_activated', {
@@ -462,6 +491,8 @@ export function AskCuravonScreen() {
         });
         showToast('Added to Today.');
         setActiveTab('home');
+      } catch {
+        showToast('Could not add to Today. Please try again.');
       } finally {
         setIsAcceptingAction(false);
       }
@@ -693,8 +724,8 @@ export function AskCuravonScreen() {
 
           <div className="ask-fit-footer ask-fit-footer--dock intake-nav">
             <button type="button" className="btn btn-secondary btn-glass" onClick={goBack}>Back</button>
-            <button type="button" className="btn btn-primary btn-pill" onClick={goNext} disabled={!canContinueStep()}>
-              {intakeStep === ASK_INTAKE_STEP_COUNT - 1 ? 'Get next step' : 'Continue'}
+            <button type="button" className="btn btn-primary btn-pill" onClick={goNext} disabled={!canContinueStep() || isFinishingIntake}>
+              {isFinishingIntake ? 'Preparing…' : intakeStep === ASK_INTAKE_STEP_COUNT - 1 ? 'Get next step' : 'Continue'}
             </button>
           </div>
         </div>

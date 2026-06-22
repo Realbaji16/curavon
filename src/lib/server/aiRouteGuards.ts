@@ -1,4 +1,5 @@
 import { getConfiguredAuthMode } from '../auth/authConfig';
+import { DataAuthError, DataPermissionError, DataUnavailableError } from '../data/dataErrors';
 import { detectRedFlags } from '../health/redFlags';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { hasSupabasePublicConfig } from '../supabase/supabaseEnv';
@@ -306,4 +307,44 @@ export function parseSummaryBody(body: unknown): { ok: true; data: ParsedSummary
   }
 
   return { ok: true, data: { healthFlowId: record.healthFlowId.trim() } };
+}
+
+export type ServerDataAccessFailure = {
+  status: 503 | 401;
+  code: 'data_permission' | 'data_unavailable' | 'unauthenticated';
+  message: string;
+};
+
+/** Map data-layer errors from withServerDataAccess into API-safe responses. */
+export function mapServerDataAccessError(error: unknown): ServerDataAccessFailure {
+  if (error instanceof DataAuthError) {
+    return {
+      status: 401,
+      code: 'unauthenticated',
+      message: 'Authentication required.',
+    };
+  }
+
+  if (error instanceof DataPermissionError) {
+    return {
+      status: 503,
+      code: 'data_permission',
+      message:
+        'Curavon cannot reach your Supabase tables yet. Run migration 20250618100004_curavon_table_grants.sql (or supabase db push), then try again.',
+    };
+  }
+
+  if (error instanceof DataUnavailableError) {
+    return {
+      status: 503,
+      code: 'data_unavailable',
+      message: 'Your health data is temporarily unavailable. Try again soon.',
+    };
+  }
+
+  return {
+    status: 503,
+    code: 'data_unavailable',
+    message: 'Your health data is temporarily unavailable. Try again soon.',
+  };
 }

@@ -812,3 +812,23 @@
   transform: translateX(20px);
 }
 
+/* Night mode — lift secondary copy off dark glass backgrounds */
+.phone-frame--night .type-subtitle,
+.phone-frame--night .type-body,
+.phone-frame--night .text-body,
+.phone-frame--night .text-muted,
+.phone-frame--night .header-subtitle {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.phone-frame--night .type-safety,
+.phone-frame--night .text-soft,
+.phone-frame--night .text-safety {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.phone-frame--night .curavon-wordmark-cura {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}

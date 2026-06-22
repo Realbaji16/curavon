@@ -5,7 +5,14 @@ import { useHealth } from '../context/useHealth';
 import { useDoctorSummary } from '../context/useDoctorSummary';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { HealthListEditor } from '../components/HealthListEditor';
-import type { SmartSilencePreference } from '../types/health';
+import type { SmartSilencePreference, LanguageStyle, PregnancyStatus, ProfileSex } from '../types/health';
+import {
+  AGE_RANGE_OPTIONS,
+  LANGUAGE_STYLE_OPTIONS,
+  PREGNANCY_STATUS_OPTIONS,
+  PROFILE_SEX_OPTIONS,
+  pregnancyContextRelevant,
+} from '../constants/lightProfileOptions';
 import { clearAskHistory } from '../utils/askIntakeStorage';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import { clearLocalDemoAccountData } from '../lib/app/appShellState';
@@ -196,6 +203,103 @@ export function SettingsScreen() {
               ? DELETION_CONFIRMATION_COPY.account_and_health_data.confirmLabel
               : 'Delete account and health data'}
           </button>
+        </div>
+      </section>
+
+      <section className="settings-section warm-card glass-card-inner">
+        <div className="section-header">
+          <User size={20} className="icon-teal" />
+          <h3>Profile context</h3>
+        </div>
+        <p className="section-desc">
+          Minimal details Curavon uses to tailor support. Add or change anytime — nothing here is required.
+        </p>
+        <div className="settings-profile-context">
+          <p className="settings-field-label">Age range</p>
+          <div className="settings-chip-row">
+            {AGE_RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`settings-chip ${healthProfile.ageRange === option.id ? 'settings-chip--active' : ''}`}
+                onClick={() =>
+                  updateHealthProfile({
+                    ageRange: healthProfile.ageRange === option.id ? '' : option.id,
+                  })
+                }
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <p className="settings-field-label">Sex</p>
+          <div className="settings-chip-row">
+            {PROFILE_SEX_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`settings-chip ${healthProfile.sex === option.id ? 'settings-chip--active' : ''}`}
+                onClick={() => {
+                  const next = healthProfile.sex === option.id ? '' : option.id;
+                  updateHealthProfile({
+                    sex: next as ProfileSex,
+                    pregnancyStatus: pregnancyContextRelevant(next) ? healthProfile.pregnancyStatus : '',
+                  });
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {pregnancyContextRelevant(healthProfile.sex) ? (
+            <>
+              <p className="settings-field-label">Pregnancy status</p>
+              <div className="settings-chip-row settings-chip-row--stacked">
+                {PREGNANCY_STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`settings-chip ${healthProfile.pregnancyStatus === option.id ? 'settings-chip--active' : ''}`}
+                    onClick={() =>
+                      updateHealthProfile({
+                        pregnancyStatus:
+                          healthProfile.pregnancyStatus === option.id ? '' : (option.id as PregnancyStatus),
+                      })
+                    }
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+          <label className="settings-text-field">
+            <span>State or region</span>
+            <input
+              className="settings-input"
+              value={healthProfile.stateOrRegion}
+              onChange={(e) => updateHealthProfile({ stateOrRegion: e.target.value })}
+              placeholder="Optional"
+            />
+          </label>
+          <p className="settings-field-label">Language style</p>
+          <div className="settings-chip-row settings-chip-row--stacked">
+            {LANGUAGE_STYLE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`settings-chip ${healthProfile.languageStyle === option.id ? 'settings-chip--active' : ''}`}
+                onClick={() =>
+                  updateHealthProfile({
+                    languageStyle:
+                      healthProfile.languageStyle === option.id ? '' : (option.id as LanguageStyle),
+                  })
+                }
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

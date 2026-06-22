@@ -3,6 +3,29 @@ export type SmartSilencePreference =
   | 'daily-digest-only'
   | 'minimal-notifications';
 
+export type AgeRange =
+  | ''
+  | 'under-18'
+  | '18-24'
+  | '25-34'
+  | '35-44'
+  | '45-54'
+  | '55-64'
+  | '65-plus';
+
+export type ProfileSex = '' | 'female' | 'male' | 'intersex' | 'prefer-not-to-say';
+
+export type PregnancyStatus =
+  | ''
+  | 'not-pregnant'
+  | 'pregnant'
+  | 'trying'
+  | 'postpartum'
+  | 'not-applicable'
+  | 'prefer-not-to-say';
+
+export type LanguageStyle = '' | 'plain' | 'warm' | 'clinical' | 'brief';
+
 export type ActionStatus = 'pending' | 'done' | 'blocked' | 'adjusted';
 
 export type HealthBlockedReason = 'tired' | 'time' | 'unsure' | 'symptoms' | 'other';
@@ -14,6 +37,12 @@ export interface HealthProfile {
   primaryGoals: string[];
   sensitiveMode: boolean;
   smartSilencePreference: SmartSilencePreference;
+  /** Minimal context — optional at signup, fills gradually */
+  ageRange: AgeRange;
+  sex: ProfileSex;
+  pregnancyStatus: PregnancyStatus;
+  stateOrRegion: string;
+  languageStyle: LanguageStyle;
   conditions: string[];
   medications: string[];
   allergies: string[];
