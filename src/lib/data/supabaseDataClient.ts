@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityInsightStore } from '../../types/activityInsights';
 import type { DoctorSummaryDraft, DoctorSummaryItem, RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
+import { normalizeHealthProfile } from '../../utils/healthUtils';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
 import { applyNotDeleted, type ReadQueryOptions } from './supabaseSoftDelete';
 
@@ -276,7 +277,8 @@ export async function readPayloadList<T>(
 }
 
 export async function readSupabaseHealthProfile(): Promise<HealthProfile | null> {
-  return readSinglePayload<HealthProfile>('health_profiles');
+  const raw = await readSinglePayload<HealthProfile>('health_profiles');
+  return raw ? normalizeHealthProfile(raw) : null;
 }
 
 export async function saveSupabaseHealthProfile(profile: HealthProfile): Promise<void> {

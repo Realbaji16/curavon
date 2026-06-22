@@ -1,4 +1,5 @@
 import { getDataAdapter } from '../data/getDataAdapter';
+import { purgeSupabaseAccountDataForUser } from '../data/accountDataPurge';
 import { requireAuthenticatedSupabaseUser } from './aiRouteGuards';
 import { getSupabaseAdminClient } from '../supabase/adminClient';
 import {
@@ -227,42 +228,37 @@ export async function handleDeleteAccountPost(request: Request) {
     return privacyError(auth.status, auth.code, auth.message);
   }
 
-  const serverClient = await createSupabaseServerClient();
-  if (!serverClient) {
-    return privacyError(401, 'unauthenticated', PRIVACY_ROUTE_MESSAGES.unauthenticated);
-  }
-
   try {
-    const result = await withServerDataAccess(auth.userId, serverClient, async () => {
-      const purgeResult = await getDataAdapter().deleteAccountAndUserData();
+    const adminClient = getSupabaseAdminClient();
 
-      let authUserDeleted = false;
-      const adminClient = getSupabaseAdminClient();
-      if (adminClient) {
-        const { error } = await adminClient.auth.admin.deleteUser(auth.userId);
-        authUserDeleted = !error;
+    if (adminClient) {
+      const purgeResult = await purgeSupabaseAccountDataForUser(adminClient, auth.userId);
+
+      const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(auth.userId);
+      if (authDeleteError) {
+        return privacyError(500, 'auth_delete_failed', authDeleteError.message);
       }
 
-      trackSafeEvent('data_deletion_requested', {
-        request_status: 'completed',
-        status: 'deleted',
-        route_name: 'api_data_delete_account',
-      });
+      return completeDeleteAccountResponse(purgeResult.profileDeleted, purgeResult.failedTables);
+    }
 
-      return {
-        status: 200,
-        body: {
-          ok: true,
-          status: purgeResult.status,
-          profileDeleted: purgeResult.profileDeleted,
-          authUserDeleted,
-          failedTables: purgeResult.failedTables ?? [],
-          message: PRIVACY_ROUTE_MESSAGES.accountDeleted,
-        },
-      };
-    });
+    const serverClient = await createSupabaseServerClient();
+    if (!serverClient) {
+      return privacyError(401, 'unauthenticated', PRIVACY_ROUTE_MESSAGES.unauthenticated);
+    }
 
-    return result;
+    const { error: rpcError } = await serverClient.rpc('delete_own_account');
+    if (rpcError) {
+      const missingRpc =
+        rpcError.code === 'PGRST202' ||
+        rpcError.message.toLowerCase().includes('delete_own_account');
+      if (missingRpc) {
+        return privacyError(503, 'delete_rpc_missing', PRIVACY_ROUTE_MESSAGES.deleteRpcMissing);
+      }
+      return privacyError(500, 'account_delete_failed', rpcError.message);
+    }
+
+    return completeDeleteAccountResponse(true, []);
   } catch (error) {
     const message =
       error instanceof Error && error.message.trim()
@@ -270,4 +266,24 @@ export async function handleDeleteAccountPost(request: Request) {
         : PRIVACY_ROUTE_MESSAGES.accountDeleteFailed;
     return privacyError(500, 'account_delete_failed', message);
   }
+}
+
+function completeDeleteAccountResponse(profileDeleted: boolean, failedTables: string[]) {
+  trackSafeEvent('data_deletion_requested', {
+    request_status: 'completed',
+    status: 'deleted',
+    route_name: 'api_data_delete_account',
+  });
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      status: 'deleted',
+      profileDeleted,
+      authUserDeleted: true,
+      failedTables,
+      message: PRIVACY_ROUTE_MESSAGES.accountDeleted,
+    },
+  };
 }

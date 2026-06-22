@@ -366,9 +366,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback((msg: string) => {
     setState((s) => ({ ...s, toast: msg }));
+    const durationMs = msg.length > 48 ? 8000 : 2500;
     setTimeout(() => {
       setState((s) => (s.toast === msg ? { ...s, toast: null } : s));
-    }, 2500);
+    }, durationMs);
   }, []);
 
   const openDoctorSummary = useCallback(() => {

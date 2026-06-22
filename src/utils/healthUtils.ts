@@ -22,6 +22,41 @@ export function createDefaultHealthProfile(): HealthProfile {
   };
 }
 
+/** Merge stored payloads with defaults — older profiles may omit newer fields. */
+export function normalizeHealthProfile(
+  raw: Partial<HealthProfile> | null | undefined,
+): HealthProfile {
+  const defaults = createDefaultHealthProfile();
+  if (!raw) return defaults;
+
+  return {
+    ...defaults,
+    ...raw,
+    preferredName: typeof raw.preferredName === 'string' ? raw.preferredName : defaults.preferredName,
+    primaryGoals: Array.isArray(raw.primaryGoals) ? raw.primaryGoals : defaults.primaryGoals,
+    sensitiveMode: typeof raw.sensitiveMode === 'boolean' ? raw.sensitiveMode : defaults.sensitiveMode,
+    smartSilencePreference: raw.smartSilencePreference ?? defaults.smartSilencePreference,
+    ageRange: raw.ageRange ?? defaults.ageRange,
+    sex: raw.sex ?? defaults.sex,
+    pregnancyStatus: raw.pregnancyStatus ?? defaults.pregnancyStatus,
+    stateOrRegion: typeof raw.stateOrRegion === 'string' ? raw.stateOrRegion : defaults.stateOrRegion,
+    languageStyle: raw.languageStyle ?? defaults.languageStyle,
+    conditions: Array.isArray(raw.conditions) ? raw.conditions : defaults.conditions,
+    medications: Array.isArray(raw.medications) ? raw.medications : defaults.medications,
+    allergies: Array.isArray(raw.allergies) ? raw.allergies : defaults.allergies,
+    healthNotes: Array.isArray(raw.healthNotes) ? raw.healthNotes : defaults.healthNotes,
+    doctorQuestions: Array.isArray(raw.doctorQuestions) ? raw.doctorQuestions : defaults.doctorQuestions,
+    emergencyContactName:
+      typeof raw.emergencyContactName === 'string'
+        ? raw.emergencyContactName
+        : defaults.emergencyContactName,
+    emergencyContactPhone:
+      typeof raw.emergencyContactPhone === 'string'
+        ? raw.emergencyContactPhone
+        : defaults.emergencyContactPhone,
+  };
+}
+
 export function todayDateKey(): string {
   const now = new Date();
   const y = now.getFullYear();

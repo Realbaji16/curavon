@@ -111,6 +111,8 @@ export const OPERATIONAL_DATA_MESSAGES = {
   exportSubmitted: 'Export request submitted. We will notify you when it is ready.',
   deletionSubmitted: 'Deletion request submitted. Your account team will process it.',
   accountDeleted: 'Account and health data deleted from Curavon.',
+  accountDeleteNotConfigured:
+    'Run ACCOUNT_DELETION.sql in Supabase SQL Editor, then try again.',
 } as const;
 
 export function toOperationalDataErrorMessage(error: unknown): string {
@@ -211,6 +213,10 @@ export async function requestAccountDeletion(): Promise<{
 
   if (!response.ok || !body.ok) {
     throw new DataUnavailableError(body.error?.message ?? OPERATIONAL_DATA_MESSAGES.unavailable);
+  }
+
+  if (body.authUserDeleted !== true) {
+    throw new DataUnavailableError(OPERATIONAL_DATA_MESSAGES.accountDeleteNotConfigured);
   }
 
   trackSafeEvent('data_deletion_requested', {

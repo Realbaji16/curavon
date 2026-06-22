@@ -7,9 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const settingsSource = readFileSync(path.join(__dirname, '../screens/Settings.tsx'), 'utf8');
 
 describe('Settings account deletion copy', () => {
-  it('explains deletion is immediate for Supabase profile data and signing out is not deletion', () => {
-    expect(settingsSource).toMatch(/removes your Curavon profile and health data from Supabase/i);
-    expect(settingsSource).toMatch(/Signing out does not delete your account/i);
+  it('explains deletion removes Supabase account and signing out is not deletion', () => {
+    expect(settingsSource).toMatch(/permanently removes your Supabase login/i);
+    expect(settingsSource).toMatch(/Signing\s+out does not delete your account/i);
   });
 
   it('mentions pending deletion status for health data requests', () => {
@@ -20,5 +20,7 @@ describe('Settings account deletion copy', () => {
   it('submits full-account deletion to Supabase before signing out', () => {
     expect(settingsSource).toMatch(/requestAccountDeletion\(\)/);
     expect(settingsSource).toMatch(/if \(isSupabaseMode\)/);
+    expect(settingsSource).toMatch(/clearPersistedAppShell/);
+    expect(settingsSource).toMatch(/await signOut\(\)/);
   });
 });

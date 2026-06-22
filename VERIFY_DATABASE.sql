@@ -19,3 +19,10 @@ group by table_name, grantee
 order by table_name, grantee;
 -- Expect authenticated + service_role with SELECT, INSERT, UPDATE, DELETE
 -- If empty → run FIX_DATABASE.sql or the grants section of SETUP_SUPABASE.sql
+
+-- 3) Is account self-deletion enabled?
+select routine_name
+from information_schema.routines
+where routine_schema = 'public'
+  and routine_name = 'delete_own_account';
+-- Expect 1 row. If 0 rows → run ACCOUNT_DELETION.sql or FIX_DATABASE.sql

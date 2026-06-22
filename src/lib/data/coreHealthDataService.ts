@@ -1,6 +1,10 @@
 import type { AskHistoryEntry } from '../../types/askIntake';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
-import { createDefaultHealthProfile, normalizeCheckIn } from '../../utils/healthUtils';
+import {
+  createDefaultHealthProfile,
+  normalizeCheckIn,
+  normalizeHealthProfile,
+} from '../../utils/healthUtils';
 import { DataAuthError, DataPermissionError, DataValidationError, DataUnavailableError } from './dataErrors';
 import { getDataAdapter } from './getDataAdapter';
 import { softDeleteUserRows } from './supabaseDataClient';
@@ -54,7 +58,7 @@ export async function loadCoreHealthData(): Promise<CoreHealthDataLoadResult> {
     ]);
 
     return {
-      healthProfile: healthProfile ?? createDefaultHealthProfile(),
+      healthProfile: normalizeHealthProfile(healthProfile),
       dailyCheckins: dailyCheckins.map(normalizeCheckIn),
       nextActionState,
       askHistory,

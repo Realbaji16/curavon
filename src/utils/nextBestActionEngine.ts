@@ -540,8 +540,9 @@ function buildProfileInsightCard(
       healthProfile.languageStyle;
     lines.push(`Language style: ${styleLabel}`);
   }
-  if (healthProfile.stateOrRegion.trim()) {
-    lines.push(`Region: ${healthProfile.stateOrRegion.trim()}`);
+  const region = healthProfile.stateOrRegion?.trim() ?? '';
+  if (region) {
+    lines.push(`Region: ${region}`);
   }
   if (healthProfile.conditions.length) {
     const preview = healthProfile.conditions.slice(0, 2).join(', ');

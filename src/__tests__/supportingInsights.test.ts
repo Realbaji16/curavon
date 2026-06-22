@@ -179,4 +179,40 @@ describe('supporting insights', () => {
     expect(plan.supportingInsights.every((card) => card.id !== 'no-checkin')).toBe(true);
     expect(plan.supportingInsights.every((card) => card.actionTarget !== 'checkin')).toBe(true);
   });
+
+  it('handles legacy profiles missing newer optional fields', () => {
+    const legacyProfile = {
+      preferredName: 'Alex',
+      primaryGoals: ['Reduce health overwhelm'],
+      sensitiveMode: false,
+      smartSilencePreference: 'gentle-reminders' as const,
+      conditions: ['Migraine'],
+      medications: [],
+      allergies: [],
+      healthNotes: [],
+      doctorQuestions: [],
+      emergencyContactName: '',
+      emergencyContactPhone: '',
+    };
+
+    const memory = readCuravonMemorySnapshot(
+      {
+        healthProfile: legacyProfile,
+        dailyCheckins: [],
+        nextActionState: null,
+        askHistory: [],
+      },
+      {
+        doctorSummaryItems: [],
+        askHistory: [],
+        redFlagLogs: [],
+        followUps: [],
+        guideResults: [],
+      },
+    );
+
+    expect(() => buildNextBestActionPlan(memory)).not.toThrow();
+    expect(memory.healthProfile.stateOrRegion).toBe('');
+    expect(memory.healthProfile.ageRange).toBe('');
+  });
 });

@@ -23,8 +23,18 @@ vi.mock('../lib/server/serverDataContext', () => ({
   withServerDataAccess: (_userId: string, _client: unknown, fn: () => Promise<unknown>) => fn(),
 }));
 
+vi.mock('../lib/supabase/adminClient', () => ({
+  getSupabaseAdminClient: vi.fn(),
+}));
+
+vi.mock('../lib/data/accountDataPurge', () => ({
+  purgeSupabaseAccountDataForUser: vi.fn(),
+}));
+
 import { createSupabaseServerClient } from '../lib/supabase/serverClient';
 import { getDataAdapter } from '../lib/data/getDataAdapter';
+import { getSupabaseAdminClient } from '../lib/supabase/adminClient';
+import { purgeSupabaseAccountDataForUser } from '../lib/data/accountDataPurge';
 
 const mockAdapter = {
   createDataExportRequest: vi.fn(),
@@ -88,6 +98,18 @@ describe('data privacy routes', () => {
       status: 'deleted',
       profileDeleted: true,
       authUserDeleted: false,
+      failedTables: [],
+    });
+    vi.mocked(getSupabaseAdminClient).mockReturnValue({
+      auth: {
+        admin: {
+          deleteUser: vi.fn().mockResolvedValue({ error: null }),
+        },
+      },
+    } as never);
+    vi.mocked(purgeSupabaseAccountDataForUser).mockResolvedValue({
+      profileDeleted: true,
+      tablesPurged: 12,
       failedTables: [],
     });
   });
@@ -238,7 +260,7 @@ describe('data privacy routes', () => {
     expect(JSON.stringify(body)).not.toContain('auth');
   });
 
-  it('delete-account purges account data and profiles row', async () => {
+  it('delete-account purges account data and deletes auth user', async () => {
     mockAuthenticatedUser();
 
     const { status, body } = await handleDeleteAccountPost(
@@ -248,8 +270,64 @@ describe('data privacy routes', () => {
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.profileDeleted).toBe(true);
-    expect(mockAdapter.deleteAccountAndUserData).toHaveBeenCalled();
+    expect(body.authUserDeleted).toBe(true);
+    expect(purgeSupabaseAccountDataForUser).toHaveBeenCalled();
     expect(JSON.stringify(body)).not.toContain('symptoms');
+  });
+
+  it('delete-account uses self-delete RPC when admin client is not configured', async () => {
+    mockAuthenticatedUser();
+    vi.mocked(getSupabaseAdminClient).mockReturnValue(null);
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: 'user-test-123' } } },
+          error: null,
+        }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-test-123' } },
+          error: null,
+        }),
+      },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    } as never);
+
+    const { status, body } = await handleDeleteAccountPost(
+      new Request('http://localhost/api/data/delete-account', { method: 'POST' }),
+    );
+
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.authUserDeleted).toBe(true);
+    expect(purgeSupabaseAccountDataForUser).not.toHaveBeenCalled();
+  });
+
+  it('delete-account reports missing RPC when Supabase function was not applied', async () => {
+    mockAuthenticatedUser();
+    vi.mocked(getSupabaseAdminClient).mockReturnValue(null);
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { user: { id: 'user-test-123' } } },
+          error: null,
+        }),
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-test-123' } },
+          error: null,
+        }),
+      },
+      rpc: vi.fn().mockResolvedValue({
+        error: { code: 'PGRST202', message: 'Could not find function public.delete_own_account' },
+      }),
+    } as never);
+
+    const { status, body } = await handleDeleteAccountPost(
+      new Request('http://localhost/api/data/delete-account', { method: 'POST' }),
+    );
+
+    expect(status).toBe(503);
+    expect(body.ok).toBe(false);
+    expect(body.error?.code).toBe('delete_rpc_missing');
   });
 
   it('privacy route handlers do not import localStorage modules', () => {

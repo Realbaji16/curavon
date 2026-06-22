@@ -3280,13 +3280,54 @@ Do not add new screen styles here unless unavoidable.
   bottom: 88px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 24px;
+  padding: 12px 20px;
+  border-radius: 16px;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
   z-index: 200;
-  white-space: nowrap;
+  max-width: min(92vw, 420px);
+  white-space: normal;
+  word-break: break-word;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.settings-deletion-error {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.35);
+  color: var(--text-primary, #1a1a1a);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.settings-deletion-error p {
+  margin: 0 0 8px;
+}
+
+.settings-deletion-error p:last-child {
+  margin-bottom: 0;
+}
+
+.settings-deletion-error a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.settings-deletion-error-steps {
+  font-size: 13px;
+  opacity: 0.92;
+}
+
+.phone-frame--night .settings-deletion-error {
+  background: rgba(255, 120, 120, 0.14);
+  border-color: rgba(255, 140, 140, 0.45);
+  color: var(--text-primary);
 }
 
 /* ─── Screen redesign additions ─── */
