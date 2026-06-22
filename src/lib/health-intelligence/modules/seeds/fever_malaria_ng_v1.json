@@ -1,0 +1,125 @@
+{
+  "module_id": "fever_malaria_ng_v1",
+  "name": "Fever & malaria concern",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Help users in Nigeria organize fever symptoms, timing, and when to seek care — without naming an illness or giving treatment advice.",
+  "not_allowed": [
+    "Naming malaria, typhoid, or any specific illness as a conclusion",
+    "Prescribing antimalarials, antibiotics, or any medication dose",
+    "Telling the user to start, stop, or change medicines bought at a chemist",
+    "Replacing emergency services or a clinician visit when danger signs appear",
+    "Interpreting lab slips (including widal) as proof of a condition"
+  ],
+  "entry_triggers": [
+    {
+      "id": "body_hot",
+      "label": "body hot / hot body",
+      "terms": ["body hot", "hot body", "body dey hot", "my body is hot", "I dey hot"],
+      "weight": 1
+    },
+    {
+      "id": "fever_words",
+      "label": "fever language",
+      "terms": ["fever", "high temperature", "temperature dey high", "I get temperature"],
+      "weight": 0.95
+    },
+    {
+      "id": "malaria_typhoid_talk",
+      "label": "malaria and typhoid concern",
+      "terms": ["malaria and typhoid", "malaria", "typhoid", "I think na malaria", "na typhoid"],
+      "weight": 0.9
+    },
+    {
+      "id": "chills_sweats",
+      "label": "chills or sweats",
+      "terms": ["chills", "shivering", "sweating at night", "cold and hot"],
+      "weight": 0.7
+    }
+  ],
+  "overlapping_modules": ["child_fever_illness_ng_v1", "diarrhea_vomiting_ng_v1", "cough_catarrh_ng_v1"],
+  "red_flags": [
+    {
+      "id": "confusion_weakness",
+      "label": "confusion or severe weakness with fever",
+      "terms": ["confused", "cannot stand", "very weak", "barely awake"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "breathing_chest",
+      "label": "breathing difficulty with fever",
+      "terms": ["cannot breathe", "trouble breathing", "chest pain with fever"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "stiff_neck_rash",
+      "label": "stiff neck or rash with fever",
+      "terms": ["stiff neck", "rash with fever", "purple spots"],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "persistent_high_fever",
+      "label": "fever not improving after several days",
+      "terms": ["fever for many days", "fever not going", "still hot after treatment"],
+      "severity": "watch"
+    }
+  ],
+  "required_questions": [
+    { "id": "onset", "prompt": "When did the fever or hot body feeling start?", "kind": "required" },
+    { "id": "pattern", "prompt": "Does it come and go, or stay most of the day?", "kind": "required" },
+    { "id": "other_symptoms", "prompt": "What else is happening — headache, vomiting, cough, body pain?", "kind": "required" },
+    { "id": "fluids", "prompt": "Are you able to drink fluids and pass urine normally?", "kind": "required" },
+    { "id": "tried_so_far", "prompt": "What have you tried so far (rest, fluids, medicines from chemist)?", "kind": "required" },
+    { "id": "vulnerable", "prompt": "Is this for a child, someone pregnant, or an older adult?", "kind": "conditional", "showWhen": "context_vulnerable" }
+  ],
+  "ai_generated_question_policy": {
+    "enabled": true,
+    "maxAdditionalQuestions": 2,
+    "mustStayWithinModuleScope": true,
+    "forbiddenTopics": ["diagnosis", "prescription", "widal interpretation", "antimalarial choice"],
+    "notes": "Clarify timing and danger signs only; never name malaria or typhoid as a conclusion."
+  },
+  "allowed_actions": [
+    {
+      "id": "track_fever_pattern",
+      "title": "Track fever pattern",
+      "instruction": "Write the time fever started, highest feeling of heat, and what else you noticed (chills, sweat, weakness).",
+      "category": "track",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "hydration_check",
+      "title": "Check fluids",
+      "instruction": "Note whether you can drink water or oral rehydration and whether urine color or amount changed.",
+      "category": "stabilize",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "prepare_clinic_visit",
+      "title": "Prepare for clinic",
+      "instruction": "List symptoms, start time, medicines already taken, and questions for the clinician — without naming an illness.",
+      "category": "prepare",
+      "safetyLevel": "medium"
+    },
+    {
+      "id": "seek_urgent_care",
+      "title": "Seek urgent care",
+      "instruction": "If breathing is hard, confusion appears, or weakness is severe, go to emergency services or a clinician now.",
+      "category": "seek_care",
+      "safetyLevel": "urgent"
+    }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Main concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "When it started", "kind": "timeline", "required": true },
+    { "id": "symptoms", "label": "Other symptoms", "kind": "symptom", "required": true },
+    { "id": "fluids", "label": "Fluids and urine", "kind": "symptom", "required": false },
+    { "id": "tried", "label": "What was tried", "kind": "other", "required": false },
+    { "id": "clinician_questions", "label": "Questions for clinician", "kind": "question_for_clinician", "required": false }
+  ]
+}

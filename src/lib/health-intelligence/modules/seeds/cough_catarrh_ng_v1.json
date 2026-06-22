@@ -1,0 +1,33 @@
+{
+  "module_id": "cough_catarrh_ng_v1",
+  "name": "Cough & catarrh",
+  "country_context": "NG",
+  "risk_level": "medium",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize cough, catarrh, and cold-like symptoms without diagnosing infection type.",
+  "not_allowed": ["Diagnosing pneumonia, tuberculosis, or COVID", "Prescribing cough syrups or antibiotics", "Replacing care for breathing difficulty"],
+  "entry_triggers": [
+    { "id": "catarrh", "label": "catarrh", "terms": ["catarrh", "running nose", "blocked nose", "flu symptoms"], "weight": 1 },
+    { "id": "cough", "label": "cough", "terms": ["cough", "coughing", "dry cough", "chest cough"], "weight": 0.95 }
+  ],
+  "overlapping_modules": ["breathing_difficulty_ng_v1", "fever_malaria_ng_v1"],
+  "red_flags": [
+    { "id": "breathing_hard", "label": "breathing difficulty", "terms": ["cannot breathe", "trouble breathing", "gasping"], "severity": "emergency", "escalateImmediately": true },
+    { "id": "blood_cough", "label": "coughing blood", "terms": ["coughing blood", "blood in sputum"], "severity": "urgent", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "duration", "prompt": "How long have you had cough or catarrh?", "kind": "required" },
+    { "id": "fever", "prompt": "Any fever or body hot feeling?", "kind": "required" },
+    { "id": "breathing", "prompt": "Any trouble breathing or chest pain?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "track_symptoms", "title": "Track symptoms", "instruction": "Note cough type, catarrh, fever, and duration.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_breathing", "title": "Seek care for breathing trouble", "instruction": "If breathing is hard, seek urgent care immediately.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Cough and catarrh notes", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Duration", "kind": "timeline", "required": true }
+  ]
+}

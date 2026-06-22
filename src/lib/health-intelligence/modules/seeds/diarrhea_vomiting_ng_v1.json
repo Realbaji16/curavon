@@ -1,0 +1,34 @@
+{
+  "module_id": "diarrhea_vomiting_ng_v1",
+  "name": "Diarrhea & vomiting",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize stooling, vomiting, and fluid concerns without naming infection or prescribing treatment.",
+  "not_allowed": ["Diagnosing cholera, typhoid, or food poisoning", "Prescribing antibiotics or anti-diarrhea drugs", "Replacing oral rehydration guidance from a clinician when severely dehydrated"],
+  "entry_triggers": [
+    { "id": "stooling", "label": "stooling", "terms": ["stooling", "running stomach", "diarrhea", "loose stool", "watery stool"], "weight": 1 },
+    { "id": "vomiting", "label": "vomiting", "terms": ["vomiting", "throwing up", "dey vomit"], "weight": 0.9 }
+  ],
+  "overlapping_modules": ["fever_malaria_ng_v1", "stomach_pain_ng_v1", "child_fever_illness_ng_v1"],
+  "red_flags": [
+    { "id": "blood_stool", "label": "blood in stool", "terms": ["blood in stool", "bloody diarrhea"], "severity": "urgent", "escalateImmediately": true },
+    { "id": "cannot_keep_fluids", "label": "cannot keep fluids down", "terms": ["cannot keep fluids", "vomiting everything", "not urinating"], "severity": "urgent", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "onset", "prompt": "When did stooling or vomiting start?", "kind": "required" },
+    { "id": "fluids", "prompt": "Can you drink fluids and urinate normally?", "kind": "required" },
+    { "id": "fever", "prompt": "Any fever or body hot feeling?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "track_episodes", "title": "Track episodes", "instruction": "Note frequency of stooling/vomiting and fluid intake.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_care_dehydration", "title": "Seek care if dehydrated", "instruction": "If you cannot keep fluids or feel very weak, seek clinic or emergency care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Main symptoms", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Start time", "kind": "timeline", "required": true },
+    { "id": "fluids", "label": "Fluids and urine", "kind": "symptom", "required": false }
+  ]
+}

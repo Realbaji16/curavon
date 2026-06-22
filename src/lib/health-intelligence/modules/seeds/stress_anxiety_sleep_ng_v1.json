@@ -1,0 +1,34 @@
+{
+  "module_id": "stress_anxiety_sleep_ng_v1",
+  "name": "Stress, anxiety & sleep",
+  "country_context": "NG",
+  "risk_level": "medium",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize stress, anxiety, and sleep concerns with self-harm escalation — not mental health diagnosis or medication advice.",
+  "not_allowed": ["Diagnosing depression, anxiety disorder, or insomnia as certainty", "Prescribing sleeping pills or psychiatric drugs", "Providing therapy replacement or crisis counseling scripts"],
+  "entry_triggers": [
+    { "id": "stress", "label": "stress", "terms": ["stressed", "anxiety", "panic", "overwhelmed", "cannot sleep", "insomnia"], "weight": 1 },
+    { "id": "sleep", "label": "sleep trouble", "terms": ["not sleeping", "sleep problem", "wake up tired", "no rest"], "weight": 0.9 }
+  ],
+  "overlapping_modules": ["headache_ng_v1", "clinic_pharmacy_prep_ng_v1"],
+  "red_flags": [
+    { "id": "self_harm", "label": "self-harm or suicidal language", "terms": ["harm myself", "suicidal", "want to die", "kill myself"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "main_worry", "prompt": "What feels most overwhelming right now?", "kind": "required" },
+    { "id": "sleep", "prompt": "How has sleep been — hours and quality?", "kind": "required" },
+    { "id": "duration", "prompt": "How long has this been going on?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription", "therapy replacement"] },
+  "allowed_actions": [
+    { "id": "breathing_pause", "title": "Two-minute breathing pause", "instruction": "Slow breathing for two minutes, then write one sentence about what feels loudest.", "category": "stabilize", "safetyLevel": "low" },
+    { "id": "sleep_log", "title": "Log sleep pattern", "instruction": "Note bed time, wake time, and what interrupted sleep.", "category": "track", "safetyLevel": "low" },
+    { "id": "support_now", "title": "Reach immediate support", "instruction": "If you may harm yourself, contact local emergency services or a trusted person now.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Stress or sleep concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Duration", "kind": "timeline", "required": true },
+    { "id": "goal", "label": "What would help next", "kind": "user_goal", "required": false }
+  ]
+}

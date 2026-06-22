@@ -1,0 +1,31 @@
+{
+  "module_id": "missed_medication_ng_v1",
+  "name": "Missed medication",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Help users organize missed-dose worries for pharmacist or clinician guidance — not catch-up dosing advice.",
+  "not_allowed": ["Telling user to double dose or skip future doses", "Prescribing catch-up schedules", "Diagnosing harm from a missed dose"],
+  "entry_triggers": [
+    { "id": "missed_dose", "label": "missed medicine", "terms": ["missed my medicine", "forgot to take", "skipped dose", "missed dose"], "weight": 1 }
+  ],
+  "overlapping_modules": ["medication_question_ng_v1", "clinic_pharmacy_prep_ng_v1"],
+  "red_flags": [
+    { "id": "severe_reaction_after", "label": "severe symptoms after missed or extra dose", "terms": ["severe reaction", "cannot breathe", "confused"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "medicine", "prompt": "Which medicine was missed?", "kind": "required" },
+    { "id": "when", "prompt": "When was the dose due and when did you remember?", "kind": "required" },
+    { "id": "double_worry", "prompt": "Did you take extra to catch up?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["dose adjustment", "double dose advice"] },
+  "allowed_actions": [
+    { "id": "medication_log", "title": "Write medication log", "instruction": "Note medicine name, scheduled time, and what happened for pharmacist or clinician.", "category": "prepare", "safetyLevel": "low" },
+    { "id": "ask_pharmacist", "title": "Ask pharmacist", "instruction": "Contact pharmacist or clinician about missed dose — do not double on your own.", "category": "prepare", "safetyLevel": "medium" }
+  ],
+  "summary_fields": [
+    { "id": "medications", "label": "Medicine involved", "kind": "medication", "required": true },
+    { "id": "timeline", "label": "Missed dose timing", "kind": "timeline", "required": true }
+  ]
+}

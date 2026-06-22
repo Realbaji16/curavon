@@ -1,0 +1,31 @@
+{
+  "module_id": "chest_pain_ng_v1",
+  "name": "Chest pain",
+  "country_context": "NG",
+  "risk_level": "high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize chest pain concerns with emergency escalation — never diagnose heart or lung cause.",
+  "not_allowed": ["Diagnosing heart attack, angina, or reflux as certainty", "Prescribing nitrates or any cardiac drug", "Advising to wait at home when emergency symptoms present"],
+  "entry_triggers": [
+    { "id": "chest_pain", "label": "chest pain", "terms": ["chest pain", "pain in my chest", "chest pressure", "tight chest"], "weight": 1 }
+  ],
+  "overlapping_modules": ["breathing_difficulty_ng_v1", "blood_pressure_ng_v1"],
+  "red_flags": [
+    { "id": "crushing_chest", "label": "crushing chest pain", "terms": ["crushing chest", "severe chest pain", "chest pain radiating"], "severity": "emergency", "escalateImmediately": true },
+    { "id": "chest_breath", "label": "chest pain with breathlessness", "terms": ["chest pain and breathless", "cannot breathe with chest pain"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "onset", "prompt": "Did pain start suddenly or gradually?", "kind": "required" },
+    { "id": "associated", "prompt": "Any breathlessness, sweating, or pain spreading to arm or jaw?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "emergency_chest", "title": "Seek emergency care", "instruction": "Sudden or severe chest pain needs emergency evaluation — call local emergency services or go now.", "category": "seek_care", "safetyLevel": "urgent" },
+    { "id": "track_onset", "title": "Note onset details", "instruction": "If not in immediate danger, note time started and associated symptoms for clinicians.", "category": "track", "safetyLevel": "high" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Chest pain description", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Onset", "kind": "timeline", "required": true }
+  ]
+}

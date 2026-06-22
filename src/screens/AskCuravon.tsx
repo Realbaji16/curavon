@@ -51,7 +51,9 @@ import { collectAskCompletion, runMetaSystemCycle } from '../utils/metaSystem';
 import {
   buildAskFlowProposalFromIntake,
   mapAskPrivacyForServer,
+  postAIIntake,
   postFlowProposal,
+  processAIIntakeClientResult,
 } from '../lib/client/aiRoutes';
 import type { PlanAction, PlanCategory } from '../lib/plan/planTypes';
 import {
@@ -168,6 +170,7 @@ export function AskCuravonScreen() {
   const [safetyBody, setSafetyBody] = useState(CALM_URGENT_BODY);
   const [aiRefinedConcern, setAiRefinedConcern] = useState('');
   const [aiMissingQuestions, setAiMissingQuestions] = useState<string[]>([]);
+  const [aiSelectedModuleLabels, setAiSelectedModuleLabels] = useState<string[]>([]);
   const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
   const [isAcceptingAction, setIsAcceptingAction] = useState(false);
   const [intakeSessionId, setIntakeSessionId] = useState<string | null>(null);
@@ -191,16 +194,59 @@ export function AskCuravonScreen() {
     void refreshAskHistory();
     setAiRefinedConcern('');
     setAiMissingQuestions([]);
+    setAiSelectedModuleLabels([]);
     setAskFinalAction(null);
     setIntakeSessionId(null);
     setDraftHealthFlowId(null);
   }, [refreshAskHistory]);
 
+  const applyLandingIntakeRefinement = useCallback(
+    async (concern: string, sessionId: string | null) => {
+      const intakeResult = await postAIIntake({ input: concern });
+      const processed = processAIIntakeClientResult(intakeResult);
+
+      if (processed.kind === 'safety_blocked') {
+        setSafetyTitle(processed.title);
+        setSafetyBody(processed.body);
+        if (sessionId) {
+          void updateAskIntakeSession(sessionId, {
+            status: 'closed',
+            stage: 'safety',
+            riskLevel: 'urgent',
+            payload: { outcome: 'ai_intake_red_flag', source: 'ask_curavon' },
+          });
+        }
+        setMode('safety');
+        return;
+      }
+
+      if (processed.kind !== 'success') return;
+
+      setAiRefinedConcern(processed.refinement.understoodSummary);
+      setAiMissingQuestions(processed.refinement.guidedQuestions);
+      setAiSelectedModuleLabels(processed.refinement.selectedModuleLabels);
+
+      if (sessionId) {
+        void updateAskIntakeSession(sessionId, {
+          payload: {
+            source: 'ask_curavon',
+            intelligenceMeta: processed.refinement.metadata,
+          },
+        });
+      }
+    },
+    [],
+  );
+
   const startIntake = (prefill = '') => {
-    setIntake({ ...EMPTY_ASK_INTAKE, mainConcern: prefill || landingInput.trim() });
+    const concern = prefill || landingInput.trim();
+    setIntake({ ...EMPTY_ASK_INTAKE, mainConcern: concern });
     setIntakeStep(0);
     setSavedToSummary(false);
     setHistoryEntryId(null);
+    setAiRefinedConcern('');
+    setAiMissingQuestions([]);
+    setAiSelectedModuleLabels([]);
     setMode('intake');
     void createAskIntakeSession({
       status: 'open',
@@ -209,8 +255,14 @@ export function AskCuravonScreen() {
       privacyLevel: resolveAskPrivacyLevel(sensitive),
       payload: { source: 'ask_curavon' },
     })
-      .then((session) => setIntakeSessionId(session.id))
-      .catch(() => setIntakeSessionId(null));
+      .then((session) => {
+        setIntakeSessionId(session.id);
+        void applyLandingIntakeRefinement(concern, session.id);
+      })
+      .catch(() => {
+        setIntakeSessionId(null);
+        void applyLandingIntakeRefinement(concern, null);
+      });
   };
 
   const finishIntake = useCallback(async () => {
@@ -699,6 +751,27 @@ export function AskCuravonScreen() {
           </div>
 
           <div className="ask-fit-body ask-intake-body">
+            {intakeStep === 0 && (aiRefinedConcern || aiSelectedModuleLabels.length || aiMissingQuestions.length) ? (
+              <div className="ask-result-highlight" role="note">
+                <h3 className="ask-result-heading">Organized from your brief note</h3>
+                <p className="intake-helper">Not a diagnosis — just helps structure your guided intake.</p>
+                {aiRefinedConcern ? (
+                  <p className="ask-next-step-text">
+                    <SensitiveBlur sensitive={sensitive}>{aiRefinedConcern}</SensitiveBlur>
+                  </p>
+                ) : null}
+                {aiSelectedModuleLabels.length ? (
+                  <p className="ask-result-guide-hint">Topics: {aiSelectedModuleLabels.join(', ')}</p>
+                ) : null}
+                {aiMissingQuestions.length ? (
+                  <ul className="ask-watch-list ask-watch-list--compact">
+                    {aiMissingQuestions.map((question) => (
+                      <li key={question}>{question}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
             <AnimatePresence mode="wait">
               <motion.div
                 key={intakeStep}

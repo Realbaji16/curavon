@@ -1,3 +1,5 @@
+import type { HealthIntelligenceResult } from '../health-intelligence/types';
+
 export type AIIntakeRiskLevel = 'low' | 'medium' | 'high' | 'urgent';
 
 export type AIIntakeSafety = {
@@ -10,6 +12,7 @@ export type AIIntakeResult = {
   message: string;
   questions: string[];
   nextStep: string;
+  intelligence?: HealthIntelligenceResult;
 };
 
 export type AIIntakeError = {
@@ -27,5 +30,7 @@ export type AIIntakeResponse = {
 
 export type IntakeRequestBody = {
   input?: unknown;
+  /** @deprecated Use `input` — kept for backward compatibility. */
+  concernText?: unknown;
   context?: unknown;
 };

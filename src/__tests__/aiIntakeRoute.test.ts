@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APPROVED_ACTIONS } from '../lib/health-intelligence/actions/allowedActions';
 import { handleAIIntakePost } from '../lib/server/aiIntakeHandler';
 import { getServerAIConfig } from '../lib/server/aiConfig';
 
@@ -40,6 +41,10 @@ function configureSupabaseEnv() {
 function mockAuthenticatedUser(userId = 'user-test-123') {
   vi.mocked(createSupabaseServerClient).mockResolvedValue({
     auth: {
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: userId } } },
+        error: null,
+      }),
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: userId } },
         error: null,
@@ -74,6 +79,7 @@ describe('AI intake route (Fix 7)', () => {
     configureSupabaseEnv();
     vi.mocked(createSupabaseServerClient).mockResolvedValue({
       auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
         getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
     } as never);
@@ -95,7 +101,7 @@ describe('AI intake route (Fix 7)', () => {
     expect(body.error?.code).toBe('empty_input');
   });
 
-  it('returns safe mock response when AI_ENABLED=false', async () => {
+  it('returns deterministic intelligence when AI_ENABLED=false', async () => {
     configureSupabaseEnv();
     mockAuthenticatedUser();
     process.env.AI_ENABLED = 'false';
@@ -107,8 +113,10 @@ describe('AI intake route (Fix 7)', () => {
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.mode).toBe('intake');
-    expect(body.result?.questions.length).toBeGreaterThan(0);
-    expect(body.result?.nextStep).toBe('answer_questions');
+    expect(body.result?.questions.length).toBeGreaterThanOrEqual(2);
+    expect(body.result?.message).toContain('does not diagnose');
+    expect(body.result?.nextStep).toContain('Answer a few short');
+    expect(body.result?.intelligence?.selectedModules.length).toBeGreaterThan(0);
     expect(body.safety.allowed).toBe(true);
   });
 
@@ -123,6 +131,19 @@ describe('AI intake route (Fix 7)', () => {
     expect(status).toBe(503);
     expect(body.ok).toBe(false);
     expect(body.error?.code).toBe('ai_unavailable');
+  });
+
+  it('runs deterministic pipeline when AI_ENABLED=true with provider key (no live call)', async () => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'true';
+    process.env.OPENAI_API_KEY = 'sk-test-secret-key-value';
+
+    const { status, body } = await postIntake({ input: 'mild headache for two days' });
+
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.result?.intelligence?.selectedModules.length).toBeGreaterThan(0);
   });
 
   it('never exposes OPENAI_API_KEY in the response', async () => {
@@ -154,6 +175,7 @@ describe('AI intake route (Fix 7)', () => {
     expect(body.safety.riskLevel).toBe('urgent');
     expect(body.error?.code).toBe('safety_blocked');
     expect(serialized).not.toContain(rawInput);
+    expect(body.result?.intelligence).toBeUndefined();
   });
 
   const urgentRouteCases = [
@@ -183,5 +205,34 @@ describe('AI intake route (Fix 7)', () => {
     const { status, body } = await postIntake({ input: 'I do not have chest pain, just mild fatigue' });
     expect(status).toBe(200);
     expect(body.safety.allowed).toBe(true);
+  });
+
+  it('accepts concernText for backward compatibility', async () => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'false';
+
+    const { status, body } = await postIntake({ concernText: 'mild headache for two days' });
+
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.result?.intelligence?.selectedModules.length).toBeGreaterThan(0);
+  });
+
+  it('routes Nigerian phrase input through intelligence modules', async () => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'false';
+
+    const { status, body } = await postIntake({
+      input: 'my body hot and head dey bang',
+    });
+
+    expect(status).toBe(200);
+    const moduleIds = body.result?.intelligence?.selectedModules.map((module) => module.moduleId) ?? [];
+    expect(moduleIds).toEqual(
+      expect.arrayContaining(['fever_malaria_ng_v1', 'headache_ng_v1']),
+    );
+    expect(body.result?.nextStep).toContain(APPROVED_ACTIONS.answer_guided_questions.instruction.slice(0, 20));
   });
 });

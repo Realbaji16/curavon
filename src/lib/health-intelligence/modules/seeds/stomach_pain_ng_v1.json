@@ -1,0 +1,34 @@
+{
+  "module_id": "stomach_pain_ng_v1",
+  "name": "Stomach pain",
+  "country_context": "NG",
+  "risk_level": "medium",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize belly or stomach pain concerns using common Nigeria descriptions without diagnosing cause.",
+  "not_allowed": ["Diagnosing ulcer, appendicitis, infection, or pregnancy complications", "Prescribing painkillers or antibiotics", "Replacing emergency care for severe abdominal pain"],
+  "entry_triggers": [
+    { "id": "belle_pain", "label": "belle pain", "terms": ["belle pain", "belly pain", "stomach pain", "tummy pain", "abdominal pain"], "weight": 1 },
+    { "id": "stomach_upset", "label": "stomach upset", "terms": ["stomach upset", "pain for belle", "cramp for stomach"], "weight": 0.85 }
+  ],
+  "overlapping_modules": ["diarrhea_vomiting_ng_v1", "pregnancy_concern_ng_v1"],
+  "red_flags": [
+    { "id": "severe_abdominal", "label": "severe or sudden abdominal pain", "terms": ["severe stomach pain", "worst abdominal pain", "sudden severe pain"], "severity": "urgent", "escalateImmediately": true },
+    { "id": "blood_vomit_stool", "label": "blood in vomit or stool", "terms": ["blood in stool", "vomiting blood", "black stool"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "location", "prompt": "Where is the pain — upper, lower, or all over?", "kind": "required" },
+    { "id": "onset", "prompt": "When did it start?", "kind": "required" },
+    { "id": "pattern", "prompt": "Constant or comes and goes?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "track_pain", "title": "Track pain pattern", "instruction": "Note location, timing, and what makes pain better or worse.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_care_severe", "title": "Seek care if severe", "instruction": "If pain is sudden and severe, or with blood in vomit or stool, seek urgent care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Pain description", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "When it started", "kind": "timeline", "required": true },
+    { "id": "clinician_questions", "label": "Questions for clinician", "kind": "question_for_clinician", "required": false }
+  ]
+}

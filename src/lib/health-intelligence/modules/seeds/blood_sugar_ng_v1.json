@@ -1,0 +1,32 @@
+{
+  "module_id": "blood_sugar_ng_v1",
+  "name": "Blood sugar concern",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize blood sugar questions and symptoms for clinician review without diagnosing diabetes.",
+  "not_allowed": ["Diagnosing diabetes or hypoglycemia", "Prescribing insulin or oral glucose drugs", "Telling user to skip or double medicines"],
+  "entry_triggers": [
+    { "id": "sugar_worry", "label": "blood sugar worry", "terms": ["blood sugar", "sugar level", "diabetes worry", "fasting sugar", "random sugar"], "weight": 1 },
+    { "id": "frequent_urine", "label": "thirst and urine", "terms": ["always thirsty", "urinating often", "sugar is high"], "weight": 0.8 }
+  ],
+  "overlapping_modules": ["medication_question_ng_v1", "lab_result_confusion_ng_v1"],
+  "red_flags": [
+    { "id": "confusion_low_sugar", "label": "confusion or fainting with sugar worry", "terms": ["confused", "fainting", "very weak", "cannot eat"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "reading", "prompt": "Any recent sugar reading or lab slip wording?", "kind": "required" },
+    { "id": "symptoms", "prompt": "Thirst, frequent urine, weakness, or blurred vision?", "kind": "required" },
+    { "id": "meds", "prompt": "Any diabetes medicines you use?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription", "insulin dosing"] },
+  "allowed_actions": [
+    { "id": "track_symptoms", "title": "Track symptoms and readings", "instruction": "Note readings, meals, and symptoms for clinician review.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_urgent", "title": "Seek urgent care if very unwell", "instruction": "Confusion, fainting, or inability to eat/drink needs urgent care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Sugar concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "When noticed", "kind": "timeline", "required": true }
+  ]
+}

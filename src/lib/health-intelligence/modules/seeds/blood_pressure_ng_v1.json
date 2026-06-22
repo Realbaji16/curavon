@@ -1,0 +1,33 @@
+{
+  "module_id": "blood_pressure_ng_v1",
+  "name": "Blood pressure concern",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize blood pressure worries and readings for clinician review — not treatment or diagnosis.",
+  "not_allowed": ["Diagnosing hypertension or hypotension as certainty", "Prescribing or adjusting BP medicines", "Interpreting a single reading as safe or dangerous alone"],
+  "entry_triggers": [
+    { "id": "bp_disturbing", "label": "BP disturbing me", "terms": ["bp disturbing me", "blood pressure high", "bp too high", "hypertension worry", "bp dey high"], "weight": 1 },
+    { "id": "bp_reading", "label": "BP reading", "terms": ["blood pressure reading", "checked my bp", "nurse said bp"], "weight": 0.85 }
+  ],
+  "overlapping_modules": ["headache_ng_v1", "chest_pain_ng_v1", "medication_question_ng_v1"],
+  "red_flags": [
+    { "id": "chest_head_severe", "label": "severe headache or chest pain with high BP worry", "terms": ["severe headache", "chest pain", "confused", "vision change"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "reading", "prompt": "What was the reading or what did you hear about your BP?", "kind": "required" },
+    { "id": "symptoms", "prompt": "Any headache, chest pain, dizziness, or vision changes?", "kind": "required" },
+    { "id": "meds", "prompt": "Are you on any BP medicines now?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription", "dose change"] },
+  "allowed_actions": [
+    { "id": "log_readings", "title": "Log BP readings", "instruction": "Write date, time, reading, and symptoms — for clinician review.", "category": "track", "safetyLevel": "low" },
+    { "id": "clinician_questions", "title": "Questions for clinician", "instruction": "Prepare questions about targets, medicines, and follow-up — do not change dose yourself.", "category": "prepare", "safetyLevel": "medium" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "BP concern", "kind": "concern", "required": true },
+    { "id": "readings", "label": "Readings noted", "kind": "symptom", "required": false },
+    { "id": "medications", "label": "BP medicines", "kind": "medication", "required": false }
+  ]
+}

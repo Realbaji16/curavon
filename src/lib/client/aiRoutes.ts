@@ -1,4 +1,10 @@
 import type { AskIntakeData } from '../../types/askIntake';
+import type { HealthIntelligenceResult } from '../health-intelligence/types';
+import { HEALTH_MODULE_BY_ID } from '../health-intelligence/modules/moduleCatalog';
+import {
+  CALM_URGENT_BODY,
+  CALM_URGENT_TITLE,
+} from '../../utils/healthSafety';
 import { collectIntakeSafetyText } from '../../utils/askIntakeRules';
 
 export type FlowProposalPrivacyLevel = 'standard' | 'sensitive';
@@ -167,26 +173,125 @@ export async function postFlowProposal(body: FlowProposalRequestBody): Promise<F
 }
 
 export type AIIntakeRequestBody = {
-  concernText: string;
+  input: string;
+  /** @deprecated Use `input` — sent as `input` on the wire for backward compatibility. */
+  concernText?: string;
+  context?: Record<string, unknown>;
   privacyLevel?: FlowProposalPrivacyLevel;
 };
 
 export type AIIntakeResponseBody = {
   ok: boolean;
+  mode?: 'intake';
+  safety?: {
+    allowed: boolean;
+    riskLevel?: string;
+    blockedReason?: string;
+  };
+  result?: {
+    message: string;
+    questions: string[];
+    nextStep: string;
+    intelligence?: HealthIntelligenceResult;
+  };
   error?: { code: string; message: string };
 };
 
 export type AIIntakeClientResult =
   | { ok: true; status: number; data: AIIntakeResponseBody }
-  | { ok: false; status: number; code: string; message: string };
+  | { ok: false; status: number; code: string; message: string; data?: AIIntakeResponseBody };
+
+export type AskIntakeRefinementMetadata = {
+  selectedModules: string[];
+  riskLevel: string;
+  questionCount: number;
+};
+
+export type AskIntakeRefinement = {
+  understoodSummary: string;
+  selectedModuleLabels: string[];
+  guidedQuestions: string[];
+  metadata: AskIntakeRefinementMetadata;
+};
+
+export type ProcessedAIIntakeClientResult =
+  | { kind: 'success'; refinement: AskIntakeRefinement }
+  | { kind: 'safety_blocked'; title: string; body: string }
+  | { kind: 'skipped' };
+
+export function buildAskIntakeRefinementMetadata(
+  intelligence: HealthIntelligenceResult,
+): AskIntakeRefinementMetadata {
+  return {
+    selectedModules: intelligence.selectedModules.map((module) => module.moduleId),
+    riskLevel: intelligence.riskLevel,
+    questionCount: intelligence.questions.length,
+  };
+}
+
+export function buildAskIntakeUnderstoodSummary(intelligence: HealthIntelligenceResult): string {
+  if (intelligence.normalizedTerms.length > 0) {
+    return intelligence.normalizedTerms.slice(0, 4).join(' · ');
+  }
+  return intelligence.selectedModules
+    .map((module) => HEALTH_MODULE_BY_ID[module.moduleId]?.name)
+    .filter((name): name is string => Boolean(name))
+    .slice(0, 3)
+    .join(' · ');
+}
+
+export function buildAskIntakeRefinementFromIntelligence(
+  intelligence: HealthIntelligenceResult,
+): AskIntakeRefinement {
+  const selectedModuleLabels = intelligence.selectedModules
+    .map((module) => HEALTH_MODULE_BY_ID[module.moduleId]?.name)
+    .filter((name): name is string => Boolean(name));
+
+  return {
+    understoodSummary: buildAskIntakeUnderstoodSummary(intelligence),
+    selectedModuleLabels,
+    guidedQuestions: intelligence.questions.map((question) => question.prompt).slice(0, 5),
+    metadata: buildAskIntakeRefinementMetadata(intelligence),
+  };
+}
+
+/** Map /api/ai/intake client result to optional Ask landing refinement (no raw provider payload). */
+export function processAIIntakeClientResult(
+  result: AIIntakeClientResult,
+): ProcessedAIIntakeClientResult {
+  if (!result.ok) {
+    if (result.status === 422 && result.code === 'safety_blocked') {
+      return {
+        kind: 'safety_blocked',
+        title: CALM_URGENT_TITLE,
+        body: result.message || CALM_URGENT_BODY,
+      };
+    }
+    return { kind: 'skipped' };
+  }
+
+  const intelligence = result.data.result?.intelligence;
+  if (!intelligence) {
+    return { kind: 'skipped' };
+  }
+
+  return {
+    kind: 'success',
+    refinement: buildAskIntakeRefinementFromIntelligence(intelligence),
+  };
+}
 
 export async function postAIIntake(body: AIIntakeRequestBody): Promise<AIIntakeClientResult> {
+  const input = body.input?.trim() || body.concernText?.trim() || '';
   try {
     const response = await fetch('/api/ai/intake', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        input,
+        context: body.context,
+      }),
     });
     const parsed = (await response.json()) as AIIntakeResponseBody;
     if (response.ok && parsed.ok) {
@@ -197,6 +302,7 @@ export async function postAIIntake(body: AIIntakeRequestBody): Promise<AIIntakeC
       status: response.status,
       code: parsed.error?.code ?? 'request_failed',
       message: parsed.error?.message ?? 'Could not process intake.',
+      data: parsed,
     };
   } catch {
     return {

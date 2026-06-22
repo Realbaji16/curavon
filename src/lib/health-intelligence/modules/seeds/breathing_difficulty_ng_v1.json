@@ -1,0 +1,33 @@
+{
+  "module_id": "breathing_difficulty_ng_v1",
+  "name": "Breathing difficulty",
+  "country_context": "NG",
+  "risk_level": "high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Route and organize breathing concerns with strong escalation bias — not a diagnosis module.",
+  "not_allowed": ["Diagnosing asthma, pneumonia, or heart failure", "Prescribing inhalers or oxygen", "Downplaying emergency breathing symptoms"],
+  "entry_triggers": [
+    { "id": "breathing", "label": "breathing difficulty", "terms": ["cannot breathe", "trouble breathing", "shortness of breath", "breathing difficulty", "gasping"], "weight": 1 },
+    { "id": "chest_tight", "label": "chest tightness", "terms": ["chest tight", "tight chest", "cannot catch breath"], "weight": 0.9 }
+  ],
+  "overlapping_modules": ["chest_pain_ng_v1", "cough_catarrh_ng_v1"],
+  "red_flags": [
+    { "id": "severe_breathing", "label": "severe breathing difficulty", "terms": ["cannot breathe", "lips blue", "gasping for air"], "severity": "emergency", "escalateImmediately": true },
+    { "id": "chest_pain_breath", "label": "chest pain with breathlessness", "terms": ["chest pain and breathless", "chest pain when breathing"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "onset", "prompt": "When did breathing trouble start — sudden or gradual?", "kind": "required" },
+    { "id": "severity", "prompt": "Can you speak full sentences or walk normally?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "emergency_now", "title": "Seek emergency care", "instruction": "Breathing difficulty may need emergency services — do not wait for online guidance.", "category": "seek_care", "safetyLevel": "urgent" },
+    { "id": "note_symptoms", "title": "Note symptoms for help", "instruction": "If safe, note onset and associated chest pain or cough for responders or clinician.", "category": "track", "safetyLevel": "high" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Breathing concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Onset", "kind": "timeline", "required": true },
+    { "id": "red_flag", "label": "Danger signs noted", "kind": "red_flag", "required": false }
+  ]
+}

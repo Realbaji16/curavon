@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EMPTY_ASK_INTAKE } from '../types/askIntake';
 import {
   buildAskFlowProposalFromIntake,
+  buildAskIntakeRefinementFromIntelligence,
   mapAskPrivacyForServer,
+  postAIIntake,
   postFlowProposal,
+  processAIIntakeClientResult,
 } from '../lib/client/aiRoutes';
 import { runAIClient } from '../lib/ai/aiClient';
 
@@ -27,6 +30,8 @@ describe('Ask Curavon server flow-proposal routing', () => {
   it('AskCuravon uses postFlowProposal and not runAIOrchestrator', () => {
     const source = readFileSync(ASK_CURAVON_PATH, 'utf8');
     expect(source).toMatch(/postFlowProposal/);
+    expect(source).toMatch(/postAIIntake/);
+    expect(source).toMatch(/processAIIntakeClientResult/);
     expect(source).toMatch(/buildAskFlowProposalFromIntake/);
     expect(source).not.toMatch(/runAIOrchestrator/);
     expect(source).not.toMatch(/generateCuravonNextAction/);
@@ -169,6 +174,96 @@ describe('Ask Curavon server flow-proposal routing', () => {
   it('maps sensitive mode to server privacy level', () => {
     expect(mapAskPrivacyForServer(true)).toBe('sensitive');
     expect(mapAskPrivacyForServer(false)).toBe('standard');
+  });
+
+  it('processAIIntakeClientResult builds minimal refinement metadata', () => {
+    const refinement = buildAskIntakeRefinementFromIntelligence({
+      message: 'safe message',
+      normalizedTerms: ['fever / feeling hot', 'headache'],
+      selectedModules: [
+        { moduleId: 'fever_malaria_ng_v1', confidence: 0.9, matchedTriggers: ['body hot'] },
+        { moduleId: 'headache_ng_v1', confidence: 0.85, matchedTriggers: ['head dey bang'] },
+      ],
+      primaryModuleId: 'fever_malaria_ng_v1',
+      riskLevel: 'high',
+      redFlags: [],
+      questions: [
+        { id: 'q1', prompt: 'When did it start?', source: 'module_required' },
+        { id: 'q2', prompt: 'Any weakness?', source: 'ai_generated' },
+      ],
+      allowedActions: [],
+      nextStep: 'Answer a few short questions',
+      summaryPreview: { title: 'Clinician summary preparation', fields: [], footer: 'not a diagnosis' },
+      safety: { allowed: true, riskLevel: 'high' },
+    });
+
+    expect(refinement.metadata).toEqual({
+      selectedModules: ['fever_malaria_ng_v1', 'headache_ng_v1'],
+      riskLevel: 'high',
+      questionCount: 2,
+    });
+    expect(refinement.understoodSummary).toContain('fever / feeling hot');
+    expect(refinement.selectedModuleLabels).toContain('Fever & malaria concern');
+    expect(refinement.guidedQuestions).toEqual(['When did it start?', 'Any weakness?']);
+  });
+
+  it('processAIIntakeClientResult maps safety_blocked without raw input echo', async () => {
+    const rawInput = 'I cannot breathe and have chest pain';
+    const processed = processAIIntakeClientResult({
+      ok: false,
+      status: 422,
+      code: 'safety_blocked',
+      message: 'This concern may need urgent support.',
+    });
+    expect(processed.kind).toBe('safety_blocked');
+    if (processed.kind === 'safety_blocked') {
+      expect(processed.title.length).toBeGreaterThan(0);
+      expect(processed.body).toContain('urgent');
+    }
+    expect(JSON.stringify(processed)).not.toContain(rawInput);
+  });
+
+  it('postAIIntake calls /api/ai/intake with input field', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        mode: 'intake',
+        safety: { allowed: true, riskLevel: 'high' },
+        result: {
+          message: 'Organize notes',
+          questions: ['When did it start?'],
+          nextStep: 'Answer a few short questions',
+          intelligence: {
+            message: 'Organize notes',
+            normalizedTerms: ['fever / feeling hot'],
+            selectedModules: [{ moduleId: 'fever_malaria_ng_v1', confidence: 0.9, matchedTriggers: [] }],
+            primaryModuleId: 'fever_malaria_ng_v1',
+            riskLevel: 'high',
+            redFlags: [],
+            questions: [{ id: 'q1', prompt: 'When did it start?', source: 'module_required' }],
+            allowedActions: [],
+            nextStep: 'Answer a few short questions',
+            summaryPreview: { title: 'Clinician summary preparation', fields: [], footer: 'not a diagnosis' },
+            safety: { allowed: true, riskLevel: 'high' },
+          },
+        },
+      }),
+    } as Response);
+
+    const result = await postAIIntake({ input: 'my body hot' });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/ai/intake',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ input: 'my body hot', context: undefined }),
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.result?.intelligence?.selectedModules[0]?.moduleId).toBe('fever_malaria_ng_v1');
+    }
   });
 
   it('browser AI client remains blocked', async () => {

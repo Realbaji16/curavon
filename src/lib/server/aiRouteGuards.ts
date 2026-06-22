@@ -1,9 +1,10 @@
 import { getConfiguredAuthMode } from '../auth/authConfig';
 import { DataAuthError, DataPermissionError, DataUnavailableError } from '../data/dataErrors';
 import { detectRedFlags } from '../health/redFlags';
+import type { IntelligenceRiskLevel, HealthIntelligenceResult } from '../health-intelligence/types';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { hasSupabasePublicConfig } from '../supabase/supabaseEnv';
-import type { AIIntakeRiskLevel, AIIntakeSafety, IntakeRequestBody } from './aiIntakeTypes';
+import type { AIIntakeRiskLevel, AIIntakeResult, AIIntakeSafety, IntakeRequestBody } from './aiIntakeTypes';
 import type {
   FlowProposalRequestBody,
   ParsedFlowProposalInput,
@@ -36,6 +37,7 @@ export type BodyGuardFailure = {
 export type BodyGuardSuccess = {
   ok: true;
   input: string;
+  context?: Record<string, unknown>;
 };
 
 export type BodyGuardResult = BodyGuardSuccess | BodyGuardFailure;
@@ -101,7 +103,14 @@ export function parseIntakeRequestBody(body: unknown): BodyGuardResult {
   }
 
   const record = body as IntakeRequestBody;
-  if (typeof record.input !== 'string') {
+  const rawField =
+    typeof record.input === 'string'
+      ? record.input
+      : typeof record.concernText === 'string'
+        ? record.concernText
+        : null;
+
+  if (rawField === null) {
     return {
       ok: false,
       status: 400,
@@ -110,7 +119,7 @@ export function parseIntakeRequestBody(body: unknown): BodyGuardResult {
     };
   }
 
-  const input = record.input.trim();
+  const input = rawField.trim();
   if (!input) {
     return {
       ok: false,
@@ -120,7 +129,20 @@ export function parseIntakeRequestBody(body: unknown): BodyGuardResult {
     };
   }
 
-  return { ok: true, input };
+  let context: Record<string, unknown> | undefined;
+  if (record.context !== undefined) {
+    if (record.context === null || typeof record.context !== 'object' || Array.isArray(record.context)) {
+      return {
+        ok: false,
+        status: 400,
+        code: 'invalid_body',
+        message: 'Field "context" must be a JSON object when provided.',
+      };
+    }
+    context = record.context as Record<string, unknown>;
+  }
+
+  return { ok: true, input, context };
 }
 
 export function assessIntakeSafety(input: string): AIIntakeSafety {
@@ -160,6 +182,33 @@ export function resolveServerAIIntakeMode(): ServerAIIntakeMode {
   return 'mock';
 }
 
+export function mapIntelligenceRiskToIntakeRisk(risk: IntelligenceRiskLevel): AIIntakeRiskLevel {
+  if (risk === 'medium_high') return 'high';
+  return risk;
+}
+
+export function buildIntakeResultFromIntelligence(
+  intelligence: HealthIntelligenceResult,
+): AIIntakeResult {
+  return {
+    message: intelligence.message,
+    questions: intelligence.questions.map((question) => question.prompt),
+    nextStep: intelligence.nextStep,
+    intelligence,
+  };
+}
+
+export function buildIntakeSafetyFromIntelligence(
+  intelligence: HealthIntelligenceResult,
+): AIIntakeSafety {
+  return {
+    allowed: intelligence.safety.allowed,
+    riskLevel: mapIntelligenceRiskToIntakeRisk(intelligence.safety.riskLevel),
+    blockedReason: intelligence.safety.blockedReason,
+  };
+}
+
+/** @deprecated Pilot mock — replaced by health intelligence pipeline. */
 export function buildMockIntakeResult(): {
   message: string;
   questions: string[];
