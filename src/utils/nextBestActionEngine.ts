@@ -661,7 +661,7 @@ function buildActionProgressCard(memory: PersonalizationMemorySnapshot): Support
     lines.push(`Adjusted step: ${truncateText(action.currentAction, 96)}`);
     if (action.adjustLabel) lines.push(`Adjustment: ${action.adjustLabel}`);
   }
-  if (action.reason.trim()) {
+  if (action.reason?.trim()) {
     lines.push(truncateText(action.reason, 96));
   }
 
@@ -786,10 +786,8 @@ function buildSupportingInsights(
   const guideCard = buildGuideInsightCard(memory, snapshot);
   if (guideCard) candidates.push({ priority: 78, card: guideCard });
 
-  candidates.push({
-    priority: 72,
-    card: buildDoctorSummaryInsightCard(memory),
-  });
+  const doctorCard = buildDoctorSummaryInsightCard(memory);
+  if (doctorCard) candidates.push({ priority: 72, card: doctorCard });
 
   const signalsCard = buildSignalsInsightCard(signals, snapshot);
   if (signalsCard) candidates.push({ priority: 65, card: signalsCard });

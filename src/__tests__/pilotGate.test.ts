@@ -37,6 +37,7 @@ const REQUIRED_SAFETY_TESTS = [
   'src/__tests__/aiIntakeRoute.test.ts',
   'src/__tests__/aiFlowProposalRoute.test.ts',
   'src/__tests__/planGuards.test.ts',
+  'src/__tests__/healthIntelligencePhase1.test.ts',
 ];
 
 const REQUIRED_PRIVACY_TESTS = [

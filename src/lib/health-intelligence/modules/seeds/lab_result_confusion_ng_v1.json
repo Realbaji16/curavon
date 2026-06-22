@@ -1,0 +1,104 @@
+{
+  "module_id": "lab_result_confusion_ng_v1",
+  "name": "Lab result confusion",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Help users organize lab slips and confusion about results (including widal and malaria/typhoid panels) for clinician review — not interpretation as diagnosis.",
+  "not_allowed": [
+    "Interpreting widal, malaria, typhoid, or any lab value as confirming a disease",
+    "Telling the user they have malaria, typhoid, infection, or any named condition from a slip",
+    "Prescribing treatment based on lab wording alone",
+    "Replacing the laboratory or clinician who ordered the test",
+    "Declaring results normal or abnormal without clinician context"
+  ],
+  "entry_triggers": [
+    {
+      "id": "widal",
+      "label": "widal test",
+      "terms": ["widal", "widal test", "typhoid test result", "salmonella on result"],
+      "weight": 1
+    },
+    {
+      "id": "malaria_typhoid_panel",
+      "label": "malaria and typhoid results",
+      "terms": ["malaria and typhoid", "mp test", "malaria test", "typhoid result", "lab said malaria"],
+      "weight": 0.95
+    },
+    {
+      "id": "lab_confusion",
+      "label": "confused by lab result",
+      "terms": ["lab result", "test result confusing", "don't understand my result", "what does this test mean"],
+      "weight": 0.9
+    }
+  ],
+  "overlapping_modules": ["fever_malaria_ng_v1", "medication_question_ng_v1", "clinic_pharmacy_prep_ng_v1"],
+  "red_flags": [
+    {
+      "id": "very_unwell_with_result",
+      "label": "very unwell regardless of slip wording",
+      "terms": ["cannot breathe", "confused", "very weak", "severe pain"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "started_meds_without_clinician",
+      "label": "started strong medicines from slip alone",
+      "terms": ["started antibiotics alone", "injection without doctor", "treating from lab only"],
+      "severity": "urgent"
+    }
+  ],
+  "required_questions": [
+    { "id": "test_name", "prompt": "What test was done (name on the slip)?", "kind": "required" },
+    { "id": "where_done", "prompt": "Where was the test done and when?", "kind": "required" },
+    { "id": "confusion_point", "prompt": "What part of the result is confusing you?", "kind": "required" },
+    { "id": "symptoms_now", "prompt": "What symptoms do you have right now?", "kind": "required" },
+    { "id": "who_ordered", "prompt": "Did a clinician order this test, or was it self-requested?", "kind": "required" },
+    { "id": "treatment_started", "prompt": "Have you started any new medicines because of this result?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": {
+    "enabled": true,
+    "maxAdditionalQuestions": 2,
+    "mustStayWithinModuleScope": true,
+    "forbiddenTopics": ["diagnosis from labs", "widal interpretation", "treatment choice", "dose advice"],
+    "notes": "Organize slip details and questions for a clinician; never conclude illness from numbers or reactive flags alone."
+  },
+  "allowed_actions": [
+    {
+      "id": "organize_slip",
+      "title": "Organize lab slip details",
+      "instruction": "Write test name, date, facility, and the exact words or values that confuse you — without guessing meaning.",
+      "category": "track",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "symptom_timeline",
+      "title": "Link symptoms to timeline",
+      "instruction": "Note when symptoms started relative to when the test was done.",
+      "category": "track",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "clinician_questions",
+      "title": "Questions for clinician",
+      "instruction": "Prepare questions: what the test checks, how it fits your symptoms, and what follow-up is needed.",
+      "category": "prepare",
+      "safetyLevel": "medium"
+    },
+    {
+      "id": "avoid_self_treat",
+      "title": "Pause self-treatment from slip alone",
+      "instruction": "If you started medicines only because of the slip wording, note what you took and ask a clinician or pharmacist before continuing.",
+      "category": "prepare",
+      "safetyLevel": "medium_high"
+    }
+  ],
+  "summary_fields": [
+    { "id": "test", "label": "Test name", "kind": "other", "required": true },
+    { "id": "confusion", "label": "What is confusing", "kind": "concern", "required": true },
+    { "id": "symptoms", "label": "Current symptoms", "kind": "symptom", "required": true },
+    { "id": "timeline", "label": "Test date and context", "kind": "timeline", "required": true },
+    { "id": "clinician_questions", "label": "Questions for clinician", "kind": "question_for_clinician", "required": false }
+  ]
+}

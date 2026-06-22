@@ -1,0 +1,34 @@
+{
+  "module_id": "eye_ear_dental_ng_v1",
+  "name": "Eye, ear & dental concern",
+  "country_context": "NG",
+  "risk_level": "medium",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize eye, ear, and dental symptoms for appropriate clinic visit — not specialty diagnosis.",
+  "not_allowed": ["Diagnosing glaucoma, ear infection, or dental abscess", "Prescribing eye drops, ear drops, or antibiotics", "Delaying care for sudden vision loss"],
+  "entry_triggers": [
+    { "id": "eye", "label": "eye problem", "terms": ["eye pain", "red eye", "vision blurry", "something in my eye"], "weight": 1 },
+    { "id": "ear", "label": "ear problem", "terms": ["ear pain", "ear discharge", "cannot hear well"], "weight": 0.9 },
+    { "id": "dental", "label": "tooth pain", "terms": ["tooth pain", "dental pain", "gum swelling", "toothache"], "weight": 0.9 }
+  ],
+  "overlapping_modules": ["injury_wound_swelling_ng_v1", "headache_ng_v1"],
+  "red_flags": [
+    { "id": "vision_loss", "label": "sudden vision loss", "terms": ["sudden vision loss", "cannot see", "vision gone"], "severity": "emergency", "escalateImmediately": true },
+    { "id": "eye_injury", "label": "eye injury", "terms": ["chemical in eye", "pierced eye", "hit in eye"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "area", "prompt": "Is this eye, ear, or dental?", "kind": "required" },
+    { "id": "onset", "prompt": "When did it start?", "kind": "required" },
+    { "id": "severity", "prompt": "How much is it affecting daily activity?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "symptom_note", "title": "Note symptoms", "instruction": "Write which side, pain level, discharge, and vision/hearing changes.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_eye_urgent", "title": "Seek urgent eye care", "instruction": "Sudden vision loss or chemical injury needs urgent specialist or emergency care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Eye/ear/dental concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Onset", "kind": "timeline", "required": true }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "module_id": "pregnancy_concern_ng_v1",
+  "name": "Pregnancy concern",
+  "country_context": "NG",
+  "risk_level": "high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize pregnancy-related symptoms and questions for antenatal or emergency care — not obstetric diagnosis.",
+  "not_allowed": ["Diagnosing miscarriage, ectopic pregnancy, or preeclampsia", "Prescribing pregnancy medicines", "Replacing antenatal or emergency obstetric care"],
+  "entry_triggers": [
+    { "id": "pregnant_symptom", "label": "pregnant with symptoms", "terms": ["pregnant and", "pregnancy concern", "antenatal worry", "belly pain pregnant"], "weight": 1 },
+    { "id": "bleeding_pregnant", "label": "bleeding in pregnancy", "terms": ["pregnant and bleeding", "spotting pregnant"], "weight": 0.95 }
+  ],
+  "overlapping_modules": ["stomach_pain_ng_v1", "fever_malaria_ng_v1", "headache_ng_v1"],
+  "red_flags": [
+    { "id": "bleeding_pain", "label": "bleeding or severe pain in pregnancy", "terms": ["bleeding heavily", "severe abdominal pain pregnant", "severe headache pregnant"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "weeks", "prompt": "How far along is the pregnancy (weeks or months, if known)?", "kind": "required" },
+    { "id": "symptom", "prompt": "What symptom or worry brought you here?", "kind": "required" },
+    { "id": "bleeding", "prompt": "Any bleeding, fluid leak, or severe pain?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "antenatal_prep", "title": "Prepare for antenatal visit", "instruction": "List symptoms, timing, and questions for your antenatal clinic.", "category": "prepare", "safetyLevel": "medium" },
+    { "id": "seek_obstetric", "title": "Seek urgent obstetric care", "instruction": "Heavy bleeding, severe pain, or severe headache in pregnancy needs urgent care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Pregnancy concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Gestational timing", "kind": "timeline", "required": true }
+  ]
+}

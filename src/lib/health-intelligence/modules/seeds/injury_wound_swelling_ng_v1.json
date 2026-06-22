@@ -1,0 +1,32 @@
+{
+  "module_id": "injury_wound_swelling_ng_v1",
+  "name": "Injury, wound & swelling",
+  "country_context": "NG",
+  "risk_level": "medium_high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize injuries, wounds, and swelling after trauma without clinical interpretation.",
+  "not_allowed": ["Diagnosing fracture or deep infection", "Prescribing antibiotics or painkillers", "Advising to avoid hospital when severe injury present"],
+  "entry_triggers": [
+    { "id": "injury", "label": "injury", "terms": ["injury", "wound", "cut", "swelling after fall", "sprain", "accident"], "weight": 1 }
+  ],
+  "overlapping_modules": ["eye_ear_dental_ng_v1"],
+  "red_flags": [
+    { "id": "heavy_bleeding", "label": "heavy bleeding", "terms": ["heavy bleeding", "bleeding won't stop", "deep cut"], "severity": "emergency", "escalateImmediately": true },
+    { "id": "cannot_use_limb", "label": "cannot move limb", "terms": ["cannot move arm", "cannot walk", "bone looks wrong"], "severity": "urgent" }
+  ],
+  "required_questions": [
+    { "id": "what_happened", "prompt": "What happened and when?", "kind": "required" },
+    { "id": "location", "prompt": "Where is the injury or swelling?", "kind": "required" },
+    { "id": "function", "prompt": "Can you use the limb or bear weight?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "wound_note", "title": "Note wound details", "instruction": "Describe size, bleeding, and when injury happened.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_emergency", "title": "Seek emergency care", "instruction": "Heavy bleeding or obvious deformity needs emergency care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Injury description", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "When it happened", "kind": "timeline", "required": true }
+  ]
+}

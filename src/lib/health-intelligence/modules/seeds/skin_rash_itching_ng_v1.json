@@ -1,0 +1,32 @@
+{
+  "module_id": "skin_rash_itching_ng_v1",
+  "name": "Skin rash & itching",
+  "country_context": "NG",
+  "risk_level": "medium",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize rash, itching, and skin changes for clinician review without naming skin disease.",
+  "not_allowed": ["Diagnosing eczema, fungal infection, or allergy type", "Prescribing topical steroids or antibiotics", "Dismissing facial swelling or breathing issues"],
+  "entry_triggers": [
+    { "id": "rash", "label": "rash", "terms": ["rash", "skin rash", "spots on skin", "itching", "body dey itch"], "weight": 1 }
+  ],
+  "overlapping_modules": ["medication_question_ng_v1", "breathing_difficulty_ng_v1"],
+  "red_flags": [
+    { "id": "face_swelling", "label": "face or lip swelling", "terms": ["face swelling", "lip swelling", "throat tight"], "severity": "emergency", "escalateImmediately": true },
+    { "id": "spreading_fast", "label": "rapidly spreading rash with fever", "terms": ["rash spreading fast", "purple rash", "fever with rash"], "severity": "urgent" }
+  ],
+  "required_questions": [
+    { "id": "location", "prompt": "Where is the rash or itch?", "kind": "required" },
+    { "id": "onset", "prompt": "When did it start?", "kind": "required" },
+    { "id": "new_meds", "prompt": "Any new medicine, cream, or food?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription"] },
+  "allowed_actions": [
+    { "id": "photo_note", "title": "Describe or photograph rash", "instruction": "Note location, spread, and triggers — for clinician review.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_allergy", "title": "Seek care for swelling", "instruction": "Face swelling or breathing trouble needs urgent care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Rash description", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Onset", "kind": "timeline", "required": true }
+  ]
+}

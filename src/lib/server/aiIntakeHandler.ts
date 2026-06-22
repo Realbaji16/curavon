@@ -1,8 +1,10 @@
 import type { AIIntakeResponse } from './aiIntakeTypes';
+import { runHealthIntelligencePipeline } from '../health-intelligence/services/healthIntelligencePipeline';
 import { trackSafeEvent } from '../observability/safeAnalytics';
 import {
   assessIntakeSafety,
-  buildMockIntakeResult,
+  buildIntakeResultFromIntelligence,
+  buildIntakeSafetyFromIntelligence,
   defaultSafetyForError,
   parseIntakeRequestBody,
   requireAuthenticatedSupabaseUser,
@@ -26,7 +28,7 @@ function intakeErrorResponse(
   };
 }
 
-/** Server-side AI intake handler — no raw input logging, no provider calls in pilot mock mode. */
+/** Server-side AI intake handler — deterministic Phase 1 health intelligence pipeline. */
 export async function handleAIIntakePost(request: Request): Promise<{
   status: number;
   body: AIIntakeResponse;
@@ -87,20 +89,27 @@ export async function handleAIIntakePost(request: Request): Promise<{
     );
   }
 
-  // Pilot: deterministic mock for mock and ready modes — live OpenAI calls deferred.
+  const intelligence = runHealthIntelligencePipeline({
+    rawText: body.input,
+    context: body.context,
+  });
+  const result = buildIntakeResultFromIntelligence(intelligence);
+  const responseSafety = buildIntakeSafetyFromIntelligence(intelligence);
+
   trackSafeEvent('ai_route_called', {
     route_name: 'ai_intake',
     status: 'completed',
-    safety_flag: false,
-    risk_level: safety.riskLevel ?? 'low',
+    safety_flag: !responseSafety.allowed,
+    risk_level: responseSafety.riskLevel ?? 'low',
   });
+
   return {
     status: 200,
     body: {
       ok: true,
       mode: 'intake',
-      safety,
-      result: buildMockIntakeResult(),
+      safety: responseSafety,
+      result,
     },
   };
 }

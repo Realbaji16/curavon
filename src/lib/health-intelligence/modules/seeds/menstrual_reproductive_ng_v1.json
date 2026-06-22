@@ -1,0 +1,32 @@
+{
+  "module_id": "menstrual_reproductive_ng_v1",
+  "name": "Menstrual & reproductive health",
+  "country_context": "NG",
+  "risk_level": "medium",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize period, cycle, and reproductive health worries for clinician conversation — not gynecologic diagnosis.",
+  "not_allowed": ["Diagnosing PCOS, fibroids, or pregnancy status as certainty", "Prescribing hormonal treatments", "Replacing gynecologic emergency care"],
+  "entry_triggers": [
+    { "id": "period_worry", "label": "period concern", "terms": ["period problem", "menstrual pain", "irregular period", "heavy period", "missed period"], "weight": 1 }
+  ],
+  "overlapping_modules": ["pregnancy_concern_ng_v1", "stomach_pain_ng_v1"],
+  "red_flags": [
+    { "id": "heavy_bleeding", "label": "very heavy bleeding", "terms": ["bleeding heavily", "soaking pads quickly", "dizzy with period"], "severity": "urgent", "escalateImmediately": true },
+    { "id": "severe_pain", "label": "severe pelvic pain", "terms": ["severe pelvic pain", "worst period pain"], "severity": "urgent" }
+  ],
+  "required_questions": [
+    { "id": "cycle", "prompt": "What changed about your cycle or bleeding?", "kind": "required" },
+    { "id": "pain", "prompt": "Any pain — where and how strong?", "kind": "required" },
+    { "id": "pregnancy_possible", "prompt": "Could pregnancy be possible?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription", "contraceptive prescribing"] },
+  "allowed_actions": [
+    { "id": "cycle_log", "title": "Log cycle details", "instruction": "Note bleeding amount, pain, and cycle dates for clinician review.", "category": "track", "safetyLevel": "low" },
+    { "id": "clinician_visit", "title": "Prepare gynecology questions", "instruction": "List symptoms and questions for a clinician or antenatal service.", "category": "prepare", "safetyLevel": "medium" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Cycle concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Cycle timing", "kind": "timeline", "required": true }
+  ]
+}

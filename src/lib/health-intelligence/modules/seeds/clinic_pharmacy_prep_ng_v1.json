@@ -1,0 +1,97 @@
+{
+  "module_id": "clinic_pharmacy_prep_ng_v1",
+  "name": "Clinic & pharmacy prep",
+  "country_context": "NG",
+  "risk_level": "low",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Help users prepare for a clinic, hospital, or pharmacy visit in Nigeria — organized notes and questions, not clinical conclusions.",
+  "not_allowed": [
+    "Diagnosing or naming a condition for the visit",
+    "Prescribing what to ask the chemist to give",
+    "Replacing triage or emergency services",
+    "Telling the user which facility must treat them",
+    "Interpreting past labs or slips as final answers"
+  ],
+  "entry_triggers": [
+    {
+      "id": "clinic_visit",
+      "label": "clinic or hospital visit",
+      "terms": ["going to clinic", "hospital visit", "see doctor tomorrow", "appointment"],
+      "weight": 1
+    },
+    {
+      "id": "pharmacy_visit",
+      "label": "pharmacy or chemist visit",
+      "terms": ["go to chemist", "pharmacy visit", "buy medicine at chemist", "ask pharmacist"],
+      "weight": 0.95
+    },
+    {
+      "id": "prepare_notes",
+      "label": "prepare health notes",
+      "terms": ["prepare for doctor", "what to tell doctor", "doctor visit prep", "summary for clinic"],
+      "weight": 0.9
+    }
+  ],
+  "overlapping_modules": ["medication_question_ng_v1", "lab_result_confusion_ng_v1", "headache_ng_v1"],
+  "red_flags": [
+    {
+      "id": "emergency_before_visit",
+      "label": "emergency symptoms before planned visit",
+      "terms": ["cannot breathe", "chest pain", "severe bleeding", "fainting", "suicidal"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    }
+  ],
+  "required_questions": [
+    { "id": "visit_type", "prompt": "Is this for a clinic, hospital, or pharmacy/chemist visit?", "kind": "required" },
+    { "id": "main_concern", "prompt": "What is the main concern you want help with?", "kind": "required" },
+    { "id": "timeline", "prompt": "When did it start and what has changed?", "kind": "required" },
+    { "id": "medicines", "prompt": "What medicines or treatments are you using now?", "kind": "required" },
+    { "id": "questions", "prompt": "What two questions do you most want answered at the visit?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": {
+    "enabled": true,
+    "maxAdditionalQuestions": 3,
+    "mustStayWithinModuleScope": true,
+    "forbiddenTopics": ["diagnosis", "prescription", "facility ranking as medical advice"],
+    "notes": "Help structure visit goals and notes only."
+  },
+  "allowed_actions": [
+    {
+      "id": "visit_checklist",
+      "title": "Build visit checklist",
+      "instruction": "List ID, prior results, medicines, symptom timeline, and your top questions.",
+      "category": "prepare",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "symptom_timeline",
+      "title": "Write symptom timeline",
+      "instruction": "One line per day or phase: what started, what changed, what helped or worsened.",
+      "category": "track",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "pharmacy_list",
+      "title": "Pharmacy question list",
+      "instruction": "Write medicine names on your pack and questions about timing and interactions for the pharmacist.",
+      "category": "prepare",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "urgent_not_wait",
+      "title": "Do not wait if urgent",
+      "instruction": "If severe or sudden symptoms appear, seek emergency care instead of waiting for a routine visit.",
+      "category": "seek_care",
+      "safetyLevel": "urgent"
+    }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Main concern", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "Timeline", "kind": "timeline", "required": true },
+    { "id": "medications", "label": "Current medicines", "kind": "medication", "required": false },
+    { "id": "questions", "label": "Questions for visit", "kind": "question_for_clinician", "required": true },
+    { "id": "goal", "label": "Visit goal", "kind": "user_goal", "required": false }
+  ]
+}

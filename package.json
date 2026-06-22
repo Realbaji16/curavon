@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:pilot-gate": "vitest run src/__tests__/pilotGate.test.ts src/__tests__/pilotEnvHardening.test.ts src/__tests__/proxy.test.ts",
-    "test:safety": "vitest run src/__tests__/redFlags.test.ts src/__tests__/healthSafety.test.ts src/__tests__/healthFlowLifecycle.test.ts src/__tests__/aiIntakeRoute.test.ts src/__tests__/aiFlowProposalRoute.test.ts src/__tests__/planGuards.test.ts src/__tests__/planEngineV3Canonical.test.ts src/__tests__/planEngineV3Cache.test.ts src/__tests__/nextActionAdapter.test.ts src/__tests__/askCuravonServerRouting.test.ts",
+    "test:safety": "vitest run src/__tests__/redFlags.test.ts src/__tests__/healthSafety.test.ts src/__tests__/healthFlowLifecycle.test.ts src/__tests__/aiIntakeRoute.test.ts src/__tests__/aiFlowProposalRoute.test.ts src/__tests__/planGuards.test.ts src/__tests__/planEngineV3Canonical.test.ts src/__tests__/planEngineV3Cache.test.ts src/__tests__/nextActionAdapter.test.ts src/__tests__/askCuravonServerRouting.test.ts src/__tests__/healthIntelligencePhase1.test.ts",
     "test:privacy": "vitest run src/__tests__/privacyEnforcement.test.ts src/__tests__/dataPrivacyRoutes.test.ts src/__tests__/safeAnalytics.test.ts src/__tests__/noDirectLocalStorage.test.ts src/__tests__/pilotEnvHardening.test.ts src/__tests__/supabaseSoftDeleteFiltering.test.ts",
     "check:supabase": "node scripts/check-supabase-data-api.mjs",
     "fix:supabase-grants": "node scripts/print-grants-sql.mjs",

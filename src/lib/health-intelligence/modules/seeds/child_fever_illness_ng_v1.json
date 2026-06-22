@@ -1,0 +1,32 @@
+{
+  "module_id": "child_fever_illness_ng_v1",
+  "name": "Child fever & illness",
+  "country_context": "NG",
+  "risk_level": "high",
+  "status": "draft",
+  "version": "1.0.0",
+  "purpose": "Organize child illness and fever concerns for caregiver action — not pediatric diagnosis.",
+  "not_allowed": ["Diagnosing malaria, infection, or meningitis in a child", "Prescribing pediatric drug doses", "Replacing emergency pediatric care"],
+  "entry_triggers": [
+    { "id": "child_fever", "label": "child fever", "terms": ["my baby has fever", "child fever", "baby body hot", "infant sick"], "weight": 1 },
+    { "id": "child_unwell", "label": "child unwell", "terms": ["my child is weak", "baby not feeding", "child vomiting"], "weight": 0.9 }
+  ],
+  "overlapping_modules": ["fever_malaria_ng_v1", "diarrhea_vomiting_ng_v1"],
+  "red_flags": [
+    { "id": "child_lethargy", "label": "very weak or unresponsive child", "terms": ["baby very weak", "child not waking", "seizure", "difficulty breathing baby"], "severity": "emergency", "escalateImmediately": true }
+  ],
+  "required_questions": [
+    { "id": "age", "prompt": "How old is the child?", "kind": "required" },
+    { "id": "fever", "prompt": "Is the body hot or fever noted — since when?", "kind": "required" },
+    { "id": "feeding", "prompt": "Is the child feeding, drinking, and urinating normally?", "kind": "required" }
+  ],
+  "ai_generated_question_policy": { "enabled": false, "maxAdditionalQuestions": 0, "mustStayWithinModuleScope": true, "forbiddenTopics": ["diagnosis", "prescription", "pediatric dosing"] },
+  "allowed_actions": [
+    { "id": "track_child", "title": "Track child symptoms", "instruction": "Note fever timing, feeding, urine, and behavior changes.", "category": "track", "safetyLevel": "low" },
+    { "id": "seek_pediatric", "title": "Seek pediatric care", "instruction": "Very weak child, breathing difficulty, or not feeding needs urgent clinic or emergency care.", "category": "seek_care", "safetyLevel": "urgent" }
+  ],
+  "summary_fields": [
+    { "id": "concern", "label": "Child symptoms", "kind": "concern", "required": true },
+    { "id": "timeline", "label": "When started", "kind": "timeline", "required": true }
+  ]
+}
