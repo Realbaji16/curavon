@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityInsightStore } from '../../types/activityInsights';
 import type { DoctorSummaryDraft, DoctorSummaryItem, RedFlagLog } from '../../types/doctorSummary';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
+import { normalizeHealthProfile } from '../../utils/healthUtils';
 import { getBrowserSupabaseClient } from '../supabase/browserClient';
 import { applyNotDeleted, type ReadQueryOptions } from './supabaseSoftDelete';
 
@@ -69,6 +70,14 @@ export class SupabaseDataError extends Error {
   }
 }
 
+/** One row per user — upsert must reuse existing id to satisfy unique(user_id). */
+const USER_SINGLETON_TABLES = new Set<SupabaseDataTable>([
+  'health_profiles',
+  'next_action_state',
+  'notification_preferences',
+  'user_preferences',
+]);
+
 type PayloadRow = {
   id: string;
   user_id: string;
@@ -92,12 +101,14 @@ export async function getSupabaseUserId(): Promise<string | null> {
   const client = getBrowserSupabaseClient();
   if (!client) return null;
 
+  // getUser validates the JWT with Supabase; getSession alone can look signed-in while
+  // PostgREST requests still run as anon and fail with misleading permission errors.
   const {
-    data: { session },
+    data: { user },
     error,
-  } = await client.auth.getSession();
-  if (error || !session?.user) return null;
-  return session.user.id;
+  } = await client.auth.getUser();
+  if (error || !user) return null;
+  return user.id;
 }
 
 export async function requireSupabaseUserId(): Promise<string> {
@@ -142,16 +153,35 @@ export async function upsertSinglePayload<T>(
 ): Promise<void> {
   const client = requireClient();
   const userId = await requireSupabaseUserId();
-  const id = rowId ?? userId;
+  const updatedAt = new Date().toISOString();
+
+  let id = rowId ?? userId;
+
+  if (USER_SINGLETON_TABLES.has(table)) {
+    const { data: existing, error: readError } = await client
+      .from(table)
+      .select('id')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (readError) {
+      throw new SupabaseDataError('query_failed', readError.message);
+    }
+
+    id = existing?.id ?? crypto.randomUUID();
+  }
 
   const { error } = await client.from(table).upsert(
     {
       id,
       user_id: userId,
       payload,
-      updated_at: new Date().toISOString(),
+      updated_at: updatedAt,
+      deleted_at: null,
     },
-    { onConflict: 'id' },
+    { onConflict: USER_SINGLETON_TABLES.has(table) ? 'user_id' : 'id' },
   );
 
   if (error) {
@@ -247,7 +277,8 @@ export async function readPayloadList<T>(
 }
 
 export async function readSupabaseHealthProfile(): Promise<HealthProfile | null> {
-  return readSinglePayload<HealthProfile>('health_profiles');
+  const raw = await readSinglePayload<HealthProfile>('health_profiles');
+  return raw ? normalizeHealthProfile(raw) : null;
 }
 
 export async function saveSupabaseHealthProfile(profile: HealthProfile): Promise<void> {

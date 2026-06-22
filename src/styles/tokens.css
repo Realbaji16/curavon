@@ -17,12 +17,12 @@
   --warm-peach: #f5c9a8;
   --warm-coral: #e89972;
   --care-seed: #ff8a64;
-  --ink: #1a1f2c;
-  --muted-ink: #4f5966;
-  --text-primary: #1a1f2c;
-  --text-muted: #424a56;
-  --text-soft: #525c6a;
-  --text-body-readable: #2f3640;
+  --ink: #121820;
+  --muted-ink: #2a3542;
+  --text-primary: #121820;
+  --text-muted: #1f2e3e;
+  --text-soft: #364658;
+  --text-body-readable: #1a2634;
   --text-caption: 0.8125rem;
   --text-secondary-size: 0.9375rem;
   --text-body-size: 1rem;
@@ -66,11 +66,11 @@
   );
 
   /* Typography — Curavon text system */
-  --text-heading: #1f2d3d;
-  --text-title: #25364a;
-  --text-subtitle: #31465c;
-  --text-body: #536779;
-  --text-safety: #455b6d;
+  --text-heading: #121820;
+  --text-title: #121820;
+  --text-subtitle: #1f2e3e;
+  --text-body: #243444;
+  --text-safety: #364658;
   --text-label-warm: #d96f5a;
   --text-label-teal: #3a8f86;
   --btn-gradient-end: #8edccb;
@@ -121,5 +121,11 @@
     0 2px 8px rgba(48, 73, 108, 0.05),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
   --premium-accent-bar: linear-gradient(90deg, var(--brand-teal) 0%, #7ec8c2 42%, var(--warm-coral) 100%);
-  --dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.88) 55%);
+  --dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(252, 253, 255, 0.99) 100%);
+  --tab-dock-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(252, 253, 255, 0.99) 100%);
+  --tab-dock-border: rgba(255, 255, 255, 0.92);
+  --tab-dock-shadow:
+    0 -4px 20px rgba(48, 73, 108, 0.1),
+    0 10px 32px rgba(48, 73, 108, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }

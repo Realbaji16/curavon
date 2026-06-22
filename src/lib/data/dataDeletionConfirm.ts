@@ -28,7 +28,7 @@ export const DELETION_CONFIRMATION_COPY: Record<DeletionType, ConfirmationCopy> 
   account_and_health_data: {
     title: 'Delete account and health data?',
     body:
-      'This removes your local account and Curavon health data from this device. Export your data first if you want a copy.',
+      'This permanently deletes your Curavon account from Supabase, removes all health data stored there, and clears this device. Export your data first if you want a copy. You cannot sign in again with the same account after this.',
     confirmLabel: 'Delete everything',
     dangerLevel: 'high',
   },

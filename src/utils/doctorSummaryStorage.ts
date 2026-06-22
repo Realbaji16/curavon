@@ -92,7 +92,7 @@ export async function addDoctorSummaryItem(
 
     ...item,
 
-    id: `dsi-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
 
     createdAt: new Date().toISOString(),
 
@@ -116,7 +116,7 @@ export async function addRedFlagLog(
 
     ...log,
 
-    id: `rfl-${Date.now()}`,
+    id: crypto.randomUUID(),
 
     createdAt: new Date().toISOString(),
 

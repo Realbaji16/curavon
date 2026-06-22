@@ -117,10 +117,84 @@ function getSurfaceVars(theme: ThemePreset) {
   }
 }
 
+function getTabDockVars(theme: ThemePreset): Record<string, string> {
+  switch (theme) {
+    case 'night':
+      return {
+        '--dock-bg':
+          'linear-gradient(180deg, rgba(34, 42, 68, 0.98) 0%, rgba(20, 28, 48, 0.99) 100%)',
+        '--tab-dock-bg':
+          'linear-gradient(180deg, rgba(34, 42, 68, 0.98) 0%, rgba(20, 28, 48, 0.99) 100%)',
+        '--tab-dock-border': 'rgba(255, 255, 255, 0.26)',
+        '--tab-dock-shadow':
+          '0 -6px 24px rgba(0, 0, 0, 0.34), 0 10px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+      };
+    case 'mist':
+      return {
+        '--dock-bg':
+          'linear-gradient(180deg, rgba(248, 249, 255, 0.97) 0%, rgba(255, 255, 255, 0.99) 100%)',
+        '--tab-dock-bg':
+          'linear-gradient(180deg, rgba(248, 249, 255, 0.97) 0%, rgba(255, 255, 255, 0.99) 100%)',
+        '--tab-dock-border': 'rgba(255, 255, 255, 0.94)',
+        '--tab-dock-shadow':
+          '0 -4px 20px rgba(53, 78, 110, 0.1), 0 10px 32px rgba(53, 78, 110, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.96)',
+      };
+    case 'dawn':
+      return {
+        '--dock-bg':
+          'linear-gradient(180deg, rgba(255, 251, 246, 0.97) 0%, rgba(255, 255, 255, 0.99) 100%)',
+        '--tab-dock-bg':
+          'linear-gradient(180deg, rgba(255, 251, 246, 0.97) 0%, rgba(255, 255, 255, 0.99) 100%)',
+        '--tab-dock-border': 'rgba(255, 255, 255, 0.94)',
+        '--tab-dock-shadow':
+          '0 -4px 20px rgba(120, 90, 70, 0.1), 0 10px 32px rgba(120, 90, 70, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.96)',
+      };
+    default:
+      return {
+        '--dock-bg':
+          'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(252, 253, 255, 0.99) 100%)',
+        '--tab-dock-bg':
+          'linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(252, 253, 255, 0.99) 100%)',
+        '--tab-dock-border': 'rgba(255, 255, 255, 0.92)',
+        '--tab-dock-shadow':
+          '0 -4px 20px rgba(48, 73, 108, 0.1), 0 10px 32px rgba(48, 73, 108, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+      };
+  }
+}
+
 export function getThemeCssVars(theme: ThemePreset): Record<string, string> {
   const tokens = themes[theme];
   const sky = SKY_PALETTES[theme];
   const surfaces = getSurfaceVars(theme);
+  const isNight = theme === 'night';
+
+  const textVars = isNight
+    ? {
+        '--ink': '#FAFCFF',
+        '--muted-ink': '#D4E2F6',
+        '--text-primary': '#FAFCFF',
+        '--text-heading': '#FAFCFF',
+        '--text-title': '#FAFCFF',
+        '--text-subtitle': '#E8F0FC',
+        '--text-body': '#E8F0FC',
+        '--text-body-readable': '#EDF3FD',
+        '--text-muted': '#D4E2F6',
+        '--text-soft': '#C5D6EE',
+        '--text-safety': '#C5D6EE',
+      }
+    : {
+        '--ink': tokens.text,
+        '--muted-ink': tokens.textSecondary,
+        '--text-primary': tokens.text,
+        '--text-heading': tokens.text,
+        '--text-title': tokens.text,
+        '--text-subtitle': tokens.textSecondary,
+        '--text-body': tokens.textSecondary,
+        '--text-body-readable': tokens.textSecondary,
+        '--text-muted': tokens.textSecondary,
+        '--text-soft': tokens.textMuted,
+        '--text-safety': tokens.textMuted,
+      };
 
   return {
     '--theme-text': tokens.text,
@@ -134,16 +208,7 @@ export function getThemeCssVars(theme: ThemePreset): Record<string, string> {
     '--theme-glass-border': tokens.glassBorder,
     '--theme-border': tokens.border,
     '--theme-tab-bar': tokens.tabBar,
-    '--ink': tokens.text,
-    '--muted-ink': tokens.textSecondary,
-    '--text-primary': tokens.text,
-    '--text-muted': tokens.textSecondary,
-    '--text-soft': tokens.textMuted,
-    '--text-heading': tokens.text,
-    '--text-title': tokens.text,
-    '--text-subtitle': tokens.textSecondary,
-    '--text-body': tokens.textSecondary,
-    '--text-safety': tokens.textMuted,
+    ...textVars,
     '--text-label-warm': tokens.primary,
     '--text-label-teal': tokens.teal,
     '--brand-teal': sky.teal,
@@ -173,5 +238,6 @@ export function getThemeCssVars(theme: ThemePreset): Record<string, string> {
         }
       : {}),
     ...surfaces,
+    ...getTabDockVars(theme),
   } as Record<string, string>;
 }

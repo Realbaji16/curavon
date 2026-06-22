@@ -53,14 +53,14 @@ export function TabBar() {
                   size={20}
                   strokeWidth={active ? 2.4 : 1.75}
                   className="tab-icon"
-                  style={{ color: active ? tokens.primary : tokens.textMuted }}
+                  style={{ color: active ? tokens.primary : tokens.textSecondary }}
                 />
               </motion.span>
               <motion.span
                 className="tab-label"
-                animate={{ opacity: active ? 1 : 0.72 }}
+                animate={{ opacity: 1 }}
                 transition={{ duration: 0.18 }}
-                style={{ color: active ? tokens.primary : tokens.textMuted }}
+                style={{ color: active ? tokens.primary : tokens.textSecondary }}
               >
                 {label}
               </motion.span>

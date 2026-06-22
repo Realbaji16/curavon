@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAIFlowProposalPost } from '../lib/server/aiFlowProposalHandler';
+import { DataPermissionError } from '../lib/data/dataErrors';
 import { getServerAIConfig } from '../lib/server/aiConfig';
 
 vi.mock('../lib/supabase/serverClient', () => ({
@@ -59,6 +60,10 @@ function configureSupabaseEnv() {
 function mockAuthenticatedUser(userId = 'user-test-123') {
   vi.mocked(createSupabaseServerClient).mockResolvedValue({
     auth: {
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: userId } } },
+        error: null,
+      }),
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: userId } },
         error: null,
@@ -142,6 +147,7 @@ describe('AI flow-proposal route', () => {
     configureSupabaseEnv();
     vi.mocked(createSupabaseServerClient).mockResolvedValue({
       auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
         getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
     } as never);
@@ -251,6 +257,17 @@ describe('AI flow-proposal route', () => {
     const { status, body } = await postFlowProposal(safeStructuredBody);
     expect(status).toBe(503);
     expect(body.error?.code).toBe('ai_unavailable');
+  });
+
+  it('returns data_permission when Supabase table grants are missing', async () => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'false';
+    mockAdapter.createDraftHealthFlow.mockRejectedValueOnce(new DataPermissionError());
+
+    const { status, body } = await postFlowProposal(safeStructuredBody);
+    expect(status).toBe(503);
+    expect(body.error?.code).toBe('data_permission');
   });
 
   it('never exposes provider key in response when AI is disabled', async () => {

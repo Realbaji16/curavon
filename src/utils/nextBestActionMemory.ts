@@ -1,6 +1,7 @@
 import type { DoctorSummaryItem, RedFlagLog } from '../types/doctorSummary';
 import type { FollowUpRecord } from '../lib/followUp/followUpTypes';
 import type { PersonalizationMemorySnapshot } from '../types/nextBestAction';
+import { createDefaultHealthProfile, normalizeHealthProfile } from './healthUtils';
 import type { GuideResultRecord } from './guideResultStorage';
 
 export type CuravonMemoryProductInputs = Pick<
@@ -18,19 +19,9 @@ export function readCuravonMemorySnapshot(
   product?: CuravonMemoryProductInputs,
 ): PersonalizationMemorySnapshot {
   return {
-    healthProfile: core?.healthProfile ?? {
-      preferredName: '',
-      primaryGoals: [],
-      sensitiveMode: false,
-      smartSilencePreference: 'gentle-reminders',
-      conditions: [],
-      medications: [],
-      allergies: [],
-      healthNotes: [],
-      doctorQuestions: [],
-      emergencyContactName: '',
-      emergencyContactPhone: '',
-    },
+    healthProfile: core?.healthProfile
+      ? normalizeHealthProfile(core.healthProfile)
+      : createDefaultHealthProfile(),
     dailyCheckins: core?.dailyCheckins ?? [],
     nextActionState: core?.nextActionState ?? null,
     askHistory: core?.askHistory ?? product?.askHistory ?? [],

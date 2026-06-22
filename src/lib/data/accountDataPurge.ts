@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SupabaseDataTable } from './supabaseDataClient';
 import {
   hardDeleteUserRows,
@@ -8,7 +9,6 @@ import {
 
 /**
  * Child tables before parents where cascade may not exist in older DBs.
- * Best-effort: one table failure must not block profile removal.
  */
 export const ACCOUNT_PURGE_USER_ID_TABLES: SupabaseDataTable[] = [
   'flow_actions',
@@ -50,6 +50,104 @@ async function tryDeleteUserTable(table: SupabaseDataTable): Promise<boolean> {
   }
 }
 
+async function deleteUserTableAdmin(
+  client: SupabaseClient,
+  userId: string,
+  table: SupabaseDataTable,
+): Promise<void> {
+  const { error } = await client.from(table).delete().eq('user_id', userId);
+  if (error) {
+    throw new SupabaseDataError('query_failed', `${table}: ${error.message}`);
+  }
+}
+
+async function purgeCareCircleData(
+  client: SupabaseClient,
+  userId: string,
+  onError: (table: string) => void,
+): Promise<number> {
+  let purged = 0;
+
+  const { error: actorEventsError } = await client
+    .from('care_circle_events')
+    .delete()
+    .eq('actor_user_id', userId);
+  if (actorEventsError) {
+    onError('care_circle_events');
+  } else {
+    purged += 1;
+  }
+
+  const { error: memberError } = await client
+    .from('care_circle_members')
+    .delete()
+    .eq('member_user_id', userId);
+  if (memberError) {
+    onError('care_circle_members');
+  } else {
+    purged += 1;
+  }
+
+  const { error: ownedMembersError } = await client
+    .from('care_circle_members')
+    .delete()
+    .eq('owner_id', userId);
+  if (ownedMembersError) {
+    onError('care_circle_members_owner');
+  } else {
+    purged += 1;
+  }
+
+  const { error: circleError } = await client.from('care_circles').delete().eq('owner_id', userId);
+  if (circleError) {
+    onError('care_circles');
+  } else {
+    purged += 1;
+  }
+
+  return purged;
+}
+
+/** Server-only purge using service role — bypasses RLS for reliable account deletion. */
+export async function purgeSupabaseAccountDataForUser(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<AccountDataPurgeResult> {
+  const failedTables: string[] = [];
+  let tablesPurged = 0;
+
+  for (const table of ACCOUNT_PURGE_USER_ID_TABLES) {
+    try {
+      await deleteUserTableAdmin(adminClient, userId, table);
+      tablesPurged += 1;
+    } catch {
+      failedTables.push(table);
+    }
+  }
+
+  tablesPurged += await purgeCareCircleData(adminClient, userId, (table) => {
+    failedTables.push(table);
+  });
+
+  const { error: profileError } = await adminClient.from('profiles').delete().eq('id', userId);
+  if (profileError) {
+    throw new SupabaseDataError('query_failed', profileError.message);
+  }
+
+  if (failedTables.length > 0) {
+    throw new SupabaseDataError(
+      'query_failed',
+      `Could not delete all account data (${failedTables.join(', ')}).`,
+    );
+  }
+
+  return {
+    profileDeleted: true,
+    tablesPurged,
+    failedTables,
+  };
+}
+
 export async function purgeSupabaseAccountData(): Promise<AccountDataPurgeResult> {
   const client = requireClient();
   const userId = await requireSupabaseUserId();
@@ -65,22 +163,9 @@ export async function purgeSupabaseAccountData(): Promise<AccountDataPurgeResult
     }
   }
 
-  const { error: memberError } = await client
-    .from('care_circle_members')
-    .delete()
-    .eq('member_user_id', userId);
-  if (memberError) {
-    failedTables.push('care_circle_members');
-  } else {
-    tablesPurged += 1;
-  }
-
-  const { error: circleError } = await client.from('care_circles').delete().eq('owner_id', userId);
-  if (circleError) {
-    failedTables.push('care_circles');
-  } else {
-    tablesPurged += 1;
-  }
+  tablesPurged += await purgeCareCircleData(client, userId, (table) => {
+    failedTables.push(table);
+  });
 
   const { error: profileError } = await client.from('profiles').delete().eq('id', userId);
   if (profileError) {

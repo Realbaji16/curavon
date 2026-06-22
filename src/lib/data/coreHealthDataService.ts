@@ -1,12 +1,18 @@
 import type { AskHistoryEntry } from '../../types/askIntake';
 import type { DailyCheckIn, HealthProfile, NextActionState } from '../../types/health';
-import { createDefaultHealthProfile, normalizeCheckIn } from '../../utils/healthUtils';
-import { DataAuthError, DataUnavailableError } from './dataErrors';
+import {
+  createDefaultHealthProfile,
+  normalizeCheckIn,
+  normalizeHealthProfile,
+} from '../../utils/healthUtils';
+import { DataAuthError, DataPermissionError, DataValidationError, DataUnavailableError } from './dataErrors';
 import { getDataAdapter } from './getDataAdapter';
 import { softDeleteUserRows } from './supabaseDataClient';
 
 export const CORE_HEALTH_DATA_MESSAGES = {
   auth: 'Sign in to load and save your health data.',
+  permission:
+    'Your account cannot reach Curavon health tables yet. Apply Supabase migration 20250618100004 (table grants) or run supabase db push.',
   unavailable: 'Your health data is temporarily unavailable. Try again soon.',
 } as const;
 
@@ -32,6 +38,9 @@ function mapLoadError(error: unknown): CoreHealthDataLoadResult {
   if (error instanceof DataAuthError) {
     return emptyCoreLoad(CORE_HEALTH_DATA_MESSAGES.auth);
   }
+  if (error instanceof DataPermissionError) {
+    return emptyCoreLoad(CORE_HEALTH_DATA_MESSAGES.permission);
+  }
   if (error instanceof DataUnavailableError) {
     return emptyCoreLoad(CORE_HEALTH_DATA_MESSAGES.unavailable);
   }
@@ -49,7 +58,7 @@ export async function loadCoreHealthData(): Promise<CoreHealthDataLoadResult> {
     ]);
 
     return {
-      healthProfile: healthProfile ?? createDefaultHealthProfile(),
+      healthProfile: normalizeHealthProfile(healthProfile),
       dailyCheckins: dailyCheckins.map(normalizeCheckIn),
       nextActionState,
       askHistory,
@@ -97,6 +106,8 @@ export async function clearAskHistory(): Promise<void> {
 
 export function toDataErrorMessage(error: unknown): string {
   if (error instanceof DataAuthError) return CORE_HEALTH_DATA_MESSAGES.auth;
+  if (error instanceof DataPermissionError) return CORE_HEALTH_DATA_MESSAGES.permission;
+  if (error instanceof DataValidationError) return error.message;
   if (error instanceof DataUnavailableError) return CORE_HEALTH_DATA_MESSAGES.unavailable;
   return CORE_HEALTH_DATA_MESSAGES.unavailable;
 }

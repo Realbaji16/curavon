@@ -30,7 +30,6 @@ import { buildFullFlowModel } from '../lib/plan/fullFlowBuilder';
 import { staggerContainer, fadeUp, tapScale, cardEntrance } from '../motion/variants';
 import { buildNextBestActionPlan } from '../utils/nextBestActionEngine';
 import { readCuravonMemorySnapshot } from '../utils/nextBestActionMemory';
-import type { SupportingInsightCard } from '../types/nextBestAction';
 
 function formatFocusArea(area: string): string {
   return area.replace(/_/g, ' ');
@@ -138,11 +137,11 @@ export function HomeScreen() {
       { healthProfile, dailyCheckins, nextActionState, askHistory },
       { doctorSummaryItems, redFlagLogs, followUps, askHistory, guideResults },
     );
-    return buildNextBestActionPlan(snapshot);
-  }, [healthProfile, dailyCheckins, nextActionState, askHistory, doctorSummaryItems, redFlagLogs, followUps, guideResults]);
+    return buildNextBestActionPlan(snapshot, healthSnapshot);
+  }, [healthProfile, dailyCheckins, nextActionState, askHistory, doctorSummaryItems, redFlagLogs, followUps, guideResults, healthSnapshot]);
 
-  const noCheckInSignal = !hasCheckInToday;
-  const canRespondToAction = Boolean(nextActionState) && !noCheckInSignal;
+  const noCheckInSignal = !hasCheckInToday && !hasCurrentAction;
+  const canRespondToAction = hasCurrentAction;
 
   const safetyNote =
     nextActionState?.safetyLevel && nextActionState.safetyLevel !== 'normal'
@@ -171,27 +170,9 @@ export function HomeScreen() {
     }
   };
 
-  const handleInsightAction = (card: SupportingInsightCard) => {
-    if (card.actionTarget === 'checkin') {
-      openCheckIn();
-      return;
-    }
-    if (card.actionTarget === 'summary') {
-      openDoctorSummary();
-      return;
-    }
-    if (card.actionTarget === 'profile') {
-      setActiveTab('settings');
-      return;
-    }
-    if (card.actionTarget === 'guides') {
-      setActiveTab('circle');
-    }
-  };
-
   return (
     <div className="screen home-screen home-screen--today">
-      <ScreenHeader showThemeToggle />
+      <ScreenHeader showThemeToggle compact />
 
       <motion.div className="home-today-stack" variants={staggerContainer} initial="hidden" animate="visible">
         <motion.header className="home-greeting home-greeting--today" variants={fadeUp}>
@@ -256,17 +237,24 @@ export function HomeScreen() {
                 >
                   Start check-in
                 </motion.button>
-                <button
-                  type="button"
-                  className="home-text-link home-fullflow-link"
-                  onClick={() => setShowFullFlow(true)}
-                >
-                  <GitBranch size={14} aria-hidden="true" />
-                  {fullFlowLabel}
-                </button>
+                <div className="home-hero-flow-footer">
+                  <button
+                    type="button"
+                    className="home-text-link home-fullflow-link"
+                    onClick={() => setShowFullFlow(true)}
+                  >
+                    <GitBranch size={14} aria-hidden="true" />
+                    {fullFlowLabel}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="home-hero-body">
+                {!hasCheckInToday ? (
+                  <p className="home-hero-note">
+                    You can do this step now. A quick check-in later helps Curavon refine what comes next.
+                  </p>
+                ) : null}
                 {actionStatus === 'adjusted' && (
                   <p className="home-hero-note">A smaller version of your step.</p>
                 )}
@@ -284,19 +272,6 @@ export function HomeScreen() {
                     </SensitiveBlur>
                   )}
                 </p>
-                {sourceChips.length ? (
-                  <div className="hero-source-chips">
-                    {sourceChips.map((chip) => (
-                      <span key={chip} className="hero-source-chip">
-                        {chip.replace(/_/g, ' ')}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {nextActionState?.watchFor && !isDiscreetCompact ? (
-                  <p className="home-hero-note">Watch for: {nextActionState.watchFor}</p>
-                ) : null}
-
                 {safetyNote ? (
                   <p className="hero-safety-note">
                     <AlertTriangle size={14} />
@@ -304,28 +279,76 @@ export function HomeScreen() {
                   </p>
                 ) : null}
 
-                <button
-                  type="button"
-                  className="home-text-link home-fullflow-link"
-                  onClick={() => setShowFullFlow(true)}
-                >
-                  <GitBranch size={14} aria-hidden="true" />
-                  {fullFlowLabel}
-                </button>
+                {sourceChips.length ? (
+                  <div className="hero-source-chips hero-source-chips--compact">
+                    {sourceChips.map((chip) => (
+                      <span key={chip} className="hero-source-chip">
+                        {chip.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
 
-                <AnimatePresence>
-                  {isDone && (
-                    <motion.div
-                      className="done-badge done-badge--today"
-                      initial={{ scale: 0.85, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+                {nextActionState?.watchFor && !isDiscreetCompact ? (
+                  <p className="home-hero-note home-hero-note--watch">Watch for: {nextActionState.watchFor}</p>
+                ) : null}
+
+                <div className="action-buttons action-buttons--today">
+                  <motion.button
+                    type="button"
+                    className={`btn btn-primary action-btn action-btn--done ${isDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
+                    whileTap={isDone ? undefined : { scale: 0.98 }}
+                    onClick={handleDone}
+                    disabled={isDone || !canRespondToAction}
+                  >
+                    <CheckCircle2 size={18} />
+                    {isDone ? 'Completed' : 'Mark as done'}
+                  </motion.button>
+
+                  {!isDone && canRespondToAction ? (
+                    <div className="action-btn-row action-btn-row--split">
+                      <motion.button
+                        type="button"
+                        className="action-btn btn-health-blocked blocked-btn"
+                        {...tapScale}
+                        onClick={openHealthBlockedSheet}
+                      >
+                        <Ban size={16} />
+                        Blocked
+                      </motion.button>
+                      <motion.button
+                        type="button"
+                        className="action-btn btn-health-adjust adjust-btn"
+                        {...tapScale}
+                        onClick={openHealthAdjustSheet}
+                      >
+                        <SlidersHorizontal size={16} />
+                        Adjust
+                      </motion.button>
+                    </div>
+                  ) : null}
+
+                  <div className="action-btn-row action-btn-row--links">
+                    {(nextActionState?.relatedGuide) ? (
+                      <button
+                        type="button"
+                        className="action-link-btn"
+                        onClick={handleRelatedGuide}
+                      >
+                        <BookOpen size={14} aria-hidden="true" />
+                        Related guide
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="action-link-btn"
+                      onClick={saveCurrentActionToSummary}
                     >
-                      <CheckCircle2 size={20} />
-                      Completed
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      <FileText size={14} aria-hidden="true" />
+                      Add to summary
+                    </button>
+                  </div>
+                </div>
 
                 <AnimatePresence>
                   {showDoneMessage && isDone && (
@@ -333,63 +356,23 @@ export function HomeScreen() {
                       className="done-success-message done-success-message--today"
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
                     >
+                      <CheckCircle2 size={16} aria-hidden="true" />
                       Nice. Curavon will remember this as completed.
                     </motion.p>
                   )}
                 </AnimatePresence>
 
-                <div className="action-buttons action-buttons--today">
-                  {(nextActionState?.relatedGuide) ? (
-                    <motion.button
-                      type="button"
-                      className="action-btn btn-health-adjust adjust-btn"
-                      {...tapScale}
-                      onClick={handleRelatedGuide}
-                    >
-                      <BookOpen size={18} />
-                      Related guide
-                    </motion.button>
-                  ) : null}
-                  <motion.button
+                <div className="home-hero-flow-footer">
+                  <button
                     type="button"
-                    className="action-btn btn-health-blocked blocked-btn"
-                    {...tapScale}
-                    onClick={saveCurrentActionToSummary}
+                    className="home-text-link home-fullflow-link"
+                    onClick={() => setShowFullFlow(true)}
                   >
-                    <FileText size={18} />
-                    Add to summary
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    className={`action-btn btn-health-done done-btn ${isDone ? 'completed' : ''} ${donePressed ? 'done-btn--pressed' : ''}`}
-                    whileTap={isDone ? undefined : { scale: 0.94 }}
-                    onClick={handleDone}
-                    disabled={isDone || !canRespondToAction}
-                  >
-                    <CheckCircle2 size={18} />
-                    Done
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    className="action-btn btn-health-blocked blocked-btn"
-                    {...tapScale}
-                    onClick={openHealthBlockedSheet}
-                    disabled={isDone || !canRespondToAction}
-                  >
-                    <Ban size={18} />
-                    Blocked
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    className="action-btn btn-health-adjust adjust-btn"
-                    {...tapScale}
-                    onClick={openHealthAdjustSheet}
-                    disabled={isDone || !canRespondToAction}
-                  >
-                    <SlidersHorizontal size={18} />
-                    Adjust
-                  </motion.button>
+                    <GitBranch size={14} aria-hidden="true" />
+                    {fullFlowLabel}
+                  </button>
                 </div>
               </div>
             )}
@@ -398,6 +381,9 @@ export function HomeScreen() {
 
         <motion.p className="home-section-label" variants={fadeUp}>
           Supporting insights
+        </motion.p>
+        <motion.p className="home-section-desc" variants={fadeUp}>
+          Context from your data — read-only, to explain your next best action.
         </motion.p>
 
         <motion.div className="home-glance-grid" variants={fadeUp}>
@@ -409,7 +395,9 @@ export function HomeScreen() {
                 </span>
                 <div>
                   <h3>{card.title}</h3>
-                  <p className="home-card-sub">Based on your latest check-ins and notes.</p>
+                  <p className="home-card-sub">
+                    {card.subtitle ?? 'Context for your next best action.'}
+                  </p>
                 </div>
               </div>
               <ul className="home-insight-list">
@@ -417,15 +405,6 @@ export function HomeScreen() {
                   <li key={line}>{line}</li>
                 ))}
               </ul>
-              {card.actionLabel ? (
-                <button
-                  type="button"
-                  className="home-text-link"
-                  onClick={() => handleInsightAction(card)}
-                >
-                  {card.actionLabel}
-                </button>
-              ) : null}
             </section>
           ))}
 

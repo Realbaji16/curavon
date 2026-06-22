@@ -110,11 +110,11 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     tealSoft: 'rgba(94, 196, 168, 0.16)',
 
-    text: '#223044',
+    text: '#121820',
 
-    textSecondary: '#526577',
+    textSecondary: '#1f2e3e',
 
-    textMuted: '#6F8191',
+    textMuted: '#364658',
 
     border: 'rgba(37, 54, 74, 0.08)',
 
@@ -166,11 +166,11 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     tealSoft: 'rgba(94, 196, 168, 0.16)',
 
-    text: '#223044',
+    text: '#121820',
 
-    textSecondary: '#526577',
+    textSecondary: '#1f2e3e',
 
-    textMuted: '#6F8191',
+    textMuted: '#364658',
 
     border: 'rgba(37, 54, 74, 0.08)',
 
@@ -222,11 +222,11 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     tealSoft: 'rgba(94, 196, 168, 0.16)',
 
-    text: '#223044',
+    text: '#121820',
 
-    textSecondary: '#526577',
+    textSecondary: '#1f2e3e',
 
-    textMuted: '#6F8191',
+    textMuted: '#364658',
 
     border: 'rgba(37, 54, 74, 0.08)',
 
@@ -278,11 +278,11 @@ export const themes: Record<ThemePreset, ThemeTokens> = {
 
     tealSoft: 'rgba(94, 196, 168, 0.2)',
 
-    text: '#EEF2FA',
+    text: '#FAFCFF',
 
-    textSecondary: '#DEE7F8',
+    textSecondary: '#E8F0FC',
 
-    textMuted: '#CEDAF0',
+    textMuted: '#D4E2F6',
 
     border: 'rgba(255, 255, 255, 0.1)',
 

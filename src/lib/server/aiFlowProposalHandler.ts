@@ -10,6 +10,7 @@ import {
 import type { FlowRiskLevel } from '../data/dataTypes';
 import {
   defaultSafetyForError,
+  mapServerDataAccessError,
   parseFlowProposalBody,
   requireAuthenticatedSupabaseUser,
   resolveServerAIIntakeMode,
@@ -138,159 +139,171 @@ export async function handleAIFlowProposalPost(request: Request): Promise<{
   }
 
   return withServerDataAccess(auth.userId, serverClient, async () => {
-    let resolved;
     try {
-      resolved = await resolveSafetyCheckText(body.data);
+      return await handleFlowProposalForUser(body.data);
     } catch (error) {
-      const code = error instanceof Error && error.message === 'session_not_found' ? 'session_not_found' : 'guide_not_found';
-      return flowProposalError(404, code, 'Referenced intake or guide record was not found.');
+      const mapped = mapServerDataAccessError(error);
+      return flowProposalError(mapped.status, mapped.code, mapped.message);
     }
+  });
+}
 
-    const redFlags = detectRedFlags(resolved.safetyText);
-    const privacyLevel = mapPrivacyLevelInput(resolved.privacyLevel ?? body.data.privacyLevel);
+async function handleFlowProposalForUser(body: ParsedFlowProposalInput): Promise<{
+  status: number;
+  body: FlowProposalResponse;
+}> {
+  let resolved;
+  try {
+    resolved = await resolveSafetyCheckText(body);
+  } catch (error) {
+    const code = error instanceof Error && error.message === 'session_not_found' ? 'session_not_found' : 'guide_not_found';
+    return flowProposalError(404, code, 'Referenced intake or guide record was not found.');
+  }
 
-    if (redFlags.hasUrgent) {
-      const safetyFlow = await createAskSafetyBlockedFlow({
-        title: resolved.title ?? 'Safety escalation',
-        privacyLevel,
-        payload: buildAskSafetyBlockedPayload({
-          redFlagCategories: redFlags.categories,
-          selfHarm: redFlags.selfHarm,
-          immediateSafety: redFlags.immediateSafety,
-          intakeSessionId:
-            body.data.kind === 'session' ? body.data.askIntakeSessionId : resolved.sourceRef?.askIntakeSessionId,
-        }),
-      });
+  const redFlags = detectRedFlags(resolved.safetyText);
+  const privacyLevel = mapPrivacyLevelInput(resolved.privacyLevel ?? body.privacyLevel);
 
-      await getDataAdapter().createRedFlagLog({
-        id: crypto.randomUUID(),
-        source: 'AI Flow Proposal',
-        matchedConcern: redFlags.matches[0]?.label ?? 'urgent concern',
-        userText: redFlags.categories.join(', '),
-        guidanceShown: redFlags.body,
-        createdAt: new Date().toISOString(),
-      });
-
-      await recordFlowProposalEvent({
-        flowId: safetyFlow.id,
-        safetyFlag: true,
-        outputType: 'safety_escalation',
-        privacyLevel,
-        riskLevel: 'urgent',
-      });
-
-      trackSafeEvent('ai_route_blocked', {
-        route_name: 'ai_flow_proposal',
-        error_code: 'safety_blocked',
-        safety_flag: true,
-        risk_level: 'urgent',
-        flow_id: safetyFlow.id,
-        privacy_level: privacyLevel,
-      });
-      trackSafeEvent('unsafe_response_blocked', {
-        route_name: 'ai_flow_proposal',
-        error_code: 'safety_blocked',
-        safety_flag: true,
-        risk_level: 'urgent',
-      });
-
-      return {
-        status: 422,
-        body: {
-          ok: false,
-          mode: 'flow_proposal',
-          safety: {
-            allowed: false,
-            riskLevel: 'urgent',
-            blockedReason: redFlags.selfHarm ? 'self_harm_language' : 'urgent_language_detected',
-          },
-          flowId: safetyFlow.id,
-          flowStatus: safetyFlow.status,
-          escalation: {
-            title: redFlags.title,
-            body: redFlags.body,
-            redFlagCategories: redFlags.categories,
-          },
-          error: {
-            code: 'safety_blocked',
-            message:
-              'This concern may need urgent support. Use local emergency services or a clinician now.',
-          },
-        },
-      };
-    }
-
-    const aiMode = resolveServerAIIntakeMode();
-    if (aiMode === 'provider_unavailable') {
-      return flowProposalError(
-        503,
-        'ai_unavailable',
-        'AI provider is temporarily unavailable.',
-        { allowed: true, riskLevel: 'low' },
-      );
-    }
-
-    const proposedAction = buildMockProposedAction(body.data);
-    const riskLevel: FlowRiskLevel =
-      body.data.kind === 'structured'
-        ? mapRiskLevelFromSafety(body.data.proposedAction.safetyLevel)
-        : mapPlanSafetyToRiskLevel(proposedAction.safetyLevel);
-
-    const draftFlow = await createAskDraftHealthFlow({
-      title: proposedAction.title,
-      riskLevel,
+  if (redFlags.hasUrgent) {
+    const safetyFlow = await createAskSafetyBlockedFlow({
+      title: resolved.title ?? 'Safety escalation',
       privacyLevel,
-      payload: buildAskDraftFlowPayload({
-        concernType: resolved.concernType,
-        goal: resolved.goal ?? 'One next step',
-        timeline: resolved.timeline,
-        intakeSessionId: body.data.kind === 'session' ? body.data.askIntakeSessionId : undefined,
-        askHistoryEntryId: null,
-        actionPreview: {
-          actionId: `proposal-${draftFlowIdSuffix()}`,
-          title: proposedAction.title,
-          category: proposedAction.category,
-          safetyLevel: proposedAction.safetyLevel,
-        },
+      payload: buildAskSafetyBlockedPayload({
+        redFlagCategories: redFlags.categories,
+        selfHarm: redFlags.selfHarm,
+        immediateSafety: redFlags.immediateSafety,
+        intakeSessionId:
+          body.kind === 'session' ? body.askIntakeSessionId : resolved.sourceRef?.askIntakeSessionId,
       }),
     });
 
-    await recordFlowProposalEvent({
-      flowId: draftFlow.id,
-      safetyFlag: false,
-      outputType: 'draft_flow',
-      privacyLevel,
-      riskLevel,
+    await getDataAdapter().createRedFlagLog({
+      id: crypto.randomUUID(),
+      source: 'AI Flow Proposal',
+      matchedConcern: redFlags.matches[0]?.label ?? 'urgent concern',
+      userText: redFlags.categories.join(', '),
+      guidanceShown: redFlags.body,
+      createdAt: new Date().toISOString(),
     });
 
-    trackSafeEvent('ai_route_called', {
+    await recordFlowProposalEvent({
+      flowId: safetyFlow.id,
+      safetyFlag: true,
+      outputType: 'safety_escalation',
+      privacyLevel,
+      riskLevel: 'urgent',
+    });
+
+    trackSafeEvent('ai_route_blocked', {
       route_name: 'ai_flow_proposal',
-      status: 'completed',
-      safety_flag: false,
-      risk_level: riskLevel,
-      flow_id: draftFlow.id,
+      error_code: 'safety_blocked',
+      safety_flag: true,
+      risk_level: 'urgent',
+      flow_id: safetyFlow.id,
       privacy_level: privacyLevel,
     });
-    trackSafeEvent('flow_created', {
-      flow_id: draftFlow.id,
-      privacy_level: privacyLevel,
-      risk_level: riskLevel,
-      status: 'awaiting_user_approval',
+    trackSafeEvent('unsafe_response_blocked', {
       route_name: 'ai_flow_proposal',
+      error_code: 'safety_blocked',
+      safety_flag: true,
+      risk_level: 'urgent',
     });
 
     return {
-      status: 200,
+      status: 422,
       body: {
-        ok: true,
+        ok: false,
         mode: 'flow_proposal',
-        safety: { allowed: true, riskLevel: riskLevel === 'urgent' ? 'urgent' : riskLevel === 'medium' ? 'medium' : 'low' },
-        flowId: draftFlow.id,
-        flowStatus: draftFlow.status,
-        proposedAction,
+        safety: {
+          allowed: false,
+          riskLevel: 'urgent',
+          blockedReason: redFlags.selfHarm ? 'self_harm_language' : 'urgent_language_detected',
+        },
+        flowId: safetyFlow.id,
+        flowStatus: safetyFlow.status,
+        escalation: {
+          title: redFlags.title,
+          body: redFlags.body,
+          redFlagCategories: redFlags.categories,
+        },
+        error: {
+          code: 'safety_blocked',
+          message:
+            'This concern may need urgent support. Use local emergency services or a clinician now.',
+        },
       },
     };
+  }
+
+  const aiMode = resolveServerAIIntakeMode();
+  if (aiMode === 'provider_unavailable') {
+    return flowProposalError(
+      503,
+      'ai_unavailable',
+      'AI provider is temporarily unavailable.',
+      { allowed: true, riskLevel: 'low' },
+    );
+  }
+
+  const proposedAction = buildMockProposedAction(body);
+  const riskLevel: FlowRiskLevel =
+    body.kind === 'structured'
+      ? mapRiskLevelFromSafety(body.proposedAction.safetyLevel)
+      : mapPlanSafetyToRiskLevel(proposedAction.safetyLevel);
+
+  const draftFlow = await createAskDraftHealthFlow({
+    title: proposedAction.title,
+    riskLevel,
+    privacyLevel,
+    payload: buildAskDraftFlowPayload({
+      concernType: resolved.concernType,
+      goal: resolved.goal ?? 'One next step',
+      timeline: resolved.timeline,
+      intakeSessionId: body.kind === 'session' ? body.askIntakeSessionId : undefined,
+      askHistoryEntryId: null,
+      actionPreview: {
+        actionId: `proposal-${draftFlowIdSuffix()}`,
+        title: proposedAction.title,
+        category: proposedAction.category,
+        safetyLevel: proposedAction.safetyLevel,
+      },
+    }),
   });
+
+  await recordFlowProposalEvent({
+    flowId: draftFlow.id,
+    safetyFlag: false,
+    outputType: 'draft_flow',
+    privacyLevel,
+    riskLevel,
+  });
+
+  trackSafeEvent('ai_route_called', {
+    route_name: 'ai_flow_proposal',
+    status: 'completed',
+    safety_flag: false,
+    risk_level: riskLevel,
+    flow_id: draftFlow.id,
+    privacy_level: privacyLevel,
+  });
+  trackSafeEvent('flow_created', {
+    flow_id: draftFlow.id,
+    privacy_level: privacyLevel,
+    risk_level: riskLevel,
+    status: 'awaiting_user_approval',
+    route_name: 'ai_flow_proposal',
+  });
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      mode: 'flow_proposal',
+      safety: { allowed: true, riskLevel: riskLevel === 'urgent' ? 'urgent' : riskLevel === 'medium' ? 'medium' : 'low' },
+      flowId: draftFlow.id,
+      flowStatus: draftFlow.status,
+      proposedAction,
+    },
+  };
 }
 
 function draftFlowIdSuffix(): string {

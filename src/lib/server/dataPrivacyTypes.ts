@@ -39,4 +39,8 @@ export const PRIVACY_ROUTE_MESSAGES = {
   profileCleared: 'Health profile cleared.',
   accountDeleted: 'Account and health data deleted.',
   accountDeleteFailed: 'Account deletion could not be completed. Try again while signed in.',
+  adminNotConfigured:
+    'Account deletion is not configured on this server. Add SUPABASE_SERVICE_ROLE_KEY to the server environment.',
+  deleteRpcMissing:
+    'Run ACCOUNT_DELETION.sql in Supabase SQL Editor (one-time setup), then try again.',
 } as const;

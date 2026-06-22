@@ -7,6 +7,17 @@ import { useScreenBack } from '../hooks/useScreenBack';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
 import { getConfiguredAuthMode } from '../lib/auth/authConfig';
 import { SUPABASE_EMAIL_CONFIRMATION_MESSAGE } from '../lib/auth/supabaseAuthAdapter';
+import { loadCoreHealthData } from '../lib/data/coreHealthDataService';
+import { syncAppShellFromHealthProfile } from '../lib/app/syncAppShellFromProfile';
+import {
+  AGE_RANGE_OPTIONS,
+  LANGUAGE_STYLE_OPTIONS,
+  PREGNANCY_STATUS_OPTIONS,
+  PROFILE_SEX_OPTIONS,
+  parseOptionalCommaList,
+  pregnancyContextRelevant,
+} from '../constants/lightProfileOptions';
+import type { AgeRange, LanguageStyle, PregnancyStatus, ProfileSex } from '../types/health';
 
 const SIGNUP_INCOMPLETE_MESSAGE =
   'Sign-up did not complete. Check Supabase configuration or email confirmation settings.';
@@ -61,6 +72,7 @@ export function AuthFlow() {
     consentComplete,
     completeAuthConsent,
     completeProfileSetup,
+    hydrateShellForUser,
     showToast,
     resetToOnboarding,
   } = useApp();
@@ -81,12 +93,22 @@ export function AuthFlow() {
   });
   const [signInForm, setSignInForm] = useState<SignInForm>({ email: '', password: '' });
   const [profileName, setProfileName] = useState(user?.displayName ?? '');
+  const [ageRange, setAgeRange] = useState<AgeRange | ''>('');
+  const [sex, setSex] = useState<ProfileSex | ''>('');
+  const [pregnancyStatus, setPregnancyStatus] = useState<PregnancyStatus | ''>('');
+  const [conditionsInput, setConditionsInput] = useState('');
+  const [allergiesInput, setAllergiesInput] = useState('');
+  const [medicationsInput, setMedicationsInput] = useState('');
+  const [stateOrRegion, setStateOrRegion] = useState('');
+  const [languageStyle, setLanguageStyle] = useState<LanguageStyle | ''>('');
   const [primaryGoals, setPrimaryGoals] = useState<string[]>([]);
   const [sensitiveMode, setSensitiveMode] = useState(false);
   const [smartSilencePreference, setSmartSilencePreference] = useState<
-    'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications' | null
-  >(null);
+    'gentle-reminders' | 'daily-digest-only' | 'minimal-notifications'
+  >('gentle-reminders');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const showPregnancyField = pregnancyContextRelevant(sex);
 
   const trustCards = useMemo(
     () => [
@@ -165,15 +187,41 @@ export function AuthFlow() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const inferredName = signInForm.email.split('@')[0].replace(/[._-]+/g, ' ').trim();
-    const normalizedName = inferredName ? inferredName[0].toUpperCase() + inferredName.slice(1) : 'Curavon member';
-    await signIn(signInForm.email.trim(), signInForm.password);
-    setProfileName(normalizedName);
-
-    if (setupComplete) {
-      showToast('Signed in');
+    const result = await signIn(signInForm.email.trim(), signInForm.password);
+    if (!result.isAuthenticated) {
+      const raw = result.error ?? '';
+      const message = /invalid login credentials|invalid email or password/i.test(raw)
+        ? 'Wrong email or password. Please try again.'
+        : raw || 'Could not sign in. Please try again.';
+      setErrors({ signInPassword: message });
       return;
     }
+
+    const inferredName = signInForm.email.split('@')[0].replace(/[._-]+/g, ' ').trim();
+    const normalizedName = inferredName ? inferredName[0].toUpperCase() + inferredName.slice(1) : 'Curavon member';
+    setProfileName(result.user?.displayName ?? normalizedName);
+
+    const alreadySetup = result.user?.id ? hydrateShellForUser(result.user.id) : false;
+    if (alreadySetup || setupComplete) {
+      showToast('Signed in');
+      setManualStage(null);
+      return;
+    }
+
+    if (result.user?.id) {
+      try {
+        const core = await loadCoreHealthData();
+        if (syncAppShellFromHealthProfile(core.healthProfile, result.user.id)) {
+          hydrateShellForUser(result.user.id);
+          showToast('Signed in');
+          setManualStage(null);
+          return;
+        }
+      } catch {
+        // Fall through to consent/setup for first-time accounts.
+      }
+    }
+
     goToConsent();
   };
 
@@ -186,16 +234,29 @@ export function AuthFlow() {
   const submitProfile = () => {
     const nextErrors: Record<string, string> = {};
     if (!profileName.trim()) nextErrors.profileName = 'Preferred name is required.';
-    if (primaryGoals.length === 0) nextErrors.primaryGoals = 'Choose at least one goal.';
-    if (!smartSilencePreference) nextErrors.smartSilencePreference = 'Choose a Smart Silence preference.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
+
+    const resolvedPregnancy: PregnancyStatus =
+      showPregnancyField && pregnancyStatus
+        ? pregnancyStatus
+        : sex === 'male'
+          ? 'not-applicable'
+          : '';
 
     completeProfileSetup({
       preferredName: profileName.trim(),
       primaryGoals,
       sensitiveMode,
-      smartSilencePreference: smartSilencePreference as NonNullable<typeof smartSilencePreference>,
+      smartSilencePreference,
+      ageRange: ageRange || '',
+      sex: sex || '',
+      pregnancyStatus: resolvedPregnancy,
+      stateOrRegion: stateOrRegion.trim(),
+      languageStyle: languageStyle || '',
+      conditions: parseOptionalCommaList(conditionsInput),
+      allergies: parseOptionalCommaList(allergiesInput),
+      medications: parseOptionalCommaList(medicationsInput),
     });
   };
 
@@ -401,14 +462,147 @@ export function AuthFlow() {
         {stage === 'profile' ? (
           <>
             <h1 className="auth-title">Light profile setup</h1>
-            <div className="auth-form">
+            <p className="auth-subtitle auth-profile-lede">
+              Only your name is required. Add what helps — you can skip the rest and fill in more
+              later as Curavon learns what matters.
+            </p>
+            <div className="auth-form auth-form--profile">
               <label className="auth-label">
-                Preferred name
+                Preferred name <span className="auth-required">*</span>
                 <input className="auth-input" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
                 {errors.profileName ? <span className="auth-error">{errors.profileName}</span> : null}
               </label>
-              <div className="auth-label">
-                Your goals
+
+              <div className="auth-profile-section">
+                <p className="auth-profile-section-title">About you</p>
+                <p className="auth-profile-section-desc">Optional — helps tailor safer next steps.</p>
+                <div className="auth-label">
+                  Age range
+                  <div className="auth-choice-grid auth-choice-grid--compact">
+                    {AGE_RANGE_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`auth-choice-chip ${ageRange === option.id ? 'auth-choice-chip--active' : ''}`}
+                        onClick={() => setAgeRange(ageRange === option.id ? '' : option.id)}
+                        aria-pressed={ageRange === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="auth-label">
+                  Sex
+                  <div className="auth-choice-grid auth-choice-grid--compact">
+                    {PROFILE_SEX_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`auth-choice-chip ${sex === option.id ? 'auth-choice-chip--active' : ''}`}
+                        onClick={() => {
+                          const next = sex === option.id ? '' : option.id;
+                          setSex(next);
+                          if (!pregnancyContextRelevant(next)) setPregnancyStatus('');
+                        }}
+                        aria-pressed={sex === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {showPregnancyField ? (
+                  <div className="auth-label">
+                    Pregnancy status
+                    <span className="auth-helper">Only if relevant to your care context.</span>
+                    <div className="auth-choice-grid auth-choice-grid--stacked">
+                      {PREGNANCY_STATUS_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={`auth-choice-chip ${pregnancyStatus === option.id ? 'auth-choice-chip--active' : ''}`}
+                          onClick={() =>
+                            setPregnancyStatus(pregnancyStatus === option.id ? '' : option.id)
+                          }
+                          aria-pressed={pregnancyStatus === option.id}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="auth-profile-section">
+                <p className="auth-profile-section-title">Health context</p>
+                <p className="auth-profile-section-desc">
+                  Optional — comma-separated. You control what is saved.
+                </p>
+                <label className="auth-label">
+                  Known conditions
+                  <input
+                    className="auth-input"
+                    value={conditionsInput}
+                    onChange={(e) => setConditionsInput(e.target.value)}
+                    placeholder="e.g. asthma, migraine"
+                  />
+                </label>
+                <label className="auth-label">
+                  Allergies
+                  <input
+                    className="auth-input"
+                    value={allergiesInput}
+                    onChange={(e) => setAllergiesInput(e.target.value)}
+                    placeholder="e.g. penicillin, peanuts"
+                  />
+                </label>
+                <label className="auth-label">
+                  Current medications
+                  <input
+                    className="auth-input"
+                    value={medicationsInput}
+                    onChange={(e) => setMedicationsInput(e.target.value)}
+                    placeholder="Only if you want to share"
+                  />
+                </label>
+              </div>
+
+              <div className="auth-profile-section">
+                <p className="auth-profile-section-title">Preferences</p>
+                <label className="auth-label">
+                  State or region
+                  <input
+                    className="auth-input"
+                    value={stateOrRegion}
+                    onChange={(e) => setStateOrRegion(e.target.value)}
+                    placeholder="Optional — e.g. California"
+                  />
+                </label>
+                <div className="auth-label">
+                  How should Curavon talk to you?
+                  <div className="auth-choice-grid auth-choice-grid--stacked">
+                    {LANGUAGE_STYLE_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`auth-choice-chip ${languageStyle === option.id ? 'auth-choice-chip--active' : ''}`}
+                        onClick={() =>
+                          setLanguageStyle(languageStyle === option.id ? '' : option.id)
+                        }
+                        aria-pressed={languageStyle === option.id}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="auth-profile-section">
+                <p className="auth-profile-section-title">Your goals</p>
+                <p className="auth-profile-section-desc">Optional — pick any that fit.</p>
                 <div className="auth-choice-grid">
                   {PRIMARY_GOALS.map((goal) => (
                     <button
@@ -422,8 +616,8 @@ export function AuthFlow() {
                     </button>
                   ))}
                 </div>
-                {errors.primaryGoals ? <span className="auth-error">{errors.primaryGoals}</span> : null}
               </div>
+
               <div className="auth-setting-row">
                 <div>
                   <p className="auth-setting-title">Sensitive Mode</p>
@@ -440,7 +634,7 @@ export function AuthFlow() {
               </div>
               <div className="auth-label">
                 Smart Silence
-                <span className="auth-helper">Pick the notification style that feels right.</span>
+                <span className="auth-helper">Notification style — change anytime in Profile.</span>
                 <div className="auth-choice-grid auth-choice-grid--stacked">
                   {SMART_SILENCE_OPTIONS.map((option) => (
                     <button
@@ -454,14 +648,14 @@ export function AuthFlow() {
                     </button>
                   ))}
                 </div>
-                {errors.smartSilencePreference ? (
-                  <span className="auth-error">{errors.smartSilencePreference}</span>
-                ) : null}
               </div>
             </div>
             <button type="button" className="btn btn-primary btn-pill auth-primary" onClick={submitProfile}>
               Enter Curavon
             </button>
+            <p className="auth-profile-skip-note">
+              Everything except your name is optional. Curavon will ask only what matters as you go.
+            </p>
           </>
         ) : null}
           </section>

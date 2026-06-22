@@ -63,8 +63,9 @@ import {
   toDataErrorMessage,
   type CoreHealthDataLoadResult,
 } from '../lib/data/coreHealthDataService';
-import { DataAuthError } from '../lib/data/dataErrors';
+import { DataAuthError, DataPermissionError } from '../lib/data/dataErrors';
 import { useCuravonAuth } from '../lib/auth/useCuravonAuth';
+import { syncAppShellFromHealthProfile } from '../lib/app/syncAppShellFromProfile';
 import {
   generateCuravonNextAction,
   toNextActionStateFromAdapter,
@@ -217,7 +218,7 @@ export type AcceptNextActionInput = {
 };
 
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, loading: authLoading } = useCuravonAuth();
+  const { user, isAuthenticated, loading: authLoading } = useCuravonAuth();
   const [healthProfile, setHealthProfile] = useState<HealthProfile>(() => createDefaultHealthProfile());
   const [dailyCheckins, setDailyCheckins] = useState<DailyCheckIn[]>([]);
   const [dailySteps, setDailySteps] = useState<DailyStepsState>(() => loadTodaySteps());
@@ -276,6 +277,10 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     const checkins = result.dailyCheckins;
     const action = normalizeNextActionState(result.nextActionState);
 
+    if (user?.id) {
+      syncAppShellFromHealthProfile(profile, user.id);
+    }
+
     setHealthProfile(profile);
     setDailyCheckins(checkins);
     setNextActionState(action);
@@ -302,7 +307,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
       followUps: followUpsRef.current,
       guideResults: guideResultsRef.current,
     }));
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     nextActionStateRef.current = nextActionState;
@@ -396,7 +401,7 @@ export function HealthProvider({ children }: { children: ReactNode }) {
 
   const reportPersistError = useCallback((error: unknown) => {
     setCoreDataError(toDataErrorMessage(error));
-    if (error instanceof DataAuthError) return;
+    if (error instanceof DataAuthError || error instanceof DataPermissionError) return;
     reportSafeError(error, {
       route_name: 'health_context',
       error_code: 'persist_failed',

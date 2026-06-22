@@ -73,12 +73,18 @@ function rethrowAsDataError(error: unknown): never {
     if (error.code === 'not_configured') {
       throw new DataUnavailableError();
     }
+    if (/permission denied for table|42501/i.test(error.message)) {
+      throw new DataPermissionError();
+    }
     if (/permission|policy|row-level security/i.test(error.message)) {
       throw new DataPermissionError();
     }
-    throw new DataUnavailableError();
+    if (/duplicate key|23505|unique constraint/i.test(error.message)) {
+      throw new DataValidationError('Could not save — conflicting record. Refresh and try again.');
+    }
+    throw new DataUnavailableError(error.message);
   }
-  throw new DataUnavailableError();
+  throw new DataUnavailableError(error instanceof Error ? error.message : undefined);
 }
 
 async function runDataOp<T>(operation: () => Promise<T>): Promise<T> {
@@ -478,8 +484,9 @@ export function createSupabaseDataAdapter(): DataAdapter {
           'flow_actions',
         )
           .select('*')
-          .single();
-        if (error || !data) throw new SupabaseDataError('query_failed', error?.message ?? 'Update failed');
+          .maybeSingle();
+        if (error) throw new SupabaseDataError('query_failed', error.message);
+        if (!data) throw new DataValidationError('Flow action not found.');
         return mapFlowActionRow(data as Record<string, unknown>);
       }),
 
