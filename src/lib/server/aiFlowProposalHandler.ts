@@ -22,6 +22,12 @@ import type {
   ParsedFlowProposalInput,
   ProposedActionPreview,
 } from './aiServerTypes';
+import {
+  resolveModuleFlowProposalAction,
+  toProposedActionPreview,
+  type ModuleFlowProposalAction,
+} from '../health-intelligence/services/moduleActionTemplates';
+import type { FlowProposalIntelligenceContext } from '../health-intelligence/services/intelligenceContextSerializer';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { withServerDataAccess } from './serverDataContext';
 import { mapPrivacyLevelInput, mapRiskLevelFromSafety } from './flowSummaryBuilder';
@@ -55,6 +61,39 @@ function buildMockProposedAction(input: ParsedFlowProposalInput): ProposedAction
     category: 'track',
     safetyLevel: 'normal',
   };
+}
+
+function resolveIntelligenceContext(body: ParsedFlowProposalInput): FlowProposalIntelligenceContext | undefined {
+  if (body.kind === 'structured') {
+    return body.intelligenceContext;
+  }
+  return undefined;
+}
+
+function buildProposedAction(
+  input: ParsedFlowProposalInput,
+  intelligenceContext?: FlowProposalIntelligenceContext,
+): { preview: ProposedActionPreview; moduleAction?: ModuleFlowProposalAction } {
+  if (intelligenceContext) {
+    const moduleAction = resolveModuleFlowProposalAction(intelligenceContext);
+    return { preview: toProposedActionPreview(moduleAction), moduleAction };
+  }
+
+  return { preview: buildMockProposedAction(input) };
+}
+
+function mapIntelligenceRiskToFlowRisk(riskLevel: string): FlowRiskLevel {
+  switch (riskLevel) {
+    case 'urgent':
+      return 'urgent';
+    case 'high':
+      return 'high';
+    case 'medium_high':
+    case 'medium':
+      return 'medium';
+    default:
+      return 'low';
+  }
 }
 
 async function resolveSafetyCheckText(input: ParsedFlowProposalInput): Promise<{
@@ -244,9 +283,11 @@ async function handleFlowProposalForUser(body: ParsedFlowProposalInput): Promise
     );
   }
 
-  const proposedAction = buildMockProposedAction(body);
-  const riskLevel: FlowRiskLevel =
-    body.kind === 'structured'
+  const intelligenceContext = resolveIntelligenceContext(body);
+  const { preview: proposedAction, moduleAction } = buildProposedAction(body, intelligenceContext);
+  const riskLevel: FlowRiskLevel = intelligenceContext
+    ? mapIntelligenceRiskToFlowRisk(intelligenceContext.riskLevel)
+    : body.kind === 'structured'
       ? mapRiskLevelFromSafety(body.proposedAction.safetyLevel)
       : mapPlanSafetyToRiskLevel(proposedAction.safetyLevel);
 
@@ -254,19 +295,22 @@ async function handleFlowProposalForUser(body: ParsedFlowProposalInput): Promise
     title: proposedAction.title,
     riskLevel,
     privacyLevel,
-    payload: buildAskDraftFlowPayload({
-      concernType: resolved.concernType,
-      goal: resolved.goal ?? 'One next step',
-      timeline: resolved.timeline,
-      intakeSessionId: body.kind === 'session' ? body.askIntakeSessionId : undefined,
-      askHistoryEntryId: null,
-      actionPreview: {
-        actionId: `proposal-${draftFlowIdSuffix()}`,
-        title: proposedAction.title,
-        category: proposedAction.category,
-        safetyLevel: proposedAction.safetyLevel,
-      },
-    }),
+    payload: {
+      ...buildAskDraftFlowPayload({
+        concernType: resolved.concernType,
+        goal: resolved.goal ?? 'One next step',
+        timeline: resolved.timeline,
+        intakeSessionId: body.kind === 'session' ? body.askIntakeSessionId : undefined,
+        askHistoryEntryId: null,
+        actionPreview: {
+          actionId: moduleAction?.actionId ?? `proposal-${draftFlowIdSuffix()}`,
+          title: proposedAction.title,
+          category: proposedAction.category,
+          safetyLevel: proposedAction.safetyLevel,
+        },
+      }),
+      ...(intelligenceContext ? { intelligenceContext } : {}),
+    },
   });
 
   await recordFlowProposalEvent({

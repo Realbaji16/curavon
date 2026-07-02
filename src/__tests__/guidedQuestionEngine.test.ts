@@ -47,17 +47,16 @@ describe('generateGuidedQuestions', () => {
   });
 
   it('asks symptoms and test context for lab result confusion', () => {
-    const routing = routeHealthModules({
-      rawText: 'my Widal is 1:160 do I have typhoid',
-    });
+    const rawText = 'my Widal is 1:160 do I have typhoid';
+    const routing = routeHealthModules({ rawText });
     const questions = generateGuidedQuestions({
-      rawText: 'my Widal is 1:160 do I have typhoid',
+      rawText,
       selectedModules: routing.selectedModules,
       primaryModuleId: routing.primaryModuleId,
     });
 
-    expect(questions.some((q) => /symptom/i.test(q.question))).toBe(true);
-    expect(questions.some((q) => /test|slip|result/i.test(q.question))).toBe(true);
+    expect(questions.some((q) => /symptom|noticing/i.test(q.question))).toBe(true);
+    expect(questions.some((q) => /test|slip|result|widal|confusing/i.test(q.question))).toBe(true);
     expect(questions.some((q) => q.moduleId === 'lab_result_confusion_ng_v1')).toBe(true);
   });
 

@@ -8,7 +8,6 @@ import {
   defaultSafetyForError,
   parseIntakeRequestBody,
   requireAuthenticatedSupabaseUser,
-  resolveServerAIIntakeMode,
 } from './aiRouteGuards';
 
 function intakeErrorResponse(
@@ -77,16 +76,6 @@ export async function handleAIIntakePost(request: Request): Promise<{
         },
       },
     };
-  }
-
-  const aiMode = resolveServerAIIntakeMode();
-  if (aiMode === 'provider_unavailable') {
-    return intakeErrorResponse(
-      503,
-      'ai_unavailable',
-      'AI provider is temporarily unavailable.',
-      safety,
-    );
   }
 
   const intelligence = runHealthIntelligencePipeline({

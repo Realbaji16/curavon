@@ -6,18 +6,6 @@ import {
 import { routeHealthModules } from '../lib/health-intelligence/services/moduleRouter';
 import { isHealthIntelligenceResponseAllowed } from '../lib/health-intelligence/services/responseSafetyValidator';
 
-const REQUIRED_FIELD_LABELS = [
-  'Main concern',
-  'When it started',
-  'Symptoms noticed',
-  'Severity',
-  'Medication already taken',
-  'Known conditions',
-  'Allergies',
-  'Red flags checked',
-  'Questions for health worker',
-];
-
 function expectSafeCopy(text: string): void {
   expect(isHealthIntelligenceResponseAllowed(text), text).toBe(true);
 }
@@ -27,7 +15,60 @@ function fieldLabels(preview: ReturnType<typeof buildProfessionalSummaryPreview>
 }
 
 describe('buildProfessionalSummaryPreview', () => {
-  it('uses pharmacist summary type for medication module', () => {
+  it('builds fever module summary with conditional lab field', () => {
+    const withoutLab = buildProfessionalSummaryPreview({
+      selectedModuleIds: ['fever_malaria_ng_v1'],
+      primaryModuleId: 'fever_malaria_ng_v1',
+      rawText: 'my body hot since yesterday',
+      riskLevel: 'medium',
+    });
+
+    expect(withoutLab.summaryType).toBe('doctor');
+    expect(fieldLabels(withoutLab)).toEqual([
+      'Main concern',
+      'When it started',
+      'Temperature if known',
+      'Other symptoms',
+      'Fluids and urine',
+      'Medicines already taken',
+      'Questions for clinician',
+    ]);
+    expect(fieldLabels(withoutLab)).not.toContain('Tests/lab results');
+
+    const withLab = buildProfessionalSummaryPreview({
+      selectedModuleIds: ['fever_malaria_ng_v1', 'lab_result_confusion_ng_v1'],
+      primaryModuleId: 'fever_malaria_ng_v1',
+      rawText: 'fever since yesterday and my Widal is 1:160',
+      riskLevel: 'medium',
+    });
+
+    expect(fieldLabels(withLab)).toContain('Tests/lab results');
+    expect(fieldLabels(withLab).indexOf('Tests/lab results')).toBeLessThan(
+      fieldLabels(withLab).indexOf('Questions for clinician'),
+    );
+  });
+
+  it('builds headache module summary fields', () => {
+    const preview = buildProfessionalSummaryPreview({
+      selectedModuleIds: ['headache_ng_v1'],
+      primaryModuleId: 'headache_ng_v1',
+      riskLevel: 'medium',
+    });
+
+    expect(preview.summaryType).toBe('doctor');
+    expect(fieldLabels(preview)).toEqual([
+      'Headache description',
+      'Start and pattern',
+      'Severity',
+      'Vision changes',
+      'Weakness, confusion, or speech symptoms',
+      'Blood pressure reading if known',
+      'Medicines already taken',
+      'Questions for clinician',
+    ]);
+  });
+
+  it('prefers pharmacist summary type and medication-specific fields', () => {
     const routing = routeHealthModules({
       rawText: 'chemist gave me drug and now my body is itching',
     });
@@ -42,19 +83,18 @@ describe('buildProfessionalSummaryPreview', () => {
     expect(resolveProfessionalSummaryType({ selectedModuleIds: ['medication_question_ng_v1'] })).toBe(
       'pharmacist',
     );
-    expect(fieldLabels(preview)).toEqual(
-      expect.arrayContaining([
-        'Medication already taken',
-        'Allergies',
-        'Questions for health worker',
-      ]),
-    );
-    expect(fieldLabels(preview).indexOf('Medication already taken')).toBeLessThan(
-      fieldLabels(preview).indexOf('Severity'),
-    );
+    expect(fieldLabels(preview)).toEqual([
+      'Medicine name',
+      'Where it came from',
+      'When taken',
+      'Instructions received',
+      'What changed after taking it',
+      'Allergies',
+      'Questions for pharmacist',
+    ]);
   });
 
-  it('uses lab_follow_up summary type for lab result module', () => {
+  it('prefers lab_follow_up summary type and lab-specific fields', () => {
     const routing = routeHealthModules({
       rawText: 'my Widal is 1:160 do I have typhoid',
     });
@@ -66,31 +106,18 @@ describe('buildProfessionalSummaryPreview', () => {
     });
 
     expect(preview.summaryType).toBe('lab_follow_up');
-    expect(fieldLabels(preview)).toContain('Tests/lab results');
-    expect(fieldLabels(preview).indexOf('Tests/lab results')).toBeLessThan(
-      fieldLabels(preview).indexOf('Severity'),
-    );
+    expect(fieldLabels(preview)).toEqual([
+      'Test name',
+      'Date and facility',
+      'Result section you are confused about',
+      'Symptoms now',
+      'Who ordered the test',
+      'Medicines started because of result',
+      'Questions for clinician',
+    ]);
   });
 
-  it('uses doctor summary type for fever symptom concern', () => {
-    const routing = routeHealthModules({ rawText: 'my body hot since yesterday' });
-    const preview = buildProfessionalSummaryPreview({
-      rawText: 'my body hot since yesterday',
-      selectedModuleIds: routing.selectedModules.map((module) => module.moduleId),
-      primaryModuleId: routing.primaryModuleId,
-      riskLevel: routing.riskLevel,
-    });
-
-    expect(preview.summaryType).toBe('doctor');
-    for (const label of REQUIRED_FIELD_LABELS) {
-      expect(fieldLabels(preview)).toContain(label);
-    }
-    expect(fieldLabels(preview).indexOf('Red flags checked')).toBeLessThan(
-      fieldLabels(preview).indexOf('Medication already taken'),
-    );
-  });
-
-  it('uses general summary type for clinic-prep module', () => {
+  it('builds clinic/pharmacy prep summary fields', () => {
     const routing = routeHealthModules({
       rawText: 'prepare for doctor visit tomorrow',
       moduleHints: ['clinic_pharmacy_prep_ng_v1'],
@@ -103,15 +130,21 @@ describe('buildProfessionalSummaryPreview', () => {
     });
 
     expect(preview.summaryType).toBe('general');
-    for (const label of REQUIRED_FIELD_LABELS) {
-      expect(fieldLabels(preview)).toContain(label);
-    }
-    expect(fieldLabels(preview)).not.toContain('Tests/lab results');
+    expect(fieldLabels(preview)).toEqual([
+      'Visit type',
+      'Main concern',
+      'Timeline',
+      'Medicines',
+      'Lab/test documents',
+      'Top questions',
+      'Blocker',
+    ]);
   });
 
-  it('returns labels only with no field values in Phase 1', () => {
+  it('returns labels only with no field values', () => {
     const preview = buildProfessionalSummaryPreview({
       selectedModuleIds: ['fever_malaria_ng_v1'],
+      primaryModuleId: 'fever_malaria_ng_v1',
       riskLevel: 'high',
     });
 
@@ -126,12 +159,14 @@ describe('buildProfessionalSummaryPreview', () => {
       { selectedModuleIds: ['medication_question_ng_v1'] as const, riskLevel: 'medium' as const },
       { selectedModuleIds: ['lab_result_confusion_ng_v1'] as const, riskLevel: 'high' as const },
       { selectedModuleIds: ['fever_malaria_ng_v1'] as const, riskLevel: 'high' as const },
+      { selectedModuleIds: ['headache_ng_v1'] as const, riskLevel: 'medium' as const },
       { selectedModuleIds: ['clinic_pharmacy_prep_ng_v1'] as const, riskLevel: 'low' as const },
     ];
 
     for (const scenario of scenarios) {
       const preview = buildProfessionalSummaryPreview({
         selectedModuleIds: [...scenario.selectedModuleIds],
+        primaryModuleId: scenario.selectedModuleIds[0],
         riskLevel: scenario.riskLevel,
       });
 
@@ -139,7 +174,7 @@ describe('buildProfessionalSummaryPreview', () => {
       expectSafeCopy(preview.footer);
       for (const field of preview.fields) {
         expect(field.label.toLowerCase()).not.toMatch(
-          /\b(prescrib|take amoxicillin|take antimalarial|you have malaria|you have typhoid)\b/,
+          /\b(prescrib|take amoxicillin|take antimalarial|you have malaria|you have typhoid|dosage|dose)\b/,
         );
       }
     }

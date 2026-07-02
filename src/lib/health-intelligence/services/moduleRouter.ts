@@ -1,6 +1,9 @@
 import type { HealthModuleId } from '../modules/moduleIds';
 import { HEALTH_MODULES, HEALTH_MODULE_BY_ID } from '../modules/moduleCatalog';
 import type { HealthModule, HealthModuleRiskLevel } from '../modules/moduleTypes';
+import { getFormInsightModuleHintsForText } from '../../form-insights/formInsightContextService';
+import type { FormInsightProductContext } from '../../form-insights/formInsightContextTypes';
+import { resolveFormInsightContext } from '../../form-insights/runtime/productContextProvider';
 import { maskBlockedPhraseRegions } from '../nigeria/blockers';
 import { normalizeNigerianHealthLanguage } from './languageNormalizer';
 
@@ -22,6 +25,7 @@ export type HealthModuleRoutingResult = {
 export type RouteHealthModulesInput = {
   rawText: string;
   moduleHints?: HealthModuleId[];
+  formInsightContext?: FormInsightProductContext;
 };
 
 /** High-risk modules that should dominate primary selection when present. */
@@ -68,6 +72,7 @@ const CONTEXT_MODULE_TERMS: Partial<Record<HealthModuleId, readonly string[]>> =
   medication_question_ng_v1: [
     'chemist gave me drug',
     'chemist gave me medicine',
+    'pharmacy gave me medicine',
     'pharmacy gave me',
     'bought from chemist',
     'medication question',
@@ -75,11 +80,24 @@ const CONTEXT_MODULE_TERMS: Partial<Record<HealthModuleId, readonly string[]>> =
     'medicine question',
     'side effect',
     'took malaria drug',
+    'took antibiotics',
+    'injection',
     'no change after drug',
+    'drug no work',
     'body itching after drug',
     'itching after medicine',
+    'swelling after medicine',
     'rash after drug',
+    'missed medicine',
+    'double dose',
+    'can i stop this drug',
+    'should i continue this drug',
+    'medicine is making me weak',
+    'my medicine',
+    'about my medicine',
+    'ask pharmacist about',
   ],
+  missed_medication_ng_v1: ['missed medicine', 'missed my medicine', 'forgot to take', 'double dose', 'skipped dose'],
   lab_result_confusion_ng_v1: [
     'widal',
     'widal test',
@@ -92,9 +110,34 @@ const CONTEXT_MODULE_TERMS: Partial<Record<HealthModuleId, readonly string[]>> =
     'test said typhoid',
     'lab said typhoid',
     'do i have typhoid',
+    'typhoid test',
     'typhoid test result',
     'malaria test',
     'mp test',
+    'blood test',
+    'urine test',
+    'scan result',
+    'result says positive',
+    'result says reactive',
+    'salmonella',
+    '1:160',
+    '1:80',
+    "don't understand my result",
+    'dont understand my result',
+  ],
+  blood_sugar_ng_v1: ['blood test result', 'fasting blood test', 'sugar test result', 'blood sugar test'],
+  blood_pressure_ng_v1: [
+    'blood test result',
+    'bp test result',
+    'blood pressure test',
+    'headache and bp',
+    'headache and blood pressure',
+    'headache with high bp',
+    'bp and headache',
+    'bp disturbing me',
+    'blood pressure high',
+    'bp too high',
+    'checked my bp',
   ],
   child_fever_illness_ng_v1: [
     'my child',
@@ -119,6 +162,23 @@ const CONTEXT_MODULE_TERMS: Partial<Record<HealthModuleId, readonly string[]>> =
     'antenatal worry',
     'belly pain pregnant',
     'spotting pregnant',
+  ],
+  clinic_pharmacy_prep_ng_v1: [
+    'going to clinic',
+    'going to hospital',
+    'see doctor',
+    'doctor appointment',
+    'pharmacy visit',
+    'go to chemist',
+    'ask pharmacist',
+    'what should i tell doctor',
+    'prepare for doctor',
+    'prepare summary',
+    'what questions should i ask',
+    "don't know where to start",
+    'dont know where to start',
+    'hospital queue',
+    'clinic tomorrow',
   ],
 };
 
@@ -260,8 +320,40 @@ function selectPrimaryModuleId(
     return 'lab_result_confusion_ng_v1';
   }
 
+  if (
+    selectedIds.includes('fever_malaria_ng_v1') &&
+    selectedIds.includes('medication_question_ng_v1')
+  ) {
+    const feverCandidate = candidates.get('fever_malaria_ng_v1');
+    const hasFeverBodyTrigger =
+      feverCandidate &&
+      [...feverCandidate.matchedTriggers].some(
+        (trigger) =>
+          trigger !== 'phrase_hint' &&
+          !trigger.startsWith('context:') &&
+          !trigger.startsWith('explicit_hint'),
+      );
+    if (hasFeverBodyTrigger) {
+      return 'fever_malaria_ng_v1';
+    }
+  }
+
   if (selectedIds.includes('medication_question_ng_v1') && hasContextMatch(candidates, 'medication_question_ng_v1')) {
     return 'medication_question_ng_v1';
+  }
+
+  if (
+    selectedIds.includes('clinic_pharmacy_prep_ng_v1') &&
+    hasDirectEntryTriggerMatch(candidates, 'clinic_pharmacy_prep_ng_v1')
+  ) {
+    const hasAcutePrimary = PRIMARY_MODULE_PRIORITY.some(
+      (moduleId) =>
+        selectedIds.includes(moduleId) &&
+        (moduleId !== 'stress_anxiety_sleep_ng_v1' || crisisDetected),
+    );
+    if (!hasAcutePrimary) {
+      return 'clinic_pharmacy_prep_ng_v1';
+    }
   }
 
   const byRisk = [...selectedIds].sort((a, b) => {
@@ -281,6 +373,21 @@ function hasContextMatch(
   const candidate = candidates.get(moduleId);
   if (!candidate) return false;
   return [...candidate.matchedTriggers].some((trigger) => trigger.startsWith('context:'));
+}
+
+function hasDirectEntryTriggerMatch(
+  candidates: Map<HealthModuleId, ModuleCandidate>,
+  moduleId: HealthModuleId,
+): boolean {
+  const candidate = candidates.get(moduleId);
+  if (!candidate) return false;
+  return [...candidate.matchedTriggers].some(
+    (trigger) =>
+      trigger !== 'phrase_hint' &&
+      !trigger.startsWith('context:') &&
+      !trigger.startsWith('explicit_hint') &&
+      trigger !== 'mental_health_crisis',
+  );
 }
 
 function isPhraseHintOnly(candidate: ModuleCandidate): boolean {
@@ -321,7 +428,10 @@ function buildSelectedModules(
 export function routeHealthModules(input: RouteHealthModulesInput): HealthModuleRoutingResult {
   const normalized = normalizeText(input.rawText);
   const maskedText = maskBlockedPhraseRegions(normalized);
-  const phraseNormalization = normalizeNigerianHealthLanguage(input.rawText);
+  const productContext = resolveFormInsightContext(input.formInsightContext);
+  const phraseNormalization = normalizeNigerianHealthLanguage(input.rawText, {
+    formInsightContext: productContext,
+  });
   const crisisDetected = hasCrisisLanguage(maskedText);
 
   const candidates = new Map<HealthModuleId, ModuleCandidate>();
@@ -333,6 +443,10 @@ export function routeHealthModules(input: RouteHealthModulesInput): HealthModule
 
   for (const moduleId of input.moduleHints ?? []) {
     addCandidate(candidates, moduleId, ['explicit_hint']);
+  }
+
+  for (const moduleId of getFormInsightModuleHintsForText(input.rawText, productContext)) {
+    addCandidate(candidates, moduleId, ['active_overlay_trigger']);
   }
 
   for (const module of HEALTH_MODULES) {

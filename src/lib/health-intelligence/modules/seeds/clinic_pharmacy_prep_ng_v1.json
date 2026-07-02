@@ -3,95 +3,268 @@
   "name": "Clinic & pharmacy prep",
   "country_context": "NG",
   "risk_level": "low",
-  "status": "draft",
-  "version": "1.0.0",
-  "purpose": "Help users prepare for a clinic, hospital, or pharmacy visit in Nigeria — organized notes and questions, not clinical conclusions.",
+  "status": "review",
+  "version": "1.1.0",
+  "purpose": "Help users prepare for a clinic, hospital, or pharmacy visit in Nigeria — organized notes, medicines, labs, and questions, not clinical conclusions or facility directives.",
   "not_allowed": [
-    "Diagnosing or naming a condition for the visit",
-    "Prescribing what to ask the chemist to give",
-    "Replacing triage or emergency services",
-    "Telling the user which facility must treat them",
-    "Interpreting past labs or slips as final answers"
+    "Choosing or ranking a facility as a medical directive",
+    "Telling the chemist or pharmacist what medicine to give or buy",
+    "Diagnosing or naming an illness before the visit",
+    "Prescribing medicines or dosage to prepare for a visit",
+    "Replacing triage or emergency services when urgent symptoms are present",
+    "Interpreting past labs or slips as final answers before clinician review",
+    "Telling the user which hospital or clinic must treat them"
   ],
   "entry_triggers": [
     {
-      "id": "clinic_visit",
+      "id": "clinic_hospital_visit",
       "label": "clinic or hospital visit",
-      "terms": ["going to clinic", "hospital visit", "see doctor tomorrow", "appointment"],
+      "terms": [
+        "going to clinic",
+        "going to hospital",
+        "see doctor",
+        "doctor appointment",
+        "hospital visit",
+        "clinic tomorrow",
+        "hospital queue"
+      ],
       "weight": 1
     },
     {
-      "id": "pharmacy_visit",
+      "id": "pharmacy_chemist_visit",
       "label": "pharmacy or chemist visit",
-      "terms": ["go to chemist", "pharmacy visit", "buy medicine at chemist", "ask pharmacist"],
+      "terms": [
+        "pharmacy visit",
+        "go to chemist",
+        "ask pharmacist",
+        "visit the chemist",
+        "pharmacy tomorrow"
+      ],
       "weight": 0.95
     },
     {
-      "id": "prepare_notes",
-      "label": "prepare health notes",
-      "terms": ["prepare for doctor", "what to tell doctor", "doctor visit prep", "summary for clinic"],
+      "id": "prepare_for_visit",
+      "label": "prepare notes or summary",
+      "terms": [
+        "what should i tell doctor",
+        "what to tell doctor",
+        "prepare for doctor",
+        "prepare summary",
+        "summary for clinic",
+        "doctor visit prep"
+      ],
+      "weight": 0.95
+    },
+    {
+      "id": "visit_questions",
+      "label": "questions to ask",
+      "terms": [
+        "what questions should i ask",
+        "questions for doctor",
+        "questions for pharmacist",
+        "what should i ask"
+      ],
       "weight": 0.9
+    },
+    {
+      "id": "visit_overwhelm",
+      "label": "where to start",
+      "terms": [
+        "don't know where to start",
+        "dont know where to start",
+        "i don't know where to start",
+        "where do i start"
+      ],
+      "weight": 0.85
     }
   ],
-  "overlapping_modules": ["medication_question_ng_v1", "lab_result_confusion_ng_v1", "headache_ng_v1"],
+  "overlapping_modules": [
+    "medication_question_ng_v1",
+    "lab_result_confusion_ng_v1",
+    "fever_malaria_ng_v1",
+    "headache_ng_v1",
+    "blood_pressure_ng_v1",
+    "pregnancy_concern_ng_v1",
+    "child_fever_illness_ng_v1"
+  ],
   "red_flags": [
     {
-      "id": "emergency_before_visit",
-      "label": "emergency symptoms before planned visit",
-      "terms": ["cannot breathe", "chest pain", "severe bleeding", "fainting", "suicidal"],
+      "id": "urgent_before_planned_visit",
+      "label": "planned visit but urgent symptoms now",
+      "terms": [
+        "cannot wait until appointment",
+        "cannot wait for clinic",
+        "much worse today",
+        "urgent symptoms now",
+        "getting worse before visit"
+      ],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "chest_pain_before_visit",
+      "label": "chest pain",
+      "terms": ["chest pain", "chest pressure", "tight chest"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "breathing_before_visit",
+      "label": "difficulty breathing",
+      "terms": ["difficulty breathing", "cannot breathe", "breathing hard", "short of breath"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "severe_bleeding_before_visit",
+      "label": "severe bleeding",
+      "terms": ["severe bleeding", "heavy bleeding", "bleeding heavily"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "fainting_before_visit",
+      "label": "fainting",
+      "terms": ["fainted", "fainting", "passed out", "collapsed"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "pregnancy_bleeding_before_visit",
+      "label": "pregnancy bleeding",
+      "terms": ["pregnant and bleeding", "bleeding while pregnant", "pregnancy bleeding"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "suicidal_before_visit",
+      "label": "suicidal thoughts",
+      "terms": ["suicidal", "want to die", "kill myself", "self harm", "self-harm"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "child_emergency_before_visit",
+      "label": "child emergency signs",
+      "terms": [
+        "child not breathing",
+        "baby very weak",
+        "child unconscious",
+        "baby cannot wake",
+        "child emergency"
+      ],
       "severity": "emergency",
       "escalateImmediately": true
     }
   ],
   "required_questions": [
-    { "id": "visit_type", "prompt": "Is this for a clinic, hospital, or pharmacy/chemist visit?", "kind": "required" },
-    { "id": "main_concern", "prompt": "What is the main concern you want help with?", "kind": "required" },
-    { "id": "timeline", "prompt": "When did it start and what has changed?", "kind": "required" },
-    { "id": "medicines", "prompt": "What medicines or treatments are you using now?", "kind": "required" },
-    { "id": "questions", "prompt": "What two questions do you most want answered at the visit?", "kind": "required" }
+    {
+      "id": "visit_type",
+      "prompt": "Is this visit for a clinic, hospital, or pharmacy/chemist?",
+      "kind": "required"
+    },
+    {
+      "id": "main_concern",
+      "prompt": "What is the main concern you want help with at this visit?",
+      "kind": "required"
+    },
+    {
+      "id": "timeline",
+      "prompt": "When did it start, and what is the timeline so far?",
+      "kind": "required"
+    },
+    {
+      "id": "what_changed",
+      "prompt": "What has changed recently — better, worse, or new symptoms?",
+      "kind": "required"
+    },
+    {
+      "id": "medicines_taken",
+      "prompt": "What medicines or treatments have you already taken?",
+      "kind": "required"
+    },
+    {
+      "id": "test_results_bring",
+      "prompt": "What test results, lab slips, or scans will you bring?",
+      "kind": "required"
+    },
+    {
+      "id": "top_questions",
+      "prompt": "What are the top two questions you want answered at the visit?",
+      "kind": "required"
+    },
+    {
+      "id": "visit_blocker",
+      "prompt": "Any blocker for the visit — cost, distance, time, fear, or queue worries?",
+      "kind": "required"
+    }
   ],
   "ai_generated_question_policy": {
     "enabled": true,
-    "maxAdditionalQuestions": 3,
+    "maxAdditionalQuestions": 2,
     "mustStayWithinModuleScope": true,
-    "forbiddenTopics": ["diagnosis", "prescription", "facility ranking as medical advice"],
-    "notes": "Help structure visit goals and notes only."
+    "forbiddenTopics": [
+      "diagnosis",
+      "prescription",
+      "facility ranking as medical advice",
+      "dosage",
+      "chemist drug choice"
+    ],
+    "notes": "Structure visit goals, notes, and questions only — never diagnose or direct which medicine to buy."
   },
   "allowed_actions": [
     {
       "id": "visit_checklist",
       "title": "Build visit checklist",
-      "instruction": "List ID, prior results, medicines, symptom timeline, and your top questions.",
+      "instruction": "List visit type, ID, symptom timeline, medicines taken, lab slips, and your top questions.",
       "category": "prepare",
       "safetyLevel": "low"
     },
     {
       "id": "symptom_timeline",
-      "title": "Write symptom timeline",
-      "instruction": "One line per day or phase: what started, what changed, what helped or worsened.",
+      "title": "Prepare symptom timeline",
+      "instruction": "Write when symptoms started, what changed, and what helped or worsened — for clinician review.",
       "category": "track",
       "safetyLevel": "low"
     },
     {
-      "id": "pharmacy_list",
-      "title": "Pharmacy question list",
-      "instruction": "Write medicine names on your pack and questions about timing and interactions for the pharmacist.",
+      "id": "medicine_list",
+      "title": "Prepare medicine list",
+      "instruction": "List medicine names, who gave them, and when you took them — without changing medicines on your own.",
       "category": "prepare",
       "safetyLevel": "low"
     },
     {
+      "id": "lab_result_list",
+      "title": "Prepare test slip list",
+      "instruction": "List test names, dates, and confusing wording to show a clinician — without concluding an illness from the numbers alone.",
+      "category": "prepare",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "visit_questions_list",
+      "title": "Prepare questions for pharmacist or clinician",
+      "instruction": "Write your top questions for the pharmacist or clinician without naming an illness as a conclusion.",
+      "category": "prepare",
+      "safetyLevel": "medium"
+    },
+    {
       "id": "urgent_not_wait",
       "title": "Do not wait if urgent",
-      "instruction": "If severe or sudden symptoms appear, seek emergency care instead of waiting for a routine visit.",
+      "instruction": "If chest pain, breathing difficulty, severe bleeding, fainting, or other danger signs appear, seek emergency care now instead of waiting for a routine visit.",
       "category": "seek_care",
       "safetyLevel": "urgent"
     }
   ],
   "summary_fields": [
+    { "id": "visit_type", "label": "Visit type", "kind": "user_goal", "required": true },
     { "id": "concern", "label": "Main concern", "kind": "concern", "required": true },
-    { "id": "timeline", "label": "Timeline", "kind": "timeline", "required": true },
-    { "id": "medications", "label": "Current medicines", "kind": "medication", "required": false },
-    { "id": "questions", "label": "Questions for visit", "kind": "question_for_clinician", "required": true },
-    { "id": "goal", "label": "Visit goal", "kind": "user_goal", "required": false }
+    { "id": "timeline", "label": "Symptom timeline", "kind": "timeline", "required": true },
+    { "id": "what_changed", "label": "What changed recently", "kind": "symptom", "required": false },
+    { "id": "medications", "label": "Medicines already taken", "kind": "medication", "required": true },
+    { "id": "labs", "label": "Test results to bring", "kind": "other", "required": false },
+    { "id": "questions", "label": "Top questions for visit", "kind": "question_for_clinician", "required": true },
+    { "id": "blockers", "label": "Visit blockers", "kind": "other", "required": false },
+    { "id": "documents", "label": "Documents to bring", "kind": "other", "required": false }
   ]
 }

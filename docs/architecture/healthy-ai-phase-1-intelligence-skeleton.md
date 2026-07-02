@@ -88,8 +88,7 @@ POST { input: string, context?: object }
   → requireAuthenticatedSupabaseUser()
   → parseIntakeRequestBody()          # input or legacy concernText
   → assessIntakeSafety()              # detectRedFlags pre-block → 422 if urgent
-  → resolveServerAIIntakeMode()       # 503 if AI_ENABLED=true without key
-  → runHealthIntelligencePipeline()
+  → runHealthIntelligencePipeline()   # always deterministic; no provider key required
        1. normalizeNigerianHealthLanguage
        2. routeHealthModules
        3. bridgeRedFlags

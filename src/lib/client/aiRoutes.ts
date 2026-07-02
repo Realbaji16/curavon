@@ -1,6 +1,8 @@
 import type { AskIntakeData } from '../../types/askIntake';
 import type { HealthIntelligenceResult } from '../health-intelligence/types';
 import { HEALTH_MODULE_BY_ID } from '../health-intelligence/modules/moduleCatalog';
+import type { FlowProposalIntelligenceContext } from '../health-intelligence/services/intelligenceContextSerializer';
+import { serializeIntelligenceForFlowProposal } from '../health-intelligence/services/intelligenceContextSerializer';
 import {
   CALM_URGENT_BODY,
   CALM_URGENT_TITLE,
@@ -8,6 +10,8 @@ import {
 import { collectIntakeSafetyText } from '../../utils/askIntakeRules';
 
 export type FlowProposalPrivacyLevel = 'standard' | 'sensitive';
+
+export type { FlowProposalIntelligenceContext };
 
 export type FlowProposalRequestBody = {
   askIntakeSessionId?: string;
@@ -28,6 +32,7 @@ export type FlowProposalRequestBody = {
     safetyLevel: 'normal' | 'caution' | 'urgent';
   };
   privacyLevel?: FlowProposalPrivacyLevel;
+  intelligenceContext?: FlowProposalIntelligenceContext;
 };
 
 export type FlowProposalProposedAction = {
@@ -106,9 +111,10 @@ export function buildAskFlowProposalFromIntake(
   input: {
     privacyLevel: FlowProposalPrivacyLevel;
     nextSafeStep: string;
+    intelligenceContext?: FlowProposalIntelligenceContext | null;
   },
 ): FlowProposalRequestBody {
-  return {
+  const body: FlowProposalRequestBody = {
     privacyLevel: input.privacyLevel,
     concernSummary: {
       concernType: intake.concernType.trim() || 'Not sure',
@@ -126,6 +132,12 @@ export function buildAskFlowProposalFromIntake(
       safetyLevel: 'normal',
     },
   };
+
+  if (input.intelligenceContext) {
+    body.intelligenceContext = input.intelligenceContext;
+  }
+
+  return body;
 }
 
 function parseFlowProposalResponse(status: number, body: FlowProposalResponseBody): FlowProposalClientResult {
@@ -215,7 +227,7 @@ export type AskIntakeRefinement = {
 };
 
 export type ProcessedAIIntakeClientResult =
-  | { kind: 'success'; refinement: AskIntakeRefinement }
+  | { kind: 'success'; refinement: AskIntakeRefinement; intelligenceContext: FlowProposalIntelligenceContext }
   | { kind: 'safety_blocked'; title: string; body: string }
   | { kind: 'skipped' };
 
@@ -278,6 +290,7 @@ export function processAIIntakeClientResult(
   return {
     kind: 'success',
     refinement: buildAskIntakeRefinementFromIntelligence(intelligence),
+    intelligenceContext: serializeIntelligenceForFlowProposal(intelligence),
   };
 }
 

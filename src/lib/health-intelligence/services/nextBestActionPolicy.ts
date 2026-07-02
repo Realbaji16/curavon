@@ -2,6 +2,13 @@ import type { ApprovedActionId } from '../actions/allowedActions';
 import { APPROVED_ACTIONS } from '../actions/allowedActions';
 import type { HealthModuleId } from '../modules/moduleIds';
 import type { RouterRiskLevel } from './moduleRouter';
+import type { FlowProposalIntelligenceContext } from './intelligenceContextSerializer';
+import {
+  resolveModuleFlowProposalAction,
+  type ModuleFlowProposalAction,
+} from './moduleActionTemplates';
+
+export type { ModuleFlowProposalAction };
 
 export type NextBestActionInput = {
   riskLevel: RouterRiskLevel;
@@ -116,6 +123,13 @@ export function resolveNextBestAction(input: NextBestActionInput): NextBestActio
     'monitor_and_track',
     'Default safe organizational step when no acute routing signal is present.',
   );
+}
+
+/** Map serialized intake intelligence to one module-aware flow-proposal action. */
+export function resolveFlowProposalActionFromIntelligenceContext(
+  intelligenceContext: FlowProposalIntelligenceContext,
+): ModuleFlowProposalAction {
+  return resolveModuleFlowProposalAction(intelligenceContext);
 }
 
 /** @deprecated Use resolveNextBestAction — kept as alias for requirement naming. */

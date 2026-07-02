@@ -23,3 +23,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Phase 3 form imports — never commit sensitive CSV exports or generated artifacts
+data/form-imports/raw/*
+!data/form-imports/raw/.gitkeep
+data/form-imports/normalized/*
+!data/form-imports/normalized/.gitkeep
+data/form-imports/reports/*
+!data/form-imports/reports/.gitkeep

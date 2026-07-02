@@ -9,6 +9,8 @@ import type {
   IntelligenceSummaryPreview,
   SelectedModuleMatch,
 } from '../types';
+import { resolveFormInsightContext } from '../../form-insights/runtime/productContextProvider';
+import { composeModuleAwareIntakeMessage } from './moduleResponseComposer';
 import { generateGuidedQuestions, type GuidedQuestion } from './guidedQuestionEngine';
 import { normalizeNigerianHealthLanguage } from './languageNormalizer';
 import { resolveNextBestAction } from './nextBestActionPolicy';
@@ -122,23 +124,6 @@ function limitUrgentQuestions(questions: IntelligenceQuestion[]): IntelligenceQu
   return summaryQuestion ? [summaryQuestion] : [];
 }
 
-function buildSafeMessage(input: {
-  routing: ReturnType<typeof routeHealthModules>;
-  nextStep: string;
-  questionCount: number;
-}): string {
-  const moduleNames = input.routing.selectedModules.map((module) => module.name);
-  const focus =
-    moduleNames.length > 0
-      ? `Curavon can help organize notes for: ${moduleNames.join(', ')}.`
-      : 'Curavon can help organize your health notes.';
-  const guidance =
-    input.questionCount > 0
-      ? 'Answer a few short questions so we can prepare safe next steps.'
-      : input.nextStep;
-  return `${focus}\n\n${guidance}\n\nThis does not diagnose. If symptoms are severe, sudden, or unsafe, seek urgent care.`;
-}
-
 function sanitizeMessage(message: string): string {
   const validation = validateHealthIntelligenceResponse(message, { appendSafeDisclaimer: true });
   return validation.sanitizedText ?? message;
@@ -160,8 +145,11 @@ export function runHealthIntelligencePipeline(
   input: HealthIntelligencePipelineInput,
 ): HealthIntelligenceResult {
   const rawText = input.rawText.trim();
-  const normalization = normalizeNigerianHealthLanguage(rawText);
-  const routing = routeHealthModules({ rawText });
+  const productContext = resolveFormInsightContext(
+    input.context?.formInsightContext as import('../../form-insights/formInsightContextTypes').FormInsightProductContext | undefined,
+  );
+  const normalization = normalizeNigerianHealthLanguage(rawText, { formInsightContext: productContext });
+  const routing = routeHealthModules({ rawText, formInsightContext: productContext });
   const redFlagBridge = bridgeRedFlags(rawText);
 
   const selectedModuleIds = routing.selectedModules.map((module) => module.moduleId);
@@ -178,6 +166,7 @@ export function runHealthIntelligencePipeline(
     primaryModuleId: routing.primaryModuleId,
     riskLevel: routing.riskLevel,
     redFlags: redFlagBridge.hits,
+    formInsightContext: productContext,
   });
 
   if (redFlagBridge.isUrgent) {
@@ -188,6 +177,7 @@ export function runHealthIntelligencePipeline(
       primaryModuleId: routing.primaryModuleId,
       redFlags: redFlagBridge.hits,
       redFlagResult: redFlagBridge.detection,
+      formInsightContext: productContext,
     });
     const questions = limitUrgentQuestions(guidedQuestions.map(toIntelligenceQuestion));
 
@@ -218,6 +208,7 @@ export function runHealthIntelligencePipeline(
     primaryModuleId: routing.primaryModuleId,
     redFlags: redFlagBridge.hits,
     redFlagResult: redFlagBridge.detection,
+    formInsightContext: productContext,
   });
   const questions = guidedQuestions.map(toIntelligenceQuestion);
 
@@ -235,15 +226,21 @@ export function runHealthIntelligencePipeline(
     ? APPROVED_ACTIONS.answer_guided_questions.instruction
     : nextAction.nextStep;
 
+  const riskLevel: IntelligenceRiskLevel = routing.riskLevel;
+
   const message = sanitizeMessage(
-    buildSafeMessage({
-      routing,
+    composeModuleAwareIntakeMessage({
+      rawText,
+      selectedModules: routing.selectedModules,
+      primaryModuleId: routing.primaryModuleId,
+      normalizedTerms,
+      riskLevel,
+      questions,
       nextStep,
-      questionCount: pendingGuidedQuestions ? questions.length : 0,
+      redFlags: redFlagBridge.hits,
+      formInsightContext: productContext,
     }),
   );
-
-  const riskLevel: IntelligenceRiskLevel = routing.riskLevel;
 
   return {
     message,

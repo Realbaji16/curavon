@@ -3,113 +3,306 @@
   "name": "Fever & malaria concern",
   "country_context": "NG",
   "risk_level": "medium_high",
-  "status": "draft",
-  "version": "1.0.0",
-  "purpose": "Help users in Nigeria organize fever symptoms, timing, and when to seek care — without naming an illness or giving treatment advice.",
+  "status": "review",
+  "version": "1.1.0",
+  "purpose": "Help users in Nigeria organize fever symptoms, timing, medicines already taken, and when to seek care — without naming an illness or giving treatment advice.",
   "not_allowed": [
+    "Diagnosing malaria or naming malaria as the user's condition",
+    "Diagnosing typhoid or naming typhoid as the user's condition",
+    "Prescribing antimalarial medicines or antibiotics",
+    "Recommending dosage, dose changes, or how many tablets to take",
+    "Saying fever is harmless or that no clinician review is needed when danger signs exist",
+    "Interpreting Widal, malaria test, or typhoid panel results as proof of a disease",
     "Naming malaria, typhoid, or any specific illness as a conclusion",
-    "Prescribing antimalarials, antibiotics, or any medication dose",
     "Telling the user to start, stop, or change medicines bought at a chemist",
-    "Replacing emergency services or a clinician visit when danger signs appear",
-    "Interpreting lab slips (including widal) as proof of a condition"
+    "Replacing emergency services or a clinician visit when danger signs appear"
   ],
   "entry_triggers": [
     {
       "id": "body_hot",
       "label": "body hot / hot body",
-      "terms": ["body hot", "hot body", "body dey hot", "my body is hot", "I dey hot"],
+      "terms": [
+        "body hot",
+        "hot body",
+        "body dey hot",
+        "my body is hot",
+        "I dey hot",
+        "my body hot"
+      ],
       "weight": 1
     },
     {
       "id": "fever_words",
-      "label": "fever language",
-      "terms": ["fever", "high temperature", "temperature dey high", "I get temperature"],
+      "label": "fever and temperature language",
+      "terms": [
+        "fever",
+        "high temperature",
+        "temperature",
+        "temperature dey high",
+        "I get temperature",
+        "fever since yesterday"
+      ],
       "weight": 0.95
+    },
+    {
+      "id": "chills_sweats",
+      "label": "chills and shivering",
+      "terms": ["chills", "shivering", "sweating at night", "cold and hot"],
+      "weight": 0.85
     },
     {
       "id": "malaria_typhoid_talk",
       "label": "malaria and typhoid concern",
-      "terms": ["malaria and typhoid", "malaria", "typhoid", "I think na malaria", "na typhoid"],
+      "terms": [
+        "malaria and typhoid",
+        "malaria",
+        "typhoid",
+        "I think na malaria",
+        "na typhoid",
+        "malaria drug",
+        "took malaria drug"
+      ],
       "weight": 0.9
     },
     {
-      "id": "chills_sweats",
-      "label": "chills or sweats",
-      "terms": ["chills", "shivering", "sweating at night", "cold and hot"],
-      "weight": 0.7
+      "id": "weakness_with_fever",
+      "label": "weakness with fever",
+      "terms": ["weakness with fever", "very weak and hot", "weak and body hot", "fever and weakness"],
+      "weight": 0.8
+    },
+    {
+      "id": "persistent_after_meds",
+      "label": "fever after medicines",
+      "terms": [
+        "still hot after drugs",
+        "still hot after treatment",
+        "still hot after medicine",
+        "fever not going after drug"
+      ],
+      "weight": 0.85
     }
   ],
-  "overlapping_modules": ["child_fever_illness_ng_v1", "diarrhea_vomiting_ng_v1", "cough_catarrh_ng_v1"],
+  "overlapping_modules": [
+    "headache_ng_v1",
+    "medication_question_ng_v1",
+    "lab_result_confusion_ng_v1",
+    "cough_catarrh_ng_v1",
+    "diarrhea_vomiting_ng_v1",
+    "pregnancy_concern_ng_v1",
+    "child_fever_illness_ng_v1"
+  ],
   "red_flags": [
     {
-      "id": "confusion_weakness",
-      "label": "confusion or severe weakness with fever",
-      "terms": ["confused", "cannot stand", "very weak", "barely awake"],
+      "id": "difficulty_breathing",
+      "label": "difficulty breathing with fever",
+      "terms": ["cannot breathe", "trouble breathing", "difficulty breathing", "breathing fast with fever"],
       "severity": "emergency",
       "escalateImmediately": true
     },
     {
-      "id": "breathing_chest",
-      "label": "breathing difficulty with fever",
-      "terms": ["cannot breathe", "trouble breathing", "chest pain with fever"],
+      "id": "chest_pain_fever",
+      "label": "chest pain with fever",
+      "terms": ["chest pain with fever", "chest pain and fever", "chest pain and body hot"],
       "severity": "emergency",
       "escalateImmediately": true
     },
     {
-      "id": "stiff_neck_rash",
-      "label": "stiff neck or rash with fever",
-      "terms": ["stiff neck", "rash with fever", "purple spots"],
+      "id": "confusion",
+      "label": "confusion with fever",
+      "terms": ["confused", "confusion", "not making sense", "barely awake"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "fainting",
+      "label": "fainting or collapse",
+      "terms": ["fainted", "fainting", "collapsed", "passed out"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "seizure",
+      "label": "seizure with fever",
+      "terms": ["seizure", "convulsion", "fitting", "jerking"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "unconsciousness",
+      "label": "unconsciousness",
+      "terms": ["unconscious", "unresponsive", "cannot wake", "not waking up"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "stiff_neck",
+      "label": "stiff neck with fever",
+      "terms": ["stiff neck", "neck stiffness", "cannot bend neck"],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "repeated_vomiting",
+      "label": "repeated vomiting",
+      "terms": ["vomiting repeatedly", "cannot keep fluids down", "throwing up again and again"],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "severe_weakness",
+      "label": "severe weakness",
+      "terms": ["cannot stand", "very weak", "too weak to walk", "severe weakness"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "severe_dehydration",
+      "label": "severe dehydration",
+      "terms": ["not passing urine", "very dry mouth", "no urine all day", "severe dehydration"],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "pregnancy_fever",
+      "label": "pregnancy with fever",
+      "terms": ["pregnant and fever", "pregnant and body hot", "pregnancy with fever"],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "child_fever",
+      "label": "child fever concern",
+      "terms": ["child fever", "baby body hot", "my child is hot", "infant fever"],
       "severity": "urgent",
       "escalateImmediately": true
     },
     {
       "id": "persistent_high_fever",
       "label": "fever not improving after several days",
-      "terms": ["fever for many days", "fever not going", "still hot after treatment"],
+      "terms": [
+        "fever for many days",
+        "fever not going",
+        "still hot after treatment",
+        "fever not improving",
+        "still hot after drugs"
+      ],
+      "severity": "watch"
+    },
+    {
+      "id": "unknown_medicine_fever",
+      "label": "fever after unknown medicine",
+      "terms": [
+        "fever after unknown medicine",
+        "unknown drug and fever",
+        "white tablet and fever",
+        "fever after chemist drug"
+      ],
       "severity": "watch"
     }
   ],
   "required_questions": [
-    { "id": "onset", "prompt": "When did the fever or hot body feeling start?", "kind": "required" },
-    { "id": "pattern", "prompt": "Does it come and go, or stay most of the day?", "kind": "required" },
-    { "id": "other_symptoms", "prompt": "What else is happening — headache, vomiting, cough, body pain?", "kind": "required" },
-    { "id": "fluids", "prompt": "Are you able to drink fluids and pass urine normally?", "kind": "required" },
-    { "id": "tried_so_far", "prompt": "What have you tried so far (rest, fluids, medicines from chemist)?", "kind": "required" },
-    { "id": "vulnerable", "prompt": "Is this for a child, someone pregnant, or an older adult?", "kind": "conditional", "showWhen": "context_vulnerable" }
+    {
+      "id": "onset",
+      "prompt": "When did the fever or hot body feeling start?",
+      "kind": "required"
+    },
+    {
+      "id": "peak_temperature",
+      "prompt": "What was the highest temperature or hottest feeling, if you know it?",
+      "kind": "required"
+    },
+    {
+      "id": "worsening",
+      "prompt": "Is it getting worse, staying the same, or improving?",
+      "kind": "required"
+    },
+    {
+      "id": "other_symptoms",
+      "prompt": "What else is happening — headache, cough, body pain, or weakness?",
+      "kind": "required"
+    },
+    {
+      "id": "vomiting_diarrhea",
+      "prompt": "Any vomiting or diarrhea with the fever?",
+      "kind": "required"
+    },
+    {
+      "id": "fluids",
+      "prompt": "Are you able to drink fluids and pass urine normally?",
+      "kind": "required"
+    },
+    {
+      "id": "medicines_taken",
+      "prompt": "What medicines have you already taken, including chemist or malaria drugs?",
+      "kind": "required"
+    },
+    {
+      "id": "vulnerable",
+      "prompt": "Is this for a child, someone pregnant, or an older adult?",
+      "kind": "conditional",
+      "showWhen": "context_vulnerable"
+    },
+    {
+      "id": "lab_context",
+      "prompt": "Have you had a malaria, typhoid, or Widal test — and what is confusing about it?",
+      "kind": "conditional",
+      "showWhen": "context_lab"
+    }
   ],
   "ai_generated_question_policy": {
     "enabled": true,
     "maxAdditionalQuestions": 2,
     "mustStayWithinModuleScope": true,
-    "forbiddenTopics": ["diagnosis", "prescription", "widal interpretation", "antimalarial choice"],
-    "notes": "Clarify timing and danger signs only; never name malaria or typhoid as a conclusion."
+    "forbiddenTopics": [
+      "diagnosis",
+      "prescription",
+      "widal interpretation",
+      "antimalarial choice",
+      "dosage",
+      "malaria proof from labs"
+    ],
+    "notes": "Clarify timing, medicines taken, and danger signs only; never name malaria or typhoid as a conclusion."
   },
   "allowed_actions": [
     {
       "id": "track_fever_pattern",
       "title": "Track fever pattern",
-      "instruction": "Write the time fever started, highest feeling of heat, and what else you noticed (chills, sweat, weakness).",
+      "instruction": "Write when fever started, the hottest feeling, chills or sweats, and whether it is getting worse.",
       "category": "track",
       "safetyLevel": "low"
     },
     {
-      "id": "hydration_check",
-      "title": "Check fluids",
-      "instruction": "Note whether you can drink water or oral rehydration and whether urine color or amount changed.",
-      "category": "stabilize",
+      "id": "note_medicine_taken",
+      "title": "Note medicine already taken",
+      "instruction": "List medicine names, who gave them, and when you took them — without changing medicines on your own.",
+      "category": "prepare",
       "safetyLevel": "low"
     },
     {
-      "id": "prepare_clinic_visit",
-      "title": "Prepare for clinic",
-      "instruction": "List symptoms, start time, medicines already taken, and questions for the clinician — without naming an illness.",
+      "id": "avoid_unsafe_mixing",
+      "title": "Avoid unsafe medicine mixing",
+      "instruction": "Write all medicines and herbal products taken today before adding anything else; ask a pharmacist before mixing.",
       "category": "prepare",
       "safetyLevel": "medium"
     },
     {
+      "id": "prepare_clinic_summary",
+      "title": "Prepare pharmacist or clinician summary",
+      "instruction": "Organize symptoms, timeline, fluids, medicines taken, and questions for a pharmacist or clinician — without naming an illness.",
+      "category": "prepare",
+      "safetyLevel": "medium"
+    },
+    {
+      "id": "speak_if_persistent",
+      "title": "Speak to a health professional",
+      "instruction": "If fever is worsening or not improving after several days, speak with a clinician or pharmacist today.",
+      "category": "escalate",
+      "safetyLevel": "medium_high"
+    },
+    {
       "id": "seek_urgent_care",
       "title": "Seek urgent care",
-      "instruction": "If breathing is hard, confusion appears, or weakness is severe, go to emergency services or a clinician now.",
+      "instruction": "If breathing is hard, confusion appears, fainting occurs, or weakness is severe, seek emergency services now.",
       "category": "seek_care",
       "safetyLevel": "urgent"
     }
@@ -117,9 +310,12 @@
   "summary_fields": [
     { "id": "concern", "label": "Main concern", "kind": "concern", "required": true },
     { "id": "timeline", "label": "When it started", "kind": "timeline", "required": true },
+    { "id": "peak_heat", "label": "Highest temperature or heat felt", "kind": "symptom", "required": true },
     { "id": "symptoms", "label": "Other symptoms", "kind": "symptom", "required": true },
+    { "id": "vomiting_diarrhea", "label": "Vomiting or diarrhea", "kind": "symptom", "required": false },
     { "id": "fluids", "label": "Fluids and urine", "kind": "symptom", "required": false },
-    { "id": "tried", "label": "What was tried", "kind": "other", "required": false },
+    { "id": "medicines_taken", "label": "Medicines already taken", "kind": "medication", "required": true },
+    { "id": "lab_test_context", "label": "Lab or test context", "kind": "other", "required": false },
     { "id": "clinician_questions", "label": "Questions for clinician", "kind": "question_for_clinician", "required": false }
   ]
 }

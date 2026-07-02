@@ -3,102 +3,288 @@
   "name": "Lab result confusion",
   "country_context": "NG",
   "risk_level": "medium_high",
-  "status": "draft",
-  "version": "1.0.0",
-  "purpose": "Help users organize lab slips and confusion about results (including widal and malaria/typhoid panels) for clinician review — not interpretation as diagnosis.",
+  "status": "review",
+  "version": "1.1.0",
+  "purpose": "Help users organize lab slips and confusion about results — including Widal, malaria, typhoid, blood, urine, and scan reports — for clinician review, not interpretation as illness or treatment decisions.",
   "not_allowed": [
-    "Interpreting widal, malaria, typhoid, or any lab value as confirming a disease",
-    "Telling the user they have malaria, typhoid, infection, or any named condition from a slip",
-    "Prescribing treatment based on lab wording alone",
-    "Replacing the laboratory or clinician who ordered the test",
-    "Declaring results normal or abnormal without clinician context"
+    "Interpreting Widal titre numbers as confirming typhoid or Salmonella infection",
+    "Saying malaria positive or reactive means disease without clinician context and symptoms",
+    "Diagnosing malaria, typhoid, infection, or any named condition from a lab slip",
+    "Prescribing antibiotics, antimalarials, or any treatment based on result wording alone",
+    "Declaring results normal or abnormal without clinician context",
+    "Recommending dosage or dose changes based on lab wording alone",
+    "Replacing emergency services when the person is very unwell regardless of slip wording"
   ],
   "entry_triggers": [
     {
-      "id": "widal",
-      "label": "widal test",
-      "terms": ["widal", "widal test", "typhoid test result", "salmonella on result"],
+      "id": "widal_typhoid",
+      "label": "Widal and typhoid results",
+      "terms": [
+        "widal",
+        "widal test",
+        "typhoid test",
+        "typhoid test result",
+        "salmonella",
+        "1:160",
+        "1:80",
+        "do i have typhoid"
+      ],
       "weight": 1
     },
     {
-      "id": "malaria_typhoid_panel",
-      "label": "malaria and typhoid results",
-      "terms": ["malaria and typhoid", "mp test", "malaria test", "typhoid result", "lab said malaria"],
+      "id": "malaria_panel",
+      "label": "malaria test results",
+      "terms": [
+        "malaria test",
+        "mp test",
+        "lab said malaria",
+        "test said malaria",
+        "malaria and typhoid"
+      ],
       "weight": 0.95
     },
     {
-      "id": "lab_confusion",
-      "label": "confused by lab result",
-      "terms": ["lab result", "test result confusing", "don't understand my result", "what does this test mean"],
+      "id": "general_lab",
+      "label": "general lab or test result",
+      "terms": [
+        "lab result",
+        "test result",
+        "blood test",
+        "urine test",
+        "scan result",
+        "lab said typhoid",
+        "test said typhoid"
+      ],
       "weight": 0.9
+    },
+    {
+      "id": "result_wording",
+      "label": "positive or reactive wording",
+      "terms": [
+        "result says positive",
+        "result says reactive",
+        "positive result",
+        "reactive result"
+      ],
+      "weight": 0.9
+    },
+    {
+      "id": "lab_confusion",
+      "label": "confused by result",
+      "terms": [
+        "don't understand my result",
+        "dont understand my result",
+        "test result confusing",
+        "what does this test mean",
+        "confused by lab result"
+      ],
+      "weight": 0.85
     }
   ],
-  "overlapping_modules": ["fever_malaria_ng_v1", "medication_question_ng_v1", "clinic_pharmacy_prep_ng_v1"],
+  "overlapping_modules": [
+    "fever_malaria_ng_v1",
+    "medication_question_ng_v1",
+    "clinic_pharmacy_prep_ng_v1",
+    "pregnancy_concern_ng_v1",
+    "blood_sugar_ng_v1",
+    "blood_pressure_ng_v1"
+  ],
   "red_flags": [
     {
-      "id": "very_unwell_with_result",
-      "label": "very unwell regardless of slip wording",
-      "terms": ["cannot breathe", "confused", "very weak", "severe pain"],
+      "id": "very_unwell_regardless",
+      "label": "very unwell regardless of result",
+      "terms": [
+        "very unwell",
+        "very sick",
+        "cannot stand",
+        "barely conscious",
+        "very weak regardless"
+      ],
       "severity": "emergency",
       "escalateImmediately": true
     },
     {
-      "id": "started_meds_without_clinician",
-      "label": "started strong medicines from slip alone",
-      "terms": ["started antibiotics alone", "injection without doctor", "treating from lab only"],
-      "severity": "urgent"
+      "id": "neuro_respiratory",
+      "label": "confusion, fainting, or breathing difficulty",
+      "terms": [
+        "confused",
+        "confusion",
+        "fainted",
+        "fainting",
+        "cannot breathe",
+        "difficulty breathing",
+        "breathing hard"
+      ],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "severe_pain",
+      "label": "severe pain",
+      "terms": ["severe pain", "very severe pain", "worst pain", "unbearable pain"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "pregnancy_concerning_result",
+      "label": "pregnancy with concerning result",
+      "terms": [
+        "pregnant and result",
+        "pregnancy test result",
+        "pregnant and lab result",
+        "antenatal test result"
+      ],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "child_concerning_symptoms",
+      "label": "child with concerning symptoms",
+      "terms": [
+        "my child sick",
+        "baby sick after test",
+        "child fever after result",
+        "my baby body hot"
+      ],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "started_meds_from_slip",
+      "label": "started antibiotics or antimalarials from slip alone",
+      "terms": [
+        "started antibiotics",
+        "started antimalarial",
+        "took malaria drug because of result",
+        "treating from lab only",
+        "injection without doctor"
+      ],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "worsening_with_result",
+      "label": "result plus worsening symptoms",
+      "terms": [
+        "getting worse after result",
+        "symptoms worsening",
+        "still sick after result",
+        "fever continues after test",
+        "symptoms not better"
+      ],
+      "severity": "urgent",
+      "escalateImmediately": true
     }
   ],
   "required_questions": [
-    { "id": "test_name", "prompt": "What test was done (name on the slip)?", "kind": "required" },
-    { "id": "where_done", "prompt": "Where was the test done and when?", "kind": "required" },
-    { "id": "confusion_point", "prompt": "What part of the result is confusing you?", "kind": "required" },
-    { "id": "symptoms_now", "prompt": "What symptoms do you have right now?", "kind": "required" },
-    { "id": "who_ordered", "prompt": "Did a clinician order this test, or was it self-requested?", "kind": "required" },
-    { "id": "treatment_started", "prompt": "Have you started any new medicines because of this result?", "kind": "required" }
+    {
+      "id": "test_name",
+      "prompt": "What is the test name as written on the slip or report?",
+      "kind": "required"
+    },
+    {
+      "id": "test_date",
+      "prompt": "When was the test done (date)?",
+      "kind": "required"
+    },
+    {
+      "id": "who_ordered",
+      "prompt": "Who ordered the test — a clinician, self-requested, chemist, or employer screening?",
+      "kind": "required"
+    },
+    {
+      "id": "symptoms_led_to_test",
+      "prompt": "What symptoms led you to do this test, and what are you noticing now?",
+      "kind": "required"
+    },
+    {
+      "id": "unclear_wording",
+      "prompt": "What part of the result is confusing you (words, numbers, positive/reactive flags)?",
+      "kind": "required"
+    },
+    {
+      "id": "full_result_available",
+      "prompt": "Do you have the full result, slip photo, or complete report available?",
+      "kind": "required"
+    },
+    {
+      "id": "medicine_from_result",
+      "prompt": "Have you started any new medicines because of this result?",
+      "kind": "required"
+    },
+    {
+      "id": "symptoms_worsening",
+      "prompt": "Are your symptoms getting worse since the test was done?",
+      "kind": "required"
+    }
   ],
   "ai_generated_question_policy": {
     "enabled": true,
     "maxAdditionalQuestions": 2,
     "mustStayWithinModuleScope": true,
-    "forbiddenTopics": ["diagnosis from labs", "widal interpretation", "treatment choice", "dose advice"],
-    "notes": "Organize slip details and questions for a clinician; never conclude illness from numbers or reactive flags alone."
+    "forbiddenTopics": [
+      "widal interpretation",
+      "diagnosis from labs",
+      "treatment choice",
+      "prescription",
+      "normal or abnormal conclusion",
+      "malaria proof from labs"
+    ],
+    "notes": "Organize slip details, symptoms, and questions for a clinician — never conclude illness from numbers or reactive flags alone."
   },
   "allowed_actions": [
     {
-      "id": "organize_slip",
-      "title": "Organize lab slip details",
-      "instruction": "Write test name, date, facility, and the exact words or values that confuse you — without guessing meaning.",
+      "id": "organize_test_details",
+      "title": "Organize test name, date, and facility",
+      "instruction": "Write test name, date done, facility name, and who ordered it — without guessing what the result means.",
       "category": "track",
       "safetyLevel": "low"
     },
     {
-      "id": "symptom_timeline",
-      "title": "Link symptoms to timeline",
-      "instruction": "Note when symptoms started relative to when the test was done.",
+      "id": "link_symptom_timeline",
+      "title": "Link result to symptom timeline",
+      "instruction": "Note when symptoms started, when the test was done, and how symptoms changed before and after the result.",
       "category": "track",
       "safetyLevel": "low"
     },
     {
-      "id": "clinician_questions",
-      "title": "Questions for clinician",
-      "instruction": "Prepare questions: what the test checks, how it fits your symptoms, and what follow-up is needed.",
+      "id": "prepare_clinician_questions",
+      "title": "Prepare clinician questions",
+      "instruction": "List questions about what the test checks, how it fits your symptoms, and what follow-up is needed — without naming an illness.",
       "category": "prepare",
       "safetyLevel": "medium"
     },
     {
-      "id": "avoid_self_treat",
-      "title": "Pause self-treatment from slip alone",
-      "instruction": "If you started medicines only because of the slip wording, note what you took and ask a clinician or pharmacist before continuing.",
+      "id": "prepare_lab_followup_summary",
+      "title": "Prepare lab follow-up summary",
+      "instruction": "Organize test name, date, confusing wording, current symptoms, and medicines started for a clinician or lab follow-up visit.",
+      "category": "prepare",
+      "safetyLevel": "medium"
+    },
+    {
+      "id": "avoid_self_treat_from_slip",
+      "title": "Avoid self-treatment from slip alone",
+      "instruction": "If medicines were started only because of slip wording, note what was taken and ask a clinician or pharmacist before adding more.",
       "category": "prepare",
       "safetyLevel": "medium_high"
+    },
+    {
+      "id": "seek_urgent_if_unwell",
+      "title": "Seek urgent care if very unwell",
+      "instruction": "If breathing is hard, confusion appears, severe pain occurs, or you feel very unwell regardless of the slip, seek emergency care now.",
+      "category": "seek_care",
+      "safetyLevel": "urgent"
     }
   ],
   "summary_fields": [
-    { "id": "test", "label": "Test name", "kind": "other", "required": true },
-    { "id": "confusion", "label": "What is confusing", "kind": "concern", "required": true },
-    { "id": "symptoms", "label": "Current symptoms", "kind": "symptom", "required": true },
-    { "id": "timeline", "label": "Test date and context", "kind": "timeline", "required": true },
+    { "id": "test_name", "label": "Test name", "kind": "other", "required": true },
+    { "id": "test_date", "label": "Date test was done", "kind": "timeline", "required": true },
+    { "id": "who_ordered", "label": "Who ordered the test", "kind": "other", "required": true },
+    { "id": "symptoms_context", "label": "Symptoms that led to test", "kind": "symptom", "required": true },
+    { "id": "unclear_wording", "label": "Confusing part of result", "kind": "concern", "required": true },
+    { "id": "full_result", "label": "Full result or slip available", "kind": "other", "required": false },
+    { "id": "medicines_started", "label": "Medicines started because of result", "kind": "medication", "required": false },
+    { "id": "symptoms_worsening", "label": "Whether symptoms are worsening", "kind": "symptom", "required": false },
     { "id": "clinician_questions", "label": "Questions for clinician", "kind": "question_for_clinician", "required": false }
   ]
 }

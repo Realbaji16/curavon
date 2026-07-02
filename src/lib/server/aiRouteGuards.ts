@@ -2,6 +2,8 @@ import { getConfiguredAuthMode } from '../auth/authConfig';
 import { DataAuthError, DataPermissionError, DataUnavailableError } from '../data/dataErrors';
 import { detectRedFlags } from '../health/redFlags';
 import type { IntelligenceRiskLevel, HealthIntelligenceResult } from '../health-intelligence/types';
+import { isHealthModuleId } from '../health-intelligence/modules/moduleIds';
+import type { FlowProposalIntelligenceContext } from '../health-intelligence/services/intelligenceContextSerializer';
 import { createSupabaseServerClient } from '../supabase/serverClient';
 import { hasSupabasePublicConfig } from '../supabase/supabaseEnv';
 import type { AIIntakeRiskLevel, AIIntakeResult, AIIntakeSafety, IntakeRequestBody } from './aiIntakeTypes';
@@ -162,7 +164,7 @@ export function assessIntakeSafety(input: string): AIIntakeSafety {
   };
 }
 
-/** Pilot routing: mock-first; live provider calls are not wired yet. */
+/** Provider routing for flow-proposal/summary; intake uses deterministic Phase 1 pipeline only. */
 export function resolveServerAIIntakeMode(): ServerAIIntakeMode {
   const enabledRaw = process.env.AI_ENABLED?.trim().toLowerCase();
   const hasKey = Boolean(process.env.OPENAI_API_KEY?.trim());
@@ -257,6 +259,112 @@ function parseProposedAction(value: unknown): ProposedActionPreview | null {
   };
 }
 
+const FLOW_PROPOSAL_INTELLIGENCE_CONTEXT_KEYS = new Set([
+  'selectedModules',
+  'primaryModuleId',
+  'riskLevel',
+  'normalizedTerms',
+  'questionCount',
+  'summaryFieldIds',
+  'allowedActionIds',
+]);
+
+const FORBIDDEN_INTELLIGENCE_CONTEXT_KEYS = new Set([
+  'rawText',
+  'concernText',
+  'message',
+  'nextStep',
+  'questions',
+  'redFlags',
+  'summaryPreview',
+  'allowedActions',
+  'safety',
+  'prompt',
+  'matchedTriggers',
+  'matchedTerm',
+  'confidence',
+]);
+
+const ALLOWED_INTELLIGENCE_RISK_LEVELS = new Set([
+  'low',
+  'medium',
+  'medium_high',
+  'high',
+  'urgent',
+]);
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+/** Validate derived intake intelligence metadata — returns undefined when shape is unsafe or unknown. */
+export function parseFlowProposalIntelligenceContext(
+  value: unknown,
+): FlowProposalIntelligenceContext | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).some((key) => FORBIDDEN_INTELLIGENCE_CONTEXT_KEYS.has(key))) {
+    return undefined;
+  }
+  if (Object.keys(record).some((key) => !FLOW_PROPOSAL_INTELLIGENCE_CONTEXT_KEYS.has(key))) {
+    return undefined;
+  }
+
+  if (!isStringArray(record.selectedModules) || record.selectedModules.length === 0) {
+    return undefined;
+  }
+  const selectedModules = record.selectedModules.map((moduleId) => moduleId.trim()).filter(Boolean);
+  if (selectedModules.length === 0 || !selectedModules.every((moduleId) => isHealthModuleId(moduleId))) {
+    return undefined;
+  }
+
+  let primaryModuleId: string | null = null;
+  if (record.primaryModuleId === null) {
+    primaryModuleId = null;
+  } else if (typeof record.primaryModuleId === 'string') {
+    const trimmed = record.primaryModuleId.trim();
+    if (trimmed && !isHealthModuleId(trimmed)) {
+      return undefined;
+    }
+    primaryModuleId = trimmed || null;
+  } else if (record.primaryModuleId !== undefined) {
+    return undefined;
+  }
+
+  if (typeof record.riskLevel !== 'string' || !ALLOWED_INTELLIGENCE_RISK_LEVELS.has(record.riskLevel)) {
+    return undefined;
+  }
+
+  if (!isStringArray(record.normalizedTerms)) {
+    return undefined;
+  }
+
+  if (
+    typeof record.questionCount !== 'number' ||
+    !Number.isFinite(record.questionCount) ||
+    record.questionCount < 0
+  ) {
+    return undefined;
+  }
+
+  if (!isStringArray(record.summaryFieldIds) || !isStringArray(record.allowedActionIds)) {
+    return undefined;
+  }
+
+  return {
+    selectedModules,
+    primaryModuleId,
+    riskLevel: record.riskLevel,
+    normalizedTerms: record.normalizedTerms,
+    questionCount: Math.floor(record.questionCount),
+    summaryFieldIds: record.summaryFieldIds,
+    allowedActionIds: record.allowedActionIds.map((actionId) => actionId.trim()).filter(Boolean),
+  };
+}
+
 export function parseFlowProposalBody(
   body: unknown,
 ): { ok: true; data: ParsedFlowProposalInput } | RouteBodyFailure {
@@ -314,6 +422,8 @@ export function parseFlowProposalBody(
       };
     }
 
+    const intelligenceContext = parseFlowProposalIntelligenceContext(record.intelligenceContext);
+
     return {
       ok: true,
       data: {
@@ -322,6 +432,7 @@ export function parseFlowProposalBody(
         proposedAction,
         safetyCheckText,
         privacyLevel,
+        ...(intelligenceContext ? { intelligenceContext } : {}),
       },
     };
   }

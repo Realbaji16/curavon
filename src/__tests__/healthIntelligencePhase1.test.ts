@@ -197,7 +197,7 @@ describe('Healthy.Ai Phase 1 intelligence skeleton', () => {
   });
 
   describe('8. API intake includes result.intelligence', () => {
-    it('returns intelligence payload on safe intake', async () => {
+    it('returns intelligence payload when AI_ENABLED=false', async () => {
       configureSupabaseEnv();
       mockAuthenticatedUser();
       process.env.AI_ENABLED = 'false';
@@ -208,6 +208,34 @@ describe('Healthy.Ai Phase 1 intelligence skeleton', () => {
       expect(body.result?.intelligence?.selectedModules.length).toBeGreaterThan(0);
       expect(body.result?.questions.length).toBeGreaterThanOrEqual(2);
       expect(body.result?.message).toContain('does not diagnose');
+    });
+
+    it('returns intelligence payload when AI_ENABLED=true without OPENAI_API_KEY', async () => {
+      configureSupabaseEnv();
+      mockAuthenticatedUser();
+      process.env.AI_ENABLED = 'true';
+      delete process.env.OPENAI_API_KEY;
+
+      const { status, body } = await postIntake('my body hot and head dey bang');
+      const serialized = JSON.stringify(body);
+
+      expect(status).toBe(200);
+      expect(body.ok).toBe(true);
+      expect(body.result?.intelligence?.selectedModules.length).toBeGreaterThan(0);
+      expect(serialized).not.toContain('OPENAI_API_KEY');
+    });
+
+    it('never exposes OPENAI_API_KEY in intake response', async () => {
+      configureSupabaseEnv();
+      mockAuthenticatedUser();
+      process.env.AI_ENABLED = 'false';
+      process.env.OPENAI_API_KEY = 'sk-test-secret-key-value';
+
+      const { body } = await postIntake('mild headache for two days');
+      const serialized = JSON.stringify(body);
+
+      expect(serialized).not.toContain('sk-test-secret-key-value');
+      expect(serialized).not.toContain('OPENAI_API_KEY');
     });
   });
 

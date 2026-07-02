@@ -16,7 +16,12 @@
     "test:privacy": "vitest run src/__tests__/privacyEnforcement.test.ts src/__tests__/dataPrivacyRoutes.test.ts src/__tests__/safeAnalytics.test.ts src/__tests__/noDirectLocalStorage.test.ts src/__tests__/pilotEnvHardening.test.ts src/__tests__/supabaseSoftDeleteFiltering.test.ts",
     "check:supabase": "node scripts/check-supabase-data-api.mjs",
     "fix:supabase-grants": "node scripts/print-grants-sql.mjs",
-    "setup:supabase-help": "node -e \"console.log('\\n1. Open: https://supabase.com/dashboard/project/mprfgqnmtobbqycvtatd/sql/new\\n2. Run VERIFY_DATABASE.sql to diagnose\\n3. Run SETUP_SUPABASE.sql (full fix) or FIX_DATABASE.sql (grants only)\\n4. npm run check:supabase\\n')\""
+    "setup:supabase-help": "node -e \"console.log('\\n1. Open: https://supabase.com/dashboard/project/mprfgqnmtobbqycvtatd/sql/new\\n2. Run VERIFY_DATABASE.sql to diagnose\\n3. Run SETUP_SUPABASE.sql (full fix) or FIX_DATABASE.sql (grants only)\\n4. npm run check:supabase\\n')\"",
+    "forms:import": "tsx scripts/import-form-insights.ts",
+    "forms:report": "tsx scripts/generate-form-insight-report.ts",
+    "forms:promotion-report": "tsx scripts/generate-form-promotion-report.ts",
+    "forms:promote-shadow": "tsx scripts/promote-shadow-insights.ts",
+    "forms:rollback-overlay": "tsx scripts/rollback-form-overlay.ts"
   },
   "engines": {
     "node": ">=20"
@@ -31,7 +36,9 @@
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@eslint/js": "^10.0.1",
+    "adm-zip": "^0.5.16",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -42,6 +49,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
+    "tsx": "^4.21.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",

@@ -3,108 +3,293 @@
   "name": "Medication question",
   "country_context": "NG",
   "risk_level": "medium_high",
-  "status": "draft",
-  "version": "1.0.0",
-  "purpose": "Help users organize medication questions after chemist, clinic, or home use — preparation for pharmacist or clinician conversation, not dosing advice.",
+  "status": "review",
+  "version": "1.1.0",
+  "purpose": "Help users organize medication questions after chemist, clinic, pharmacy, or home use — preparation for pharmacist or clinician conversation, not drug choice or dosing advice.",
   "not_allowed": [
-    "Prescribing, recommending, or changing any drug or dose",
-    "Telling the user to start, stop, double, or skip medicines",
-    "Replacing a pharmacist or clinician for medication decisions",
-    "Diagnosing side effects as a named disease",
-    "Approving medicines bought without clear labeling or instructions"
+    "Recommending or choosing any drug, brand, or alternative medicine",
+    "Recommending dosage, dose schedules, or how many tablets to take",
+    "Telling the user to start, stop, skip, double, or change any medicine",
+    "Prescribing painkillers, antibiotics, antimalarials, or any alternative drug",
+    "Diagnosing side effects as a named disease or allergy type",
+    "Saying a reaction is harmless or that no professional review is needed when danger signs exist",
+    "Replacing emergency care when a severe allergic reaction or overdose is possible"
   ],
   "entry_triggers": [
     {
-      "id": "chemist_drug",
-      "label": "chemist gave me drug",
-      "terms": ["chemist gave me drug", "chemist gave me medicine", "pharmacy gave me", "bought from chemist"],
+      "id": "chemist_pharmacy_source",
+      "label": "chemist or pharmacy source",
+      "terms": [
+        "chemist gave me drug",
+        "chemist gave me medicine",
+        "pharmacy gave me medicine",
+        "pharmacy gave me",
+        "bought from chemist"
+      ],
       "weight": 1
     },
     {
-      "id": "medication_question",
-      "label": "medication question",
-      "terms": ["medication question", "drug question", "medicine question", "side effect"],
+      "id": "medicines_taken",
+      "label": "medicines already taken",
+      "terms": [
+        "took malaria drug",
+        "took antibiotics",
+        "injection",
+        "had injection",
+        "took medicine",
+        "took drug"
+      ],
       "weight": 0.95
     },
     {
-      "id": "how_to_take",
-      "label": "how to take medicine",
-      "terms": ["how to take", "when to take", "can I take together", "mixing drugs"],
+      "id": "side_effects",
+      "label": "side effect or reaction",
+      "terms": [
+        "side effect",
+        "body itching after drug",
+        "itching after medicine",
+        "swelling after medicine",
+        "rash after drug",
+        "medicine is making me weak",
+        "drug no work",
+        "medicine not working",
+        "no change after drug"
+      ],
+      "weight": 0.95
+    },
+    {
+      "id": "dose_timing_worry",
+      "label": "missed or extra dose worry",
+      "terms": ["missed medicine", "missed my medicine", "forgot to take", "double dose", "took too many"],
+      "weight": 0.9
+    },
+    {
+      "id": "continue_stop_question",
+      "label": "continue or stop question",
+      "terms": [
+        "can I stop this drug",
+        "can i stop this drug",
+        "should I continue this drug",
+        "should i continue this drug",
+        "stop this medicine",
+        "continue this medicine"
+      ],
+      "weight": 0.9
+    },
+    {
+      "id": "medication_question_general",
+      "label": "general medication question",
+      "terms": ["medication question", "drug question", "medicine question", "how to take"],
       "weight": 0.85
     }
   ],
-  "overlapping_modules": ["missed_medication_ng_v1", "clinic_pharmacy_prep_ng_v1", "lab_result_confusion_ng_v1"],
+  "overlapping_modules": [
+    "missed_medication_ng_v1",
+    "skin_rash_itching_ng_v1",
+    "fever_malaria_ng_v1",
+    "lab_result_confusion_ng_v1",
+    "pregnancy_concern_ng_v1",
+    "child_fever_illness_ng_v1"
+  ],
   "red_flags": [
     {
-      "id": "severe_reaction",
-      "label": "severe allergic reaction",
-      "terms": ["throat swelling", "cannot breathe", "severe rash", "anaphylaxis"],
+      "id": "breathing_after_medicine",
+      "label": "difficulty breathing after medicine",
+      "terms": [
+        "difficulty breathing after medicine",
+        "cannot breathe after medicine",
+        "breathing hard after drug",
+        "trouble breathing after taking"
+      ],
       "severity": "emergency",
       "escalateImmediately": true
     },
     {
-      "id": "overdose",
-      "label": "too many pills",
-      "terms": ["took too many", "overdose", "too many pills", "double dose by mistake"],
+      "id": "face_lip_tongue_swelling",
+      "label": "face, lip, or tongue swelling",
+      "terms": [
+        "face swelling",
+        "lip swelling",
+        "tongue swelling",
+        "throat swelling",
+        "lips swelling"
+      ],
       "severity": "emergency",
       "escalateImmediately": true
     },
     {
-      "id": "pregnancy_meds",
-      "label": "pregnancy and new medicine",
-      "terms": ["pregnant and took", "pregnant and medicine"],
-      "severity": "urgent"
+      "id": "severe_rash",
+      "label": "severe rash",
+      "terms": ["severe rash", "rash all over", "rash spreading fast", "purple rash"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "fainting",
+      "label": "fainting",
+      "terms": ["fainted", "fainting", "passed out", "collapsed after medicine"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "severe_weakness",
+      "label": "severe weakness",
+      "terms": ["severe weakness", "very weak after medicine", "cannot stand after drug"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "too_many_pills",
+      "label": "took too many pills",
+      "terms": ["took too many pills", "too many pills", "overdose", "double dose by mistake"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "child_accidental_medicine",
+      "label": "child took medicine accidentally",
+      "terms": [
+        "child took medicine",
+        "baby swallowed medicine",
+        "child took drug accidentally",
+        "my child took my medicine"
+      ],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "pregnancy_medication_concern",
+      "label": "pregnancy medication concern",
+      "terms": [
+        "pregnant and took medicine",
+        "pregnant and medicine",
+        "pregnancy medication concern",
+        "pregnant and new medicine"
+      ],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "severe_vomiting_after_medicine",
+      "label": "severe vomiting after medication",
+      "terms": [
+        "severe vomiting after medicine",
+        "vomiting everything after drug",
+        "cannot keep medicine down"
+      ],
+      "severity": "urgent",
+      "escalateImmediately": true
     }
   ],
   "required_questions": [
-    { "id": "medicine_name", "prompt": "What is the medicine name (as written on the pack or receipt)?", "kind": "required" },
-    { "id": "why_taking", "prompt": "Why are you taking it — what symptom or instruction led to it?", "kind": "required" },
-    { "id": "instructions_given", "prompt": "What instructions did the chemist or clinician give you?", "kind": "required" },
-    { "id": "concern", "prompt": "What is your main worry — side effect, timing, mixing, or something else?", "kind": "required" },
-    { "id": "other_meds", "prompt": "Are you taking any other medicines or herbal products?", "kind": "required" }
+    {
+      "id": "medicine_name",
+      "prompt": "What is the medicine name, as written on the pack or receipt if you know it?",
+      "kind": "required"
+    },
+    {
+      "id": "medicine_source",
+      "prompt": "Where did it come from — doctor, pharmacy, chemist, friend, or home?",
+      "kind": "required"
+    },
+    {
+      "id": "when_taken",
+      "prompt": "When did you take it (or when was it given)?",
+      "kind": "required"
+    },
+    {
+      "id": "times_taken_history",
+      "prompt": "Roughly how many times have you taken it so far? This is only to record history — not for changing how you take it.",
+      "kind": "required"
+    },
+    {
+      "id": "changes_after",
+      "prompt": "What changed after taking it — better, worse, itching, swelling, weakness, or no change?",
+      "kind": "required"
+    },
+    {
+      "id": "allergies",
+      "prompt": "Do you have any known medicine or food allergies?",
+      "kind": "required"
+    },
+    {
+      "id": "conditions_context",
+      "prompt": "Any current health conditions, pregnancy, or is this for a child?",
+      "kind": "required"
+    },
+    {
+      "id": "packaging_photo",
+      "prompt": "Do you have the packaging, label, receipt, or a photo of the medicine?",
+      "kind": "required"
+    }
   ],
   "ai_generated_question_policy": {
     "enabled": true,
     "maxAdditionalQuestions": 2,
     "mustStayWithinModuleScope": true,
-    "forbiddenTopics": ["dose adjustment", "drug choice", "diagnosis", "stop or start medication"],
-    "notes": "Only clarify what was taken, instructions received, and concerns to raise with a professional."
+    "forbiddenTopics": [
+      "drug choice",
+      "dose adjustment",
+      "diagnosis",
+      "stop or start medication",
+      "prescription",
+      "alternative medicine recommendation"
+    ],
+    "notes": "Clarify what was taken, where it came from, timing, reactions, and allergies — never tell the user to stop, start, or change medicines."
   },
   "allowed_actions": [
     {
-      "id": "medication_note",
-      "title": "Write a medication note",
-      "instruction": "List medicine names, who gave them, instructions on the label, and your exact concern.",
+      "id": "list_medicines_taken",
+      "title": "List medicines already taken",
+      "instruction": "Write medicine names, who gave them, when you took them, and what changed afterward.",
+      "category": "track",
+      "safetyLevel": "low"
+    },
+    {
+      "id": "keep_packaging_labels",
+      "title": "Keep packaging and labels",
+      "instruction": "Keep the pack, label, or receipt safe so a pharmacist or clinician can review the exact product.",
       "category": "prepare",
       "safetyLevel": "low"
     },
     {
-      "id": "pharmacist_questions",
-      "title": "Questions for pharmacist",
-      "instruction": "Prepare questions about timing, interactions, and side effects to ask a licensed pharmacist.",
+      "id": "prepare_pharmacist_summary",
+      "title": "Prepare pharmacist summary",
+      "instruction": "Organize medicine name, source, timing, reaction, allergies, and questions for a pharmacist conversation.",
       "category": "prepare",
       "safetyLevel": "medium"
     },
     {
-      "id": "clinician_questions",
-      "title": "Questions for clinician",
-      "instruction": "Prepare questions if the medicine came from a clinic or you have ongoing conditions.",
-      "category": "prepare",
-      "safetyLevel": "medium"
+      "id": "speak_pharmacist_clinician",
+      "title": "Speak to pharmacist or clinician",
+      "instruction": "Speak with a licensed pharmacist or clinician about side effects, missed doses, or whether to continue — not for emergency danger signs.",
+      "category": "escalate",
+      "safetyLevel": "medium_high"
     },
     {
       "id": "seek_urgent_reaction",
-      "title": "Seek urgent care for reaction",
-      "instruction": "If breathing is difficult, swelling occurs, or you took too many pills, seek emergency help now.",
+      "title": "Seek urgent care for allergic reaction or too many pills",
+      "instruction": "If breathing is difficult, swelling occurs, severe rash appears, or too many pills were taken, seek emergency help now.",
       "category": "seek_care",
       "safetyLevel": "urgent"
+    },
+    {
+      "id": "avoid_unsafe_mixing",
+      "title": "Avoid mixing more medicines without guidance",
+      "instruction": "Note all medicines and herbal products taken today; ask a pharmacist before adding or mixing anything else.",
+      "category": "prepare",
+      "safetyLevel": "medium"
     }
   ],
   "summary_fields": [
-    { "id": "medicines", "label": "Medicines involved", "kind": "medication", "required": true },
-    { "id": "concern", "label": "Main worry", "kind": "concern", "required": true },
-    { "id": "instructions", "label": "Instructions received", "kind": "other", "required": true },
-    { "id": "timeline", "label": "When taken / started", "kind": "timeline", "required": false },
+    { "id": "medicine_name", "label": "Medicine name if known", "kind": "medication", "required": true },
+    { "id": "medicine_source", "label": "Where medicine came from", "kind": "other", "required": true },
+    { "id": "when_taken", "label": "When taken", "kind": "timeline", "required": true },
+    { "id": "times_taken", "label": "Times taken (history only)", "kind": "timeline", "required": false },
+    { "id": "reaction_after", "label": "What changed after taking it", "kind": "symptom", "required": true },
+    { "id": "allergies", "label": "Known allergies", "kind": "other", "required": false },
+    { "id": "conditions_context", "label": "Conditions, pregnancy, or child context", "kind": "other", "required": false },
+    { "id": "packaging_photo", "label": "Packaging, label, or photo available", "kind": "other", "required": false },
     { "id": "pharmacist_questions", "label": "Questions for pharmacist", "kind": "question_for_clinician", "required": false }
   ]
 }

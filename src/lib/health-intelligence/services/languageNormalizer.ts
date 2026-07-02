@@ -1,3 +1,6 @@
+import type { FormInsightProductContext } from '../../form-insights/formInsightContextTypes';
+import { enrichNigerianHealthLanguageNormalization } from '../../form-insights/formInsightContextService';
+import { resolveFormInsightContext } from '../../form-insights/runtime/productContextProvider';
 import type { HealthModuleId } from '../modules/moduleIds';
 import { maskBlockedPhraseRegions } from '../nigeria/blockers';
 import { NIGERIAN_HEALTH_PHRASES, type PhraseMatch } from '../nigeria/healthPhrases';
@@ -7,6 +10,10 @@ export type NigerianHealthLanguageNormalization = {
   moduleHints: HealthModuleId[];
   riskCheckNeeded: boolean;
   tags: string[];
+};
+
+export type NormalizeNigerianHealthLanguageOptions = {
+  formInsightContext?: FormInsightProductContext;
 };
 
 type SourceEntry = {
@@ -89,7 +96,10 @@ function uniqueTags(matches: PhraseMatch[]): string[] {
 }
 
 /** Deterministic Nigerian English / Pidgin health phrase normalization. No AI. */
-export function normalizeNigerianHealthLanguage(input: string): NigerianHealthLanguageNormalization {
+export function normalizeNigerianHealthLanguage(
+  input: string,
+  options: NormalizeNigerianHealthLanguageOptions = {},
+): NigerianHealthLanguageNormalization {
   const normalized = normalizeInput(input);
   const masked = maskBlockedPhraseRegions(normalized);
   const matches = findNonOverlappingMatches(masked);
@@ -99,10 +109,17 @@ export function normalizeNigerianHealthLanguage(input: string): NigerianHealthLa
     normalizedTerms[match.matchedSource] = match.definition.normalizedTerm;
   }
 
-  return {
+  const base = {
     normalizedTerms,
     moduleHints: uniqueModuleHints(matches),
     riskCheckNeeded: matches.some((match) => match.definition.riskCheckNeeded),
     tags: uniqueTags(matches),
   };
+
+  const context = resolveFormInsightContext(options.formInsightContext);
+  if (context.routingTriggers.length === 0) {
+    return base;
+  }
+
+  return enrichNigerianHealthLanguageNormalization(input, base, context);
 }

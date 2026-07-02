@@ -54,6 +54,7 @@ import {
   postAIIntake,
   postFlowProposal,
   processAIIntakeClientResult,
+  type FlowProposalIntelligenceContext,
 } from '../lib/client/aiRoutes';
 import type { PlanAction, PlanCategory } from '../lib/plan/planTypes';
 import {
@@ -171,6 +172,8 @@ export function AskCuravonScreen() {
   const [aiRefinedConcern, setAiRefinedConcern] = useState('');
   const [aiMissingQuestions, setAiMissingQuestions] = useState<string[]>([]);
   const [aiSelectedModuleLabels, setAiSelectedModuleLabels] = useState<string[]>([]);
+  const [aiIntelligenceContext, setAiIntelligenceContext] =
+    useState<FlowProposalIntelligenceContext | null>(null);
   const [askFinalAction, setAskFinalAction] = useState<PlanAction | null>(null);
   const [isAcceptingAction, setIsAcceptingAction] = useState(false);
   const [intakeSessionId, setIntakeSessionId] = useState<string | null>(null);
@@ -195,6 +198,7 @@ export function AskCuravonScreen() {
     setAiRefinedConcern('');
     setAiMissingQuestions([]);
     setAiSelectedModuleLabels([]);
+    setAiIntelligenceContext(null);
     setAskFinalAction(null);
     setIntakeSessionId(null);
     setDraftHealthFlowId(null);
@@ -225,12 +229,14 @@ export function AskCuravonScreen() {
       setAiRefinedConcern(processed.refinement.understoodSummary);
       setAiMissingQuestions(processed.refinement.guidedQuestions);
       setAiSelectedModuleLabels(processed.refinement.selectedModuleLabels);
+      setAiIntelligenceContext(processed.intelligenceContext);
 
       if (sessionId) {
         void updateAskIntakeSession(sessionId, {
           payload: {
             source: 'ask_curavon',
             intelligenceMeta: processed.refinement.metadata,
+            intelligenceContext: processed.intelligenceContext,
           },
         });
       }
@@ -247,6 +253,7 @@ export function AskCuravonScreen() {
     setAiRefinedConcern('');
     setAiMissingQuestions([]);
     setAiSelectedModuleLabels([]);
+    setAiIntelligenceContext(null);
     setMode('intake');
     void createAskIntakeSession({
       status: 'open',
@@ -277,6 +284,7 @@ export function AskCuravonScreen() {
       buildAskFlowProposalFromIntake(intake, {
         privacyLevel,
         nextSafeStep: safeStepPreview,
+        intelligenceContext: aiIntelligenceContext,
       }),
     );
 
@@ -408,6 +416,7 @@ export function AskCuravonScreen() {
     intake,
     intakeStep,
     intakeSessionId,
+    aiIntelligenceContext,
     isFinishingIntake,
     logRedFlag,
     refreshHealthSnapshot,

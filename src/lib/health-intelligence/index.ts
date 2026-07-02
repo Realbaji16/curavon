@@ -39,6 +39,19 @@ export {
   listHealthModules,
 } from './modules/moduleCatalog';
 
+export {
+  PRIORITY_PHASE2_MODULE_IDS,
+  validateAllPriorityModuleQuality,
+  validatePriorityModuleQuality,
+} from './modules/moduleQuality';
+export type {
+  ClinicalReviewMarker,
+  ModuleQualityCheckId,
+  ModuleQualityIssue,
+  ModuleQualityResult,
+  PriorityPhase2ModuleId,
+} from './modules/moduleQuality';
+
 export { normalizeNigerianHealthLanguage } from './services/languageNormalizer';
 export type { NigerianHealthLanguageNormalization } from './services/languageNormalizer';
 
@@ -56,6 +69,15 @@ export type {
   GuidedQuestion,
   GuidedQuestionType,
 } from './services/guidedQuestionEngine';
+
+export {
+  getModuleQuestionStrategy,
+  getStrategyEnforcedQuestionIds,
+  GLOBAL_MAX_GUIDED_QUESTIONS,
+  moduleQuestionKey,
+  resolveMaxGuidedQuestions,
+} from './services/moduleQuestionStrategy';
+export type { ModuleQuestionStrategy } from './services/moduleQuestionStrategy';
 
 export { NIGERIAN_HEALTH_PHRASES } from './nigeria/healthPhrases';
 export type { HealthPhraseDefinition, PhraseMatch } from './nigeria/healthPhrases';
@@ -90,8 +112,18 @@ export type {
   BlockedOutputViolation,
 } from './actions/blockedOutputs';
 
-export { resolveNextBestAction, selectNextBestAction } from './services/nextBestActionPolicy';
-export type { NextBestActionInput, NextBestActionResult } from './services/nextBestActionPolicy';
+export { resolveNextBestAction, selectNextBestAction, resolveFlowProposalActionFromIntelligenceContext } from './services/nextBestActionPolicy';
+export type { NextBestActionInput, NextBestActionResult, ModuleFlowProposalAction } from './services/nextBestActionPolicy';
+
+export {
+  resolveModuleFlowProposalAction,
+  toProposedActionPreview,
+  proposedActionText,
+} from './services/moduleActionTemplates';
+export type {
+  ModuleFlowProposalPlanCategory,
+  ModuleFlowProposalPreview,
+} from './services/moduleActionTemplates';
 
 export {
   assertHealthIntelligenceResponseSafe,
@@ -119,3 +151,15 @@ export type { RedFlagBridgeResult, RedFlagDetectionResult, RedFlagMatch } from '
 
 export { runHealthIntelligencePipeline } from './services/healthIntelligencePipeline';
 export type { HealthIntelligencePipelineInput } from './services/healthIntelligencePipeline';
+
+export { composeModuleAwareIntakeMessage } from './services/moduleResponseComposer';
+export type {
+  ComposeModuleAwareIntakeMessageInput,
+  ModuleAwareSelectedModule,
+} from './services/moduleResponseComposer';
+
+export {
+  assertFlowProposalIntelligenceContextSafe,
+  serializeIntelligenceForFlowProposal,
+} from './services/intelligenceContextSerializer';
+export type { FlowProposalIntelligenceContext } from './services/intelligenceContextSerializer';

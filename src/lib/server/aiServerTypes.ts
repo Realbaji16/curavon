@@ -1,4 +1,7 @@
 import type { AIIntakeRiskLevel, AIIntakeSafety } from './aiIntakeTypes';
+import type { FlowProposalIntelligenceContext } from '../health-intelligence/services/intelligenceContextSerializer';
+
+export type { FlowProposalIntelligenceContext };
 
 export type AIServerMode = 'flow_proposal' | 'summary';
 
@@ -13,6 +16,8 @@ export type ProposedActionPreview = {
   reason: string;
   category: string;
   safetyLevel: 'normal' | 'caution' | 'urgent';
+  /** Present when action was derived from Phase 2 intelligence context. */
+  sourceActionId?: string;
 };
 
 export type FlowProposalResponse = {
@@ -55,6 +60,7 @@ export type FlowProposalRequestBody = {
   safetyResult?: unknown;
   proposedAction?: unknown;
   privacyLevel?: unknown;
+  intelligenceContext?: unknown;
 };
 
 export type SummaryRequestBody = {
@@ -82,6 +88,7 @@ export type ParsedFlowProposalInput =
       proposedAction: ProposedActionPreview;
       safetyCheckText: string;
       privacyLevel: 'standard' | 'sensitive';
+      intelligenceContext?: FlowProposalIntelligenceContext;
     };
 
 export type ParsedSummaryInput = {

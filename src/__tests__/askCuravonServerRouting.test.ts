@@ -11,6 +11,8 @@ import {
   postFlowProposal,
   processAIIntakeClientResult,
 } from '../lib/client/aiRoutes';
+import { serializeIntelligenceForFlowProposal } from '../lib/health-intelligence/services/intelligenceContextSerializer';
+import { runHealthIntelligencePipeline } from '../lib/health-intelligence/services/healthIntelligencePipeline';
 import { runAIClient } from '../lib/ai/aiClient';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,9 +35,38 @@ describe('Ask Curavon server flow-proposal routing', () => {
     expect(source).toMatch(/postAIIntake/);
     expect(source).toMatch(/processAIIntakeClientResult/);
     expect(source).toMatch(/buildAskFlowProposalFromIntake/);
+    expect(source).toMatch(/aiIntelligenceContext/);
     expect(source).not.toMatch(/runAIOrchestrator/);
     expect(source).not.toMatch(/generateCuravonNextAction/);
     expect(source).not.toMatch(/createAskDraftHealthFlow/);
+  });
+
+  it('buildAskFlowProposalFromIntake includes intelligenceContext when available', () => {
+    const intelligenceContext = serializeIntelligenceForFlowProposal(
+      runHealthIntelligencePipeline({
+        rawText: 'my body hot since yesterday and took malaria drug',
+      }),
+    );
+
+    const body = buildAskFlowProposalFromIntake(
+      {
+        ...EMPTY_ASK_INTAKE,
+        mainConcern: 'Mild headache for two days',
+        concernType: 'Physical symptom',
+        timeline: 'A few days',
+        goal: 'One next step',
+      },
+      {
+        privacyLevel: 'standard',
+        nextSafeStep: 'Write down when symptoms started.',
+        intelligenceContext,
+      },
+    );
+
+    expect(body.intelligenceContext).toEqual(intelligenceContext);
+    expect(body.intelligenceContext?.selectedModules).toContain('fever_malaria_ng_v1');
+    expect(body).not.toHaveProperty('rawText');
+    expect(body.intelligenceContext).not.toHaveProperty('message');
   });
 
   it('buildAskFlowProposalFromIntake includes safetyCheckText without logging helpers', () => {
@@ -205,6 +236,46 @@ describe('Ask Curavon server flow-proposal routing', () => {
     expect(refinement.understoodSummary).toContain('fever / feeling hot');
     expect(refinement.selectedModuleLabels).toContain('Fever & malaria concern');
     expect(refinement.guidedQuestions).toEqual(['When did it start?', 'Any weakness?']);
+
+    const processed = processAIIntakeClientResult({
+      ok: true,
+      status: 200,
+      data: {
+        ok: true,
+        mode: 'intake',
+        safety: { allowed: true, riskLevel: 'high' },
+        result: {
+          message: 'safe message',
+          questions: ['When did it start?'],
+          nextStep: 'Answer a few short questions',
+          intelligence: {
+            message: 'safe message',
+            normalizedTerms: ['fever / feeling hot', 'headache'],
+            selectedModules: [
+              { moduleId: 'fever_malaria_ng_v1', confidence: 0.9, matchedTriggers: ['body hot'] },
+            ],
+            primaryModuleId: 'fever_malaria_ng_v1',
+            riskLevel: 'high',
+            redFlags: [],
+            questions: [{ id: 'q1', prompt: 'When did it start?', source: 'module_required' }],
+            allowedActions: [],
+            nextStep: 'Answer a few short questions',
+            summaryPreview: {
+              title: 'Clinician summary preparation',
+              fields: [{ fieldId: 'onset', label: 'Onset', value: '' }],
+              footer: 'not a diagnosis',
+            },
+            safety: { allowed: true, riskLevel: 'high' },
+          },
+        },
+      },
+    });
+    expect(processed.kind).toBe('success');
+    if (processed.kind === 'success') {
+      expect(processed.intelligenceContext.selectedModules).toContain('fever_malaria_ng_v1');
+      expect(processed.intelligenceContext).not.toHaveProperty('message');
+      expect(processed.intelligenceContext).not.toHaveProperty('rawText');
+    }
   });
 
   it('processAIIntakeClientResult maps safety_blocked without raw input echo', async () => {

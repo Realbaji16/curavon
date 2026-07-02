@@ -120,7 +120,7 @@ describe('AI intake route (Fix 7)', () => {
     expect(body.safety.allowed).toBe(true);
   });
 
-  it('returns controlled 503 when AI_ENABLED=true but server key is missing', async () => {
+  it('runs deterministic pipeline when AI_ENABLED=true but server key is missing', async () => {
     configureSupabaseEnv();
     mockAuthenticatedUser();
     process.env.AI_ENABLED = 'true';
@@ -128,9 +128,10 @@ describe('AI intake route (Fix 7)', () => {
 
     const { status, body } = await postIntake({ input: 'mild headache for two days' });
 
-    expect(status).toBe(503);
-    expect(body.ok).toBe(false);
-    expect(body.error?.code).toBe('ai_unavailable');
+    expect(status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.result?.intelligence?.selectedModules.length).toBeGreaterThan(0);
+    expect(body.result?.message).toContain('does not diagnose');
   });
 
   it('runs deterministic pipeline when AI_ENABLED=true with provider key (no live call)', async () => {

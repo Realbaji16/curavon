@@ -3,115 +3,298 @@
   "name": "Headache",
   "country_context": "NG",
   "risk_level": "medium",
-  "status": "draft",
-  "version": "1.0.0",
-  "purpose": "Organize headache concerns and safe next steps for users in Nigeria — especially common local descriptions — without diagnosing cause.",
+  "status": "review",
+  "version": "1.1.0",
+  "purpose": "Organize headache concerns and safe next steps for users in Nigeria — including local descriptions — without diagnosing cause or naming stroke, migraine, or hypertension as conclusions.",
   "not_allowed": [
-    "Diagnosing migraine, hypertension, meningitis, or any named condition",
+    "Diagnosing migraine, stroke, hypertension, meningitis, or any named condition",
     "Prescribing painkillers, blood pressure medicines, or dosage changes",
+    "Recommending dosage or how many tablets to take",
+    "Dismissing severe, sudden, or neurological symptoms as minor",
+    "Saying this is just stress or that no clinician review is needed when danger signs exist",
     "Telling the user a headache is harmless without clinician review when danger signs exist",
     "Replacing emergency care for sudden severe headache or neurological symptoms"
   ],
   "entry_triggers": [
     {
       "id": "head_dey_bang",
-      "label": "head dey bang",
-      "terms": ["head dey bang", "my head dey bang", "head is banging", "headache", "migraine"],
+      "label": "head dey bang / banging head",
+      "terms": [
+        "head dey bang",
+        "my head dey bang",
+        "head is banging",
+        "headache",
+        "head pain",
+        "pain for head"
+      ],
       "weight": 1
     },
     {
-      "id": "head_pain",
-      "label": "head pain",
-      "terms": ["head pain", "pain for head", "heavy head", "pressure in my head"],
+      "id": "head_pressure",
+      "label": "heavy or pressured head",
+      "terms": ["heavy head", "pressure in my head", "head feels heavy", "tight head"],
+      "weight": 0.95
+    },
+    {
+      "id": "migraine_language",
+      "label": "migraine language",
+      "terms": ["migraine", "migraine headache", "bad migraine"],
+      "weight": 0.85
+    },
+    {
+      "id": "vision_headache",
+      "label": "headache with vision change",
+      "terms": [
+        "blurry vision with headache",
+        "headache and blurry vision",
+        "headache with blurry vision",
+        "vision loss with headache"
+      ],
+      "weight": 0.95
+    },
+    {
+      "id": "bp_headache",
+      "label": "headache and blood pressure",
+      "terms": [
+        "headache and bp",
+        "headache and blood pressure",
+        "headache with high bp",
+        "bp and headache"
+      ],
       "weight": 0.9
     },
     {
-      "id": "after_stress",
-      "label": "stress-related headache",
-      "terms": ["headache from stress", "after no sleep", "after screen"],
-      "weight": 0.6
+      "id": "stress_sleep_headache",
+      "label": "stress or sleep-related headache",
+      "terms": [
+        "headache after no sleep",
+        "headache after stress",
+        "headache from stress",
+        "after no sleep",
+        "after screen"
+      ],
+      "weight": 0.75
+    },
+    {
+      "id": "fever_headache",
+      "label": "headache with fever",
+      "terms": ["headache with fever", "fever with headache", "headache and body hot"],
+      "weight": 0.85
     }
   ],
-  "overlapping_modules": ["stress_anxiety_sleep_ng_v1", "blood_pressure_ng_v1", "pregnancy_concern_ng_v1"],
+  "overlapping_modules": [
+    "blood_pressure_ng_v1",
+    "fever_malaria_ng_v1",
+    "eye_ear_dental_ng_v1",
+    "stress_anxiety_sleep_ng_v1",
+    "pregnancy_concern_ng_v1",
+    "medication_question_ng_v1"
+  ],
   "red_flags": [
     {
-      "id": "worst_headache",
-      "label": "worst headache of life",
-      "terms": ["worst headache", "sudden severe headache", "thunderclap headache"],
+      "id": "sudden_severe",
+      "label": "sudden severe headache",
+      "terms": ["sudden severe headache", "very sudden headache", "thunderclap headache"],
       "severity": "emergency",
       "escalateImmediately": true
     },
     {
-      "id": "neuro_symptoms",
-      "label": "weakness, confusion, or vision change",
-      "terms": ["face drooping", "slurred speech", "sudden weakness", "vision loss", "confused"],
+      "id": "worst_headache",
+      "label": "worst headache of life",
+      "terms": ["worst headache", "worst headache of my life", "worst head pain ever"],
       "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "vision_loss",
+      "label": "blurry vision or vision loss",
+      "terms": ["blurry vision", "blurred vision", "vision loss", "double vision", "cannot see well"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "weakness_one_side",
+      "label": "weakness on one side",
+      "terms": ["weakness on one side", "one side weak", "arm weak on one side", "leg weak on one side"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "confusion",
+      "label": "confusion",
+      "terms": ["confused", "confusion", "not making sense", "barely awake"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "speech_difficulty",
+      "label": "difficulty speaking",
+      "terms": ["slurred speech", "cannot speak well", "difficulty speaking", "speech difficulty"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "fainting",
+      "label": "fainting",
+      "terms": ["fainted", "fainting", "passed out", "collapsed"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "seizure",
+      "label": "seizure",
+      "terms": ["seizure", "convulsion", "fitting", "jerking"],
+      "severity": "emergency",
+      "escalateImmediately": true
+    },
+    {
+      "id": "head_injury",
+      "label": "head injury",
+      "terms": ["hit my head", "head injury", "after accident", "bumped my head hard"],
+      "severity": "urgent",
       "escalateImmediately": true
     },
     {
       "id": "fever_stiff_neck",
       "label": "fever with stiff neck",
-      "terms": ["fever with headache", "stiff neck", "neck stiffness"],
+      "terms": ["fever with headache", "stiff neck", "neck stiffness", "neck stiff with fever"],
       "severity": "urgent",
       "escalateImmediately": true
     },
     {
-      "id": "head_injury",
-      "label": "headache after injury",
-      "terms": ["hit my head", "head injury", "after accident"],
-      "severity": "urgent"
+      "id": "pregnancy_severe_headache",
+      "label": "pregnancy with severe headache",
+      "terms": ["severe headache pregnant", "pregnant and severe headache", "pregnancy headache severe"],
+      "severity": "urgent",
+      "escalateImmediately": true
+    },
+    {
+      "id": "very_high_bp_reading",
+      "label": "very high blood pressure reading",
+      "terms": [
+        "bp 200",
+        "blood pressure 200",
+        "very high bp",
+        "bp reading very high",
+        "bp 180",
+        "blood pressure 180"
+      ],
+      "severity": "watch"
     }
   ],
   "required_questions": [
-    { "id": "onset", "prompt": "When did the headache start — sudden or gradual?", "kind": "required" },
-    { "id": "severity", "prompt": "How strong is it right now (mild, moderate, very strong)?", "kind": "required" },
-    { "id": "pattern", "prompt": "Is it constant or does it come and go?", "kind": "required" },
-    { "id": "associated", "prompt": "Any nausea, light sensitivity, fever, or neck stiffness?", "kind": "required" },
-    { "id": "tried", "prompt": "What have you tried so far (rest, fluids, medicine from chemist)?", "kind": "required" }
+    {
+      "id": "onset",
+      "prompt": "When did the headache start?",
+      "kind": "required"
+    },
+    {
+      "id": "onset_pattern",
+      "prompt": "Did it start suddenly or gradually?",
+      "kind": "required"
+    },
+    {
+      "id": "severity",
+      "prompt": "How strong is it right now (mild, moderate, very strong)?",
+      "kind": "required"
+    },
+    {
+      "id": "location_pattern",
+      "prompt": "Where do you feel it, and is it constant or does it come and go?",
+      "kind": "required"
+    },
+    {
+      "id": "vision_changes",
+      "prompt": "Any blurry vision, double vision, or vision loss?",
+      "kind": "required"
+    },
+    {
+      "id": "neuro_symptoms",
+      "prompt": "Any weakness on one side, confusion, or difficulty speaking?",
+      "kind": "required"
+    },
+    {
+      "id": "fever_neck",
+      "prompt": "Any fever or stiff neck with the headache?",
+      "kind": "required"
+    },
+    {
+      "id": "head_injury_check",
+      "prompt": "Did a recent head injury or hard bump happen before this headache?",
+      "kind": "required"
+    },
+    {
+      "id": "bp_reading",
+      "prompt": "If you know a blood pressure reading, what was it (and when was it taken)?",
+      "kind": "conditional",
+      "showWhen": "context_bp"
+    },
+    {
+      "id": "medicines_taken",
+      "prompt": "What medicines have you already taken for this headache, including from a chemist?",
+      "kind": "required"
+    }
   ],
   "ai_generated_question_policy": {
     "enabled": true,
     "maxAdditionalQuestions": 2,
     "mustStayWithinModuleScope": true,
-    "forbiddenTopics": ["diagnosis", "prescription", "blood pressure treatment"],
-    "notes": "Clarify timing, severity, and danger signs only."
+    "forbiddenTopics": [
+      "diagnosis",
+      "prescription",
+      "blood pressure treatment",
+      "dosage",
+      "stroke diagnosis",
+      "migraine diagnosis"
+    ],
+    "notes": "Clarify timing, severity, neurological danger signs, and medicines already taken — never name a diagnosis."
   },
   "allowed_actions": [
     {
-      "id": "track_headache",
-      "title": "Track headache details",
-      "instruction": "Note start time, severity, triggers, and what makes it better or worse.",
+      "id": "track_headache_timeline",
+      "title": "Track headache timeline",
+      "instruction": "Write when it started, whether it was sudden or gradual, severity, and how it changed through the day.",
       "category": "track",
       "safetyLevel": "low"
     },
     {
-      "id": "rest_hydrate",
-      "title": "Rest and hydrate",
-      "instruction": "Take a short rest in a quiet place and drink water if you have not recently.",
-      "category": "stabilize",
+      "id": "note_triggers_symptoms",
+      "title": "Note triggers and associated symptoms",
+      "instruction": "List possible triggers (stress, poor sleep, dehydration) and associated symptoms such as nausea or vision changes — without naming an illness.",
+      "category": "track",
       "safetyLevel": "low"
     },
     {
-      "id": "clinician_questions",
-      "title": "Prepare clinician questions",
-      "instruction": "Write questions about duration, pattern, and medicines already used — for a clinician to review.",
+      "id": "prepare_clinician_summary",
+      "title": "Prepare clinician summary",
+      "instruction": "Organize start time, pattern, vision or neurological symptoms, medicines already taken, and questions for a clinician.",
       "category": "prepare",
       "safetyLevel": "medium"
     },
     {
+      "id": "speak_if_persistent",
+      "title": "Speak to a health professional",
+      "instruction": "If the headache is worsening, not improving, or keeps returning, speak with a clinician today.",
+      "category": "escalate",
+      "safetyLevel": "medium_high"
+    },
+    {
       "id": "urgent_headache",
       "title": "Seek urgent care",
-      "instruction": "If this is the worst headache ever, with weakness, confusion, or vision change, seek emergency care now.",
+      "instruction": "If this is the worst headache ever, with vision change, weakness, confusion, fainting, or seizure, seek emergency care now.",
       "category": "seek_care",
       "safetyLevel": "urgent"
     }
   ],
   "summary_fields": [
     { "id": "concern", "label": "Headache description", "kind": "concern", "required": true },
-    { "id": "timeline", "label": "Start and pattern", "kind": "timeline", "required": true },
+    { "id": "timeline", "label": "When it started and pattern", "kind": "timeline", "required": true },
     { "id": "severity", "label": "Severity notes", "kind": "symptom", "required": true },
-    { "id": "associated", "label": "Associated symptoms", "kind": "symptom", "required": false },
-    { "id": "medications_tried", "label": "Medicines tried", "kind": "medication", "required": false },
+    { "id": "location", "label": "Location and pattern", "kind": "symptom", "required": true },
+    { "id": "vision_neuro", "label": "Vision or neurological symptoms", "kind": "symptom", "required": false },
+    { "id": "fever_neck", "label": "Fever or neck stiffness", "kind": "symptom", "required": false },
+    { "id": "bp_reading", "label": "Blood pressure reading if known", "kind": "symptom", "required": false },
+    { "id": "medications_tried", "label": "Medicines already taken", "kind": "medication", "required": true },
     { "id": "clinician_questions", "label": "Questions for clinician", "kind": "question_for_clinician", "required": false }
   ]
 }

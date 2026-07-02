@@ -1,9 +1,19 @@
+import type { FormInsightProductContext } from '../../form-insights/formInsightContextTypes';
+import { resolveFormInsightContext } from '../../form-insights/runtime/productContextProvider';
 import type { RedFlagDetectionResult } from '../../health/redFlags';
 import { HEALTH_MODULE_BY_ID } from '../modules/moduleCatalog';
 import type { HealthModuleId } from '../modules/moduleIds';
 import type { HealthModule, ModuleQuestion } from '../modules/moduleTypes';
 import type { IntelligenceRedFlagHit } from '../types';
 import type { RoutedModuleSelection } from './moduleRouter';
+import {
+  getModuleQuestionStrategy,
+  getStrategyEnforcedQuestionIds,
+  moduleQuestionKey,
+  resolveMaxGuidedQuestions,
+  strategyPriorityBoost,
+  type ModuleQuestionStrategy,
+} from './moduleQuestionStrategy';
 
 export type GuidedQuestionType =
   | 'timing'
@@ -30,10 +40,10 @@ export type GenerateGuidedQuestionsInput = {
   primaryModuleId: HealthModuleId | null;
   redFlags?: IntelligenceRedFlagHit[];
   redFlagResult?: RedFlagDetectionResult;
+  formInsightContext?: FormInsightProductContext;
 };
 
 const MIN_QUESTIONS = 2;
-const MAX_QUESTIONS = 5;
 
 const TYPE_PRIORITY: Record<GuidedQuestionType, number> = {
   red_flag: 0,
@@ -56,6 +66,12 @@ const FORBIDDEN_QUESTION_PATTERNS: RegExp[] = [
   /\bdiagnos(e|is|ing)\b/i,
 ];
 
+export function isSafeGuidedQuestionPrompt(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  if (!trimmed) return false;
+  return !FORBIDDEN_QUESTION_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
 const DOCUMENT_DOSE_PATTERN = /\b(already|took|taken|what you|have tried|tried so far)\b/i;
 
 const TIMING_ANSWER_PATTERN =
@@ -66,6 +82,12 @@ const MEDICATION_MENTION_PATTERN =
 
 const PREGNANCY_CONTEXT_PATTERN = /\b(pregnant|pregnancy|antenatal|gestation)\b/i;
 const CHILD_CONTEXT_PATTERN = /\b(child|baby|infant|my son|my daughter|toddler)\b/i;
+
+const FEVER_BODY_CONTEXT_PATTERN =
+  /\b(body hot|hot body|fever|temperature|chills|shivering|cold and hot|body dey hot|my body is hot|I dey hot)\b/i;
+
+const LAB_MENTION_CONTEXT_PATTERN =
+  /\b(widal|lab result|test result|typhoid|malaria test|1:160|malaria and typhoid)\b/i;
 
 type ScoredQuestion = GuidedQuestion & { priority: number };
 
@@ -114,6 +136,21 @@ const RED_FLAG_SAFETY_PROBES: readonly RedFlagProbe[] = [
     question: 'Any heavy bleeding, severe pain, severe headache, or fluid leak?',
     reason: 'Certain symptoms during pregnancy need urgent obstetric review.',
   },
+  {
+    id: 'medication_allergy_reaction',
+    moduleId: 'medication_question_ng_v1',
+    triggerTerms: [
+      'body itching after',
+      'itching after medicine',
+      'itching after drug',
+      'swelling after medicine',
+      'rash after drug',
+      'severe rash',
+    ],
+    question:
+      'Any difficulty breathing, face or lip swelling, or severe rash spreading right now?',
+    reason: 'Allergic reaction signs after medicine need urgent safety screening first.',
+  },
 ];
 
 type ContextProbe = RedFlagProbe & { type: GuidedQuestionType };
@@ -123,7 +160,7 @@ const LAB_CONTEXT_PROBES: readonly ContextProbe[] = [
     id: 'lab_symptoms_context',
     moduleId: 'lab_result_confusion_ng_v1',
     triggerTerms: ['widal', 'lab result', 'test result', 'typhoid', 'malaria test', '1:160'],
-    question: 'What symptoms do you have right now?',
+    question: 'What symptoms are you noticing right now?',
     reason: 'Symptoms must be linked to lab slips for clinician review — not diagnosis from numbers alone.',
     type: 'associated_symptom',
   },
@@ -185,7 +222,7 @@ function inferQuestionType(prompt: string, questionId: string): GuidedQuestionTy
   if (/when|start|onset|timeline|how long|since|how far along/.test(text)) {
     return 'timing';
   }
-  if (/severity|how strong|mild|moderate|very strong/.test(text)) {
+  if (/severity|how strong|mild|moderate|very strong|getting worse|worsening|improving|hottest|highest temperature/.test(text)) {
     return 'severity';
   }
   if (/medicine|medication|drug|chemist|tried|taking|treatment started/.test(text)) {
@@ -228,7 +265,8 @@ function moduleQuestionToGuided(
   const priority =
     TYPE_PRIORITY[type] +
     (module.module_id === primaryModuleId ? -0.45 : 0) +
-    questionOrderBoost(question.id);
+    questionOrderBoost(question.id) +
+    strategyPriorityBoost(module.module_id, question.id, primaryModuleId);
 
   return {
     id: `${module.module_id}:${question.id}`,
@@ -247,6 +285,73 @@ function questionOrderBoost(questionId: string): number {
   return index >= 0 ? index * 0.01 : 0.05;
 }
 
+function pickModuleQuestionById(
+  pick: (predicate: (question: ScoredQuestion) => boolean) => ScoredQuestion | undefined,
+  moduleId: HealthModuleId,
+  questionId: string,
+): void {
+  pick((question) => question.id === moduleQuestionKey(moduleId, questionId));
+}
+
+function applyModuleQuestionStrategy(
+  strategy: ModuleQuestionStrategy,
+  moduleId: HealthModuleId,
+  pick: (predicate: (question: ScoredQuestion) => boolean) => ScoredQuestion | undefined,
+): void {
+  for (const questionId of strategy.redFlagQuestionIds) {
+    pickModuleQuestionById(pick, moduleId, questionId);
+  }
+  for (const questionId of strategy.firstPriorityQuestionIds) {
+    pickModuleQuestionById(pick, moduleId, questionId);
+  }
+  for (const questionId of strategy.medicationQuestionIds) {
+    pickModuleQuestionById(pick, moduleId, questionId);
+  }
+  for (const questionId of strategy.contextQuestionIds) {
+    pickModuleQuestionById(pick, moduleId, questionId);
+  }
+  for (const questionId of strategy.summaryPrepQuestionIds) {
+    pickModuleQuestionById(pick, moduleId, questionId);
+  }
+
+  if (moduleId === 'lab_result_confusion_ng_v1') {
+    pick((question) => question.id === 'context:lab_test_context');
+    pick((question) => question.id === 'context:lab_symptoms_context');
+  }
+}
+
+function shouldIncludeModuleQuestion(
+  moduleId: HealthModuleId,
+  question: ModuleQuestion,
+  rawText: string,
+  primaryModuleId: HealthModuleId | null,
+): boolean {
+  const normalized = normalizeText(rawText);
+
+  if (question.kind === 'conditional') {
+    if (question.showWhen === 'context_vulnerable') {
+      return (
+        PREGNANCY_CONTEXT_PATTERN.test(normalized) ||
+        CHILD_CONTEXT_PATTERN.test(normalized) ||
+        /\bolder adult\b/i.test(normalized)
+      );
+    }
+    if (question.showWhen === 'context_lab') {
+      return LAB_MENTION_CONTEXT_PATTERN.test(normalized);
+    }
+    if (question.showWhen === 'context_bp') {
+      return /\b(bp|blood pressure|hypertension)\b/i.test(normalized);
+    }
+    return false;
+  }
+
+  if (moduleId !== 'fever_malaria_ng_v1') return true;
+
+  return (
+    primaryModuleId === 'fever_malaria_ng_v1' || FEVER_BODY_CONTEXT_PATTERN.test(normalized)
+  );
+}
+
 function buildModuleQuestions(
   moduleIds: HealthModuleId[],
   rawText: string,
@@ -256,6 +361,7 @@ function buildModuleQuestions(
   for (const moduleId of moduleIds) {
     const module = HEALTH_MODULE_BY_ID[moduleId];
     for (const question of module.required_questions) {
+      if (!shouldIncludeModuleQuestion(moduleId, question, rawText, primaryModuleId)) continue;
       const guided = moduleQuestionToGuided(module, question, primaryModuleId);
       if (!guided) continue;
       if (isLikelyAnswered(guided.question, guided.type, rawText)) continue;
@@ -430,11 +536,44 @@ function shouldIncludeCareBlocker(
   });
 }
 
+function ensureStrategyMandatoryQuestions(
+  finalSelected: ScoredQuestion[],
+  selected: ScoredQuestion[],
+  ranked: ScoredQuestion[],
+  primaryModuleId: HealthModuleId,
+  strategy: ModuleQuestionStrategy,
+  maxQuestions: number,
+): ScoredQuestion[] {
+  const mandatoryKeys = getStrategyEnforcedQuestionIds(primaryModuleId, strategy);
+  const mandatoryQuestions: ScoredQuestion[] = [];
+
+  for (const targetId of mandatoryKeys) {
+    const match =
+      finalSelected.find((question) => question.id === targetId) ??
+      selected.find((question) => question.id === targetId) ??
+      ranked.find((question) => question.id === targetId);
+    if (match) mandatoryQuestions.push(match);
+  }
+
+  const mandatoryIdSet = new Set(mandatoryQuestions.map((question) => question.id));
+  const fillerSlots = Math.max(0, maxQuestions - mandatoryQuestions.length);
+  const fillers = finalSelected
+    .filter((question) => !mandatoryIdSet.has(question.id))
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, fillerSlots);
+
+  return [...mandatoryQuestions, ...fillers]
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, maxQuestions);
+}
+
 function selectFinalQuestions(
   ranked: ScoredQuestion[],
   moduleIds: HealthModuleId[],
   primaryModuleId: HealthModuleId | null,
 ): ScoredQuestion[] {
+  const maxQuestions = resolveMaxGuidedQuestions(primaryModuleId);
+  const primaryStrategy = primaryModuleId ? getModuleQuestionStrategy(primaryModuleId) : null;
   const selected: ScoredQuestion[] = [];
   const usedIds = new Set<string>();
 
@@ -446,42 +585,73 @@ function selectFinalQuestions(
     return match;
   };
 
-  pick((q) => q.type === 'red_flag');
-  pick((q) => q.type === 'care_blocker');
+  pick((question) => question.type === 'red_flag');
+  pick((question) => question.type === 'care_blocker');
+
+  if (primaryStrategy && primaryModuleId) {
+    applyModuleQuestionStrategy(primaryStrategy, primaryModuleId, pick);
+  } else {
+    if (moduleIds.includes('lab_result_confusion_ng_v1') && primaryModuleId === 'lab_result_confusion_ng_v1') {
+      pick((question) => question.id === 'lab_result_confusion_ng_v1:test_name' || question.id === 'context:lab_test_context');
+      pick(
+        (question) =>
+          question.id === 'lab_result_confusion_ng_v1:symptoms_led_to_test' ||
+          question.id === 'context:lab_symptoms_context',
+      );
+      pick((question) => question.id === 'lab_result_confusion_ng_v1:test_date');
+      pick((question) => question.id === 'lab_result_confusion_ng_v1:who_ordered');
+      pick((question) => question.id === 'lab_result_confusion_ng_v1:unclear_wording');
+    }
+  }
 
   if (moduleIds.includes('pregnancy_concern_ng_v1') || moduleIds.includes('child_fever_illness_ng_v1')) {
-    pick((q) => q.type === 'risk_context');
+    pick((question) => question.type === 'risk_context');
   }
 
-  pick((q) => q.type === 'timing');
-  pick((q) => q.type === 'severity');
+  if (!primaryStrategy) {
+    pick((question) => question.type === 'timing');
+    pick((question) => question.type === 'severity');
 
-  if (moduleIds.includes('medication_question_ng_v1')) {
-    pick((q) => q.type === 'medication_context');
-  }
+    if (moduleIds.includes('medication_question_ng_v1')) {
+      pick((question) => question.type === 'medication_context');
+    }
 
-  if (moduleIds.includes('lab_result_confusion_ng_v1')) {
-    pick((q) => q.moduleId === 'lab_result_confusion_ng_v1' && /symptom/i.test(q.question));
-    pick((q) => q.moduleId === 'lab_result_confusion_ng_v1' && /test|slip|result/i.test(q.question));
+    if (moduleIds.includes('lab_result_confusion_ng_v1') && primaryModuleId !== 'lab_result_confusion_ng_v1') {
+      pick((question) => question.moduleId === 'lab_result_confusion_ng_v1' && /symptom/i.test(question.question));
+      pick(
+        (question) =>
+          question.moduleId === 'lab_result_confusion_ng_v1' &&
+          /test name|name as written/i.test(question.question),
+      );
+      pick(
+        (question) =>
+          question.moduleId === 'lab_result_confusion_ng_v1' &&
+          /when was the test done|date/i.test(question.question),
+      );
+      pick(
+        (question) =>
+          question.moduleId === 'lab_result_confusion_ng_v1' && /ordered/i.test(question.question),
+      );
+    }
   }
 
   for (const question of ranked) {
-    if (selected.length >= MAX_QUESTIONS) break;
+    if (selected.length >= maxQuestions) break;
     if (usedIds.has(question.id)) continue;
     usedIds.add(question.id);
     selected.push(question);
   }
 
   if (primaryModuleId) {
-    const primaryCount = selected.filter((q) => q.moduleId === primaryModuleId).length;
-    if (primaryCount < Math.min(2, MAX_QUESTIONS)) {
+    const primaryCount = selected.filter((question) => question.moduleId === primaryModuleId).length;
+    if (primaryCount < Math.min(2, maxQuestions)) {
       for (const question of ranked) {
-        if (selected.length >= MAX_QUESTIONS) break;
+        if (selected.length >= maxQuestions) break;
         if (question.moduleId !== primaryModuleId || usedIds.has(question.id)) continue;
         const replaceIndex = selected.findIndex(
           (q) => q.moduleId !== primaryModuleId && q.type === 'associated_symptom',
         );
-        if (replaceIndex >= 0 && selected.length >= MAX_QUESTIONS) {
+        if (replaceIndex >= 0 && selected.length >= maxQuestions) {
           usedIds.delete(selected[replaceIndex].id);
           selected[replaceIndex] = question;
           usedIds.add(question.id);
@@ -500,9 +670,46 @@ function selectFinalQuestions(
     selected.push(next);
   }
 
-  return selected
+  if (
+    primaryModuleId === 'lab_result_confusion_ng_v1' &&
+    !selected.some(
+      (question) =>
+        question.moduleId === 'lab_result_confusion_ng_v1' &&
+        /symptom|noticing/i.test(question.question),
+    )
+  ) {
+    const labSymptom = ranked.find(
+      (question) =>
+        !usedIds.has(question.id) &&
+        question.moduleId === 'lab_result_confusion_ng_v1' &&
+        /symptom|noticing/i.test(question.question),
+    );
+    if (labSymptom) {
+      if (selected.length >= maxQuestions) {
+        const dropped = selected.pop();
+        if (dropped) usedIds.delete(dropped.id);
+      }
+      usedIds.add(labSymptom.id);
+      selected.push(labSymptom);
+    }
+  }
+
+  let finalSelected = selected
     .sort((a, b) => a.priority - b.priority)
-    .slice(0, MAX_QUESTIONS);
+    .slice(0, maxQuestions);
+
+  if (primaryStrategy && primaryModuleId) {
+    finalSelected = ensureStrategyMandatoryQuestions(
+      finalSelected,
+      selected,
+      ranked,
+      primaryModuleId,
+      primaryStrategy,
+      maxQuestions,
+    );
+  }
+
+  return finalSelected;
 }
 
 function dedupeQuestions(questions: ScoredQuestion[]): ScoredQuestion[] {
@@ -533,16 +740,86 @@ function fallbackQuestions(
   });
 }
 
+function buildFormInsightBlockerQuestions(
+  context: FormInsightProductContext | undefined,
+  primaryModuleId: HealthModuleId | null,
+): ScoredQuestion[] {
+  if (!context || context.blockerOptions.length === 0) return [];
+
+  return context.blockerOptions
+    .filter((blocker) => !blocker.moduleId || blocker.moduleId === primaryModuleId)
+    .map((blocker) => ({
+      id: blocker.id,
+      question: `Is "${blocker.label}" making it harder to get care right now?`,
+      type: 'care_blocker' as const,
+      moduleId: blocker.moduleId ?? primaryModuleId ?? undefined,
+      reason: 'Active form overlay noted a care-access friction theme.',
+      generatedBy: 'module' as const,
+      priority: TYPE_PRIORITY.care_blocker,
+    }));
+}
+
+function buildFormInsightSafeQuestions(
+  context: FormInsightProductContext | undefined,
+  primaryModuleId: HealthModuleId | null,
+): ScoredQuestion[] {
+  if (!context || context.safeQuestionCandidates.length === 0) return [];
+
+  return context.safeQuestionCandidates
+    .filter((candidate) => !candidate.moduleId || candidate.moduleId === primaryModuleId)
+    .filter((candidate) => isSafeGuidedQuestionPrompt(candidate.prompt))
+    .map((candidate) => ({
+      id: candidate.questionId,
+      question: candidate.prompt,
+      type: 'summary' as const,
+      moduleId: candidate.moduleId ?? primaryModuleId ?? undefined,
+      reason: 'Active form overlay suggested a validated guided-question prompt.',
+      generatedBy: 'module' as const,
+      priority: TYPE_PRIORITY.summary,
+    }));
+}
+
+function ensureApprovedFormInsightBlockers(
+  selected: ScoredQuestion[],
+  pool: ScoredQuestion[],
+  maxQuestions: number,
+): ScoredQuestion[] {
+  const formInsightBlockers = pool.filter((question) => question.id.startsWith('form_insight_blocker_'));
+  if (formInsightBlockers.length === 0) return selected;
+
+  const result = [...selected];
+  for (const blocker of formInsightBlockers) {
+    if (result.some((question) => question.id === blocker.id)) continue;
+
+    if (result.length >= maxQuestions) {
+      const lowestPriorityIndex = result.reduce(
+        (lowestIndex, question, index, list) =>
+          question.priority > list[lowestIndex]!.priority ? index : lowestIndex,
+        0,
+      );
+      result.splice(lowestPriorityIndex, 1);
+    }
+
+    result.push(blocker);
+  }
+
+  return result.sort((left, right) => left.priority - right.priority).slice(0, maxQuestions);
+}
+
 /** Deterministic guided question selection — module questions + safety probes, no diagnosis or prescribing. */
 export function generateGuidedQuestions(input: GenerateGuidedQuestionsInput): GuidedQuestion[] {
   const moduleIds = resolveModuleIds(input.selectedModules);
   if (moduleIds.length === 0) return [];
+
+  const productContext = resolveFormInsightContext(input.formInsightContext);
 
   const pool: ScoredQuestion[] = [
     ...buildRedFlagResultQuestions(input.redFlagResult, input.redFlags, input.primaryModuleId),
     ...buildRedFlagProbeQuestions(moduleIds, input.rawText, input.primaryModuleId),
     ...buildModuleQuestions(moduleIds, input.rawText, input.primaryModuleId),
     ...buildContextQuestions(moduleIds, input.rawText, input.primaryModuleId),
+    ...buildFormInsightBlockerQuestions(productContext, input.primaryModuleId),
+    ...buildFormInsightSafeQuestions(productContext, input.primaryModuleId),
   ];
 
   if (shouldIncludeCareBlocker(moduleIds, input.redFlagResult, input.redFlags)) {
@@ -558,7 +835,12 @@ export function generateGuidedQuestions(input: GenerateGuidedQuestionsInput): Gu
     ranked = dedupeQuestions([...ranked, ...fallbackQuestions(moduleIds, input.primaryModuleId)]);
   }
 
-  ranked = selectFinalQuestions(ranked, moduleIds, input.primaryModuleId);
+  const maxQuestions = resolveMaxGuidedQuestions(input.primaryModuleId);
+  ranked = ensureApprovedFormInsightBlockers(
+    selectFinalQuestions(ranked, moduleIds, input.primaryModuleId),
+    ranked,
+    maxQuestions,
+  );
 
   return ranked.map((question) => {
     const { priority: _omitPriority, ...rest } = question;

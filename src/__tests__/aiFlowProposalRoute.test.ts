@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAIFlowProposalPost } from '../lib/server/aiFlowProposalHandler';
+import { runHealthIntelligencePipeline } from '../lib/health-intelligence/services/healthIntelligencePipeline';
+import { serializeIntelligenceForFlowProposal } from '../lib/health-intelligence/services/intelligenceContextSerializer';
 import { DataPermissionError } from '../lib/data/dataErrors';
 import { getServerAIConfig } from '../lib/server/aiConfig';
 
@@ -179,11 +181,49 @@ describe('AI flow-proposal route', () => {
     expect(body.flowStatus).toBe('awaiting_user_approval');
     expect(body.proposedAction?.instruction).toContain('Write down');
     expect(mockAdapter.createDraftHealthFlow).toHaveBeenCalledTimes(1);
+    expect(mockAdapter.createDraftHealthFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.not.objectContaining({
+          intelligenceContext: expect.anything(),
+        }),
+      }),
+    );
     expect(mockAdapter.updateHealthFlowStatus).toHaveBeenCalledWith(
       'flow-draft-1',
       expect.objectContaining({ status: 'awaiting_user_approval', stage: 'intake_complete' }),
     );
     expect(mockAdapter.createAgentEvent).toHaveBeenCalled();
+  });
+
+  it('stores intelligenceContext on draft flow payload when provided', async () => {
+    configureSupabaseEnv();
+    mockAuthenticatedUser();
+    process.env.AI_ENABLED = 'false';
+
+    const intelligenceContext = serializeIntelligenceForFlowProposal(
+      runHealthIntelligencePipeline({
+        rawText: 'my body hot since yesterday and took malaria drug',
+      }),
+    );
+
+    const { status, body } = await postFlowProposal({
+      ...safeStructuredBody,
+      intelligenceContext,
+    });
+
+    expect(status).toBe(200);
+    expect(body.proposedAction?.title).toMatch(/fever timeline|follow up/i);
+    expect(body.proposedAction?.instruction.toLowerCase()).toMatch(/fever|medicine|symptom|worsen|persist/);
+    expect(mockAdapter.createDraftHealthFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          intelligenceContext,
+          actionPreview: expect.objectContaining({
+            actionId: expect.stringMatching(/save_symptom_timeline|follow_up_if_worse_or_persistent/),
+          }),
+        }),
+      }),
+    );
   });
 
   it('does not activate flow automatically', async () => {

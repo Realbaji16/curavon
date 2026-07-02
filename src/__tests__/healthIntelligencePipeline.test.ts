@@ -65,9 +65,7 @@ describe('runHealthIntelligencePipeline', () => {
     expect(moduleIds(result)).toEqual(
       expect.arrayContaining(['lab_result_confusion_ng_v1', 'fever_malaria_ng_v1']),
     );
-    expect(result.summaryPreview.fields.some((field) => field.label === 'Tests/lab results')).toBe(
-      true,
-    );
+    expect(result.summaryPreview.fields.some((field) => field.label === 'Test name')).toBe(true);
     expect(result.questions.length).toBeGreaterThanOrEqual(2);
     expect(result.questions.length).toBeLessThanOrEqual(5);
   });
@@ -91,7 +89,8 @@ describe('runHealthIntelligencePipeline', () => {
       rawText: 'my body hot since yesterday',
     });
 
-    expect(result.message.toLowerCase()).toContain('does not diagnose');
+    expect(result.message.toLowerCase()).toMatch(/does not diagnose|not a diagnosis/);
+    expect(result.message.toLowerCase()).toMatch(/fever|hot body|body feeling hot/);
     expect(result.message.toLowerCase()).not.toMatch(/\btake amoxicillin\b/);
     expect(result.message.toLowerCase()).not.toMatch(/\byou have malaria\b/);
   });
